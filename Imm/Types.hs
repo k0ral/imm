@@ -19,8 +19,6 @@ data CliOptions = CliOptions {
 -- | 
 data Parameters = Parameters {
     mCacheDirectory :: Maybe String,
-    mMailTo         :: Maybe String,
-    mSMTP           :: Maybe String,
     mFeedURIs       :: [String],             -- ^ Feeds list
     mMailBox        :: FilePath,
     mError          :: Maybe String          -- ^ Error                                                                                                                           

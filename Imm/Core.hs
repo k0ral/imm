@@ -62,12 +62,11 @@ dyreParameters = D.defaultParams {
 showError :: Parameters -> String -> Parameters
 showError parameters message = parameters { mError = Just message }
 
+
 -- | Default configuration.
 defaultParameters :: Parameters
 defaultParameters = Parameters {
     mCacheDirectory = Nothing,
-    mMailTo         = Nothing,
-    mSMTP           = Nothing,
     mFeedURIs       = [],
     mMailBox        = "rss",
     mError          = Nothing
