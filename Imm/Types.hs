@@ -20,7 +20,7 @@ data CliOptions = CliOptions {
 data Parameters = Parameters {
     mCacheDirectory :: Maybe String,
     mFeedURIs       :: [String],             -- ^ Feeds list
-    mMailBox        :: FilePath,
+    mMailDirectory  :: FilePath,
     mError          :: Maybe String          -- ^ Error                                                                                                                           
 }
 

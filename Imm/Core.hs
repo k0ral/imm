@@ -68,7 +68,7 @@ defaultParameters :: Parameters
 defaultParameters = Parameters {
     mCacheDirectory = Nothing,
     mFeedURIs       = [],
-    mMailBox        = "rss",
+    mMailDirectory  = "rss",
     mError          = Nothing
 }
 -- }}}
@@ -79,7 +79,7 @@ imm = D.wrapMain dyreParameters
 
 -- Entry point
 realMain :: Parameters -> IO ()
-realMain parameters@Parameters{ mMailBox = mailbox } = do
+realMain parameters@Parameters{ mMailDirectory = directory } = do
 -- Print configuration error, if any
     maybe (return ()) putStrLn $ mError parameters
     
@@ -88,19 +88,24 @@ realMain parameters@Parameters{ mMailBox = mailbox } = do
 
 -- Print in-use paths
     (a, b, c, d, e) <- getPaths dyreParameters 
-    whenLoud $ do
-        putStrLn ("Current binary:  " ++ a)
-        putStrLn ("Custom binary:   " ++ b)
-        putStrLn ("Config file:     " ++ c)
-        putStrLn ("Cache directory: " ++ d)
-        putStrLn ("Lib directory:   " ++ e)
-        putStrLn ""
+    whenLoud $ putStrLn (unlines [
+        "Current binary:  " ++ a,
+        "Custom binary:   " ++ b,
+        "Config file:     " ++ c,
+        "Cache directory: " ++ d,
+        "Lib directory:   " ++ e,
+        ""
+        ])
         
 -- Initialize mailbox
-    result <- initMailDir mailbox
-    print result
+    result <- initMailDir directory
+    case result of
+        False -> putStrLn $ "Unable to initialize maildir at: " ++ directory
+        _     -> realMain' parameters
    
-    
+-- 
+realMain' :: Parameters -> IO ()
+realMain' parameters = do    
 -- Retrieve feeds
     let uris = mapMaybe   parseURI $ mFeedURIs parameters
     rawData <- mapIOMaybe downloadRaw uris
@@ -111,28 +116,17 @@ realMain parameters@Parameters{ mMailBox = mailbox } = do
     
     return ()
 
+
 initMailDir :: FilePath -> IO Bool
 initMailDir directory = do
-    existence <- doesDirectoryExist directory
-    result <- case existence of
-        False -> do
-            creation <- try $ createDirectory directory
-            case creation of
-                Left  _ -> return False
-                Right _ -> return True
-        True -> do          
-            permissions <- getPermissions directory
-            case (readable permissions, writable permissions) of
-                (True, True) -> return True
-                _            -> return False
-                
-    case result of
-        True -> do
-            createDirectoryIfMissing True $ directory ++ "/cur"
-            createDirectoryIfMissing True $ directory ++ "/new"
-            createDirectoryIfMissing True $ directory ++ "/tmp"
-            return True
-        False -> return False
+    root <- try $ createDirectoryIfMissing True directory
+    cur  <- try $ createDirectoryIfMissing True $ directory ++ "/cur"
+    new  <- try $ createDirectoryIfMissing True $ directory ++ "/new"
+    tmp  <- try $ createDirectoryIfMissing True $ directory ++ "/tmp"
+    
+    case (root, cur, new, tmp) of
+        (Right _, Right _, Right _, Right _) -> return True
+        _                                    -> return False
 
 
 processFeed :: Parameters -> ImmFeed -> IO ()
@@ -177,7 +171,7 @@ getUniqueName = do
     
 
 processItem :: Parameters -> Maybe UTCTime -> Item -> IO (Maybe UTCTime)
-processItem parameters@Parameters{ mMailBox = directory } threshold item = do
+processItem parameters@Parameters{ mMailDirectory = directory } threshold item = do
     putStrLn $ "   Item author: " ++ (maybe "" id $ getItemAuthor item)
     putStrLn $ "   Item title: " ++ (maybe "" id $ getItemTitle item)
     putStrLn $ "   Item URI:   " ++ (maybe "" id $ getItemLink  item)
