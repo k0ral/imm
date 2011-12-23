@@ -1,6 +1,7 @@
 module Imm.Core where
 
 -- {{{ Imports
+import Imm.Mail
 import Imm.Types
 import Imm.Util
 
@@ -9,18 +10,19 @@ import Config.Dyre.Paths
 
 import Data.Foldable
 import Data.Maybe
+import qualified Data.String.UTF8 as U
 import Data.Time.Clock
 import Data.Time.Clock.POSIX
 import Data.Time.Format
 
 import Network.BSD
 import Network.HTTP hiding(Response)
-import Network.Mail.Mime
 import Network.URI
 
 import System.Console.CmdArgs
 import System.Directory
 import System.IO
+import qualified System.IO.UTF8 as U
 import System.IO.Error
 import System.Locale
 import System.Random
@@ -177,6 +179,7 @@ getUniqueName = do
 
 processItem :: Parameters -> Maybe UTCTime -> Item -> IO (Maybe UTCTime)
 processItem parameters@Parameters{ mMailBox = directory } threshold item = do
+    putStrLn $ "   Item author: " ++ (maybe "" id $ getItemAuthor item)
     putStrLn $ "   Item title: " ++ (maybe "" id $ getItemTitle item)
     putStrLn $ "   Item URI:   " ++ (maybe "" id $ getItemLink  item)
     
@@ -197,18 +200,18 @@ processItem parameters@Parameters{ mMailBox = directory } threshold item = do
         
         
 addItemToMailDir :: FilePath -> Item -> IO ()
-addItemToMailDir filePath item = withFile filePath WriteMode $ \handle -> do
-        hPutStrLn handle "Return-Path: <noreply@anonymous.net>"
-        hPutStrLn handle $ "Date: " ++ (maybe "" id $ getItemDate item)
-        hPutStrLn handle $ "From: " ++ (maybe "Anonymous" id $ getItemAuthor item)
-        hPutStrLn handle $ "Subject: " ++ (maybe "Untitled" id $ getItemTitle item)
-        hPutStrLn handle $ "Content-Type: text/plain; charset=utf-8"
-        hPutStrLn handle $ "Content-Disposition: inline"
-        hPutStrLn handle $ ""
-        hPutStrLn handle $ ""
-        hPutStrLn handle $ (maybe "Empty" id $ getItemDescription item)        
-    
-    
+addItemToMailDir filePath item = U.writeFile filePath $ show (itemToMail item)
+  
+itemToMail :: Item -> Mail
+itemToMail item = defaultMail {
+    mReturnPath = "<noreply@anonymous.net>",
+    mDate       = stringToUTC $ (maybe "" id $ getItemDate item),
+    mFrom       = maybe "Anonymous" id $ getItemAuthor item,
+    mSubject    = maybe "Untitled" id $ getItemTitle item,
+    mCharset    = "utf-8",
+    mContentDisposition = "inline",
+    mContent = maybe "Empty" id $ getItemDescription item
+}
 
     
 stringToUTC :: String -> Maybe UTCTime

@@ -44,10 +44,10 @@ Cabal-version:       >=1.8
 
 Library
   -- Modules exported by the library.
-  Exposed-modules: Imm.Core, Imm.Types, Imm.Util
+  Exposed-modules: Imm.Core, Imm.Types, Imm.Util, Imm.Mail
   
   -- Packages needed in order to build this package.
-  Build-depends: base == 4.*, directory, dyre, time, HTTP, xml, feed, old-locale, random, bytestring, mime-mail, text, cmdargs, network, pureMD5
+  Build-depends: base == 4.*, directory, dyre, time, HTTP, xml, feed, old-locale, random, bytestring, mime-mail, text, cmdargs, network, pureMD5, utf8-string
   
   -- Modules not exported by this package.
   -- Other-modules:       
