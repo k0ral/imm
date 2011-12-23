@@ -12,8 +12,8 @@ main = imm myParameters
 
 myParameters :: Parameters
 myParameters = defaultParameters {
-  --mMailTo = Just "mail@address",
-  --mSMTP   = Just "your.smtp",
-  --mFeedURIs = ["feed_url"]
+  mMailTo = Just "mail@address",
+  mSMTP   = Just "your.smtp",
+  mFeedURIs = ["http://www.archlinux.org/feeds/news/"]
 }
 

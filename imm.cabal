@@ -47,7 +47,7 @@ Library
   Exposed-modules: Imm.Core, Imm.Types, Imm.Util
   
   -- Packages needed in order to build this package.
-  Build-depends: base == 4.*, dyre, HTTP, xml, feed, HaskellNet, bytestring, mime-mail, text, cmdargs, network, pureMD5
+  Build-depends: base == 4.*, directory, dyre, time, HTTP, xml, feed, old-locale, random, bytestring, mime-mail, text, cmdargs, network, pureMD5
   
   -- Modules not exported by this package.
   -- Other-modules:       

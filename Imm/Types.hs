@@ -1,12 +1,13 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 module Imm.Types where
 
+-- {{{ Imports
 import Network.URI
 
 import System.Console.CmdArgs
 
 import Text.Feed.Types
-
+-- }}}
 
 
 data CliOptions = CliOptions {
@@ -19,6 +20,7 @@ data Parameters = Parameters {
     mMailTo         :: Maybe String,
     mSMTP           :: Maybe String,
     mFeedURIs       :: [String],             -- ^ Feeds list
+    mMailBox        :: FilePath,
     mError          :: Maybe String          -- ^ Error                                                                                                                           
 }
 

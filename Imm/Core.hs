@@ -7,19 +7,23 @@ import Imm.Util
 import qualified Config.Dyre as D
 import Config.Dyre.Paths
 
-import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy  as BL
+import Data.Foldable
 import Data.Maybe
-import qualified Data.Text             as T
-import qualified Data.Text.Lazy        as TL
+import Data.Time.Clock
+import Data.Time.Clock.POSIX
+import Data.Time.Format
 
-import Network.HaskellNet.SMTP hiding(sendMail)
+import Network.BSD
 import Network.HTTP hiding(Response)
 import Network.Mail.Mime
 import Network.URI
 
 import System.Console.CmdArgs
+import System.Directory
 import System.IO
+import System.IO.Error
+import System.Locale
+import System.Random
 
 import Text.Feed.Import
 import Text.Feed.Query
@@ -52,7 +56,7 @@ dyreParameters = D.defaultParams {
   D.ghcOpts      = ["-threaded"],
   D.statusOut    = hPutStrLn stderr
 }
- 
+
 showError :: Parameters -> String -> Parameters
 showError parameters message = parameters { mError = Just message }
 
@@ -63,6 +67,7 @@ defaultParameters = Parameters {
     mMailTo         = Nothing,
     mSMTP           = Nothing,
     mFeedURIs       = [],
+    mMailBox        = "rss",
     mError          = Nothing
 }
 -- }}}
@@ -73,7 +78,7 @@ imm = D.wrapMain dyreParameters
 
 -- Entry point
 realMain :: Parameters -> IO ()
-realMain parameters = do
+realMain parameters@Parameters{ mMailBox = mailbox } = do
 -- Print configuration error, if any
     maybe (return ()) putStrLn $ mError parameters
     
@@ -89,19 +94,49 @@ realMain parameters = do
         putStrLn ("Cache directory: " ++ d)
         putStrLn ("Lib directory:   " ++ e)
         putStrLn ""
+        
+-- Initialize mailbox
+    result <- initMailDir mailbox
+    print result
+   
     
+-- Retrieve feeds
     let uris = mapMaybe   parseURI $ mFeedURIs parameters
     rawData <- mapIOMaybe downloadRaw uris
     feeds   <- mapIOMaybe rawToFeed rawData
     
-    
+-- 
     _ <- mapM (processFeed parameters) feeds 
     
     return ()
 
+initMailDir :: FilePath -> IO Bool
+initMailDir directory = do
+    existence <- doesDirectoryExist directory
+    result <- case existence of
+        False -> do
+            creation <- try $ createDirectory directory
+            case creation of
+                Left  _ -> return False
+                Right _ -> return True
+        True -> do          
+            permissions <- getPermissions directory
+            case (readable permissions, writable permissions) of
+                (True, True) -> return True
+                _            -> return False
+                
+    case result of
+        True -> do
+            createDirectoryIfMissing True $ directory ++ "/cur"
+            createDirectoryIfMissing True $ directory ++ "/new"
+            createDirectoryIfMissing True $ directory ++ "/tmp"
+            return True
+        False -> return False
+
 
 processFeed :: Parameters -> ImmFeed -> IO ()
 processFeed parameters _f@ImmFeed {mURI = uri, mFeed = feed} = do
+    --putStrLn $ "Processing feed: " ++ uri
     putStrLn $ "Feed title:  " ++ (getFeedTitle  feed)
     putStrLn $ "Feed author: " ++ (maybe "No author" id $ getFeedAuthor feed)
     putStrLn $ "Feed home:   " ++ (maybe "No home"   id $ getFeedHome feed)
@@ -109,19 +144,76 @@ processFeed parameters _f@ImmFeed {mURI = uri, mFeed = feed} = do
     (_, _, _, d, _) <- getPaths dyreParameters
     let directory = maybe d id $ mCacheDirectory parameters  
     let fileName  = uriToFilePath uri
-    withFile (directory ++ "/" ++ fileName) ReadWriteMode $ \handle -> do      
-        _ <- mapM (processItem parameters) (feedItems feed) 
-        return ()
-        
-processItem :: Parameters -> Item -> IO ()
-processItem parameters item = do
-    putStrLn $ "   Item title: " ++ (maybe "" id $ getItemTitle item)
-    putStrLn $ "   Item URI:   " ++ (maybe "" id $ getItemLink  item)
     
-    maybe (return ()) (\(to:smtp:_) -> sendMail to smtp item) $ sequence [mMailTo parameters, mSMTP parameters]
+-- 
+    oldTime <- try $ readFile (directory ++ "/" ++ fileName)
+    let threshold = case oldTime of
+          Left _  -> Nothing
+          Right x -> parseTime defaultTimeLocale "%F %T %Z" x
+    
+    lastTime <- foldlM (\acc item -> processItem parameters threshold item >>= (return . (flip maxMaybe acc))) (posixSecondsToUTCTime 0) (feedItems feed) 
+    
+-- 
+    (file, handle) <- openTempFile directory fileName
+    hPutStrLn handle (show lastTime)
+    hClose handle
+    renameFile file (directory ++ "/" ++ fileName)
     
     return ()
     
+
+maxMaybe :: (Ord a) => Maybe a -> a -> a
+maxMaybe (Just x) = max x
+maxMaybe Nothing  = id
+        
+getUniqueName :: IO String    
+getUniqueName = do
+    time     <- getPOSIXTime >>= (return . show)
+    hostname <- getHostName
+    rand     <- (getStdRandom $ randomR (1,100000) :: IO Int) >>= (return . show)
+    
+    return $ time ++ "." ++ rand ++ "." ++ hostname
+    
+
+processItem :: Parameters -> Maybe UTCTime -> Item -> IO (Maybe UTCTime)
+processItem parameters@Parameters{ mMailBox = directory } threshold item = do
+    putStrLn $ "   Item title: " ++ (maybe "" id $ getItemTitle item)
+    putStrLn $ "   Item URI:   " ++ (maybe "" id $ getItemLink  item)
+    
+    fileName    <- getUniqueName
+    currentTime <- getCurrentTime :: IO UTCTime
+    let time = getItemDate item >>= stringToUTC
+    print time
+    print threshold
+    print ""
+    
+    case (threshold, time) of
+        (Just x, Just y) -> case x < y of
+            True -> addItemToMailDir (directory ++ "/new/" ++ fileName) item
+            _    -> return ()
+        _     -> addItemToMailDir (directory ++ "/new/" ++ fileName) item  
+        
+    return time
+        
+        
+addItemToMailDir :: FilePath -> Item -> IO ()
+addItemToMailDir filePath item = withFile filePath WriteMode $ \handle -> do
+        hPutStrLn handle "Return-Path: <noreply@anonymous.net>"
+        hPutStrLn handle $ "Date: " ++ (maybe "" id $ getItemDate item)
+        hPutStrLn handle $ "From: " ++ (maybe "Anonymous" id $ getItemAuthor item)
+        hPutStrLn handle $ "Subject: " ++ (maybe "Untitled" id $ getItemTitle item)
+        hPutStrLn handle $ "Content-Type: text/plain; charset=utf-8"
+        hPutStrLn handle $ "Content-Disposition: inline"
+        hPutStrLn handle $ ""
+        hPutStrLn handle $ ""
+        hPutStrLn handle $ (maybe "Empty" id $ getItemDescription item)        
+    
+    
+
+    
+stringToUTC :: String -> Maybe UTCTime
+stringToUTC = parseTime defaultTimeLocale "%a, %e %b %Y %T %z"
+
 
 downloadRaw :: URI -> IO (Maybe (URI, String))
 downloadRaw uri = do
@@ -135,22 +227,3 @@ rawToFeed (uri, rawPage) = do
   case parseFeedString rawPage of
     Just x  -> return $ Just ImmFeed{ mURI = uri, mFeed = x}
     Nothing -> putStrLn "Unable to parse XML from raw page." >> return Nothing
-
-
-sendMail :: String -> String -> Item -> IO ()
-sendMail to smtp item = do
-  mail <- simpleMail (T.pack to) author subject TL.empty content [] >>= renderMail'
-  
-  doSMTPPort smtp 25 $ \connection -> do
-    _ <- sendCommand connection (HELO "noreply.net")
-    _ <- sendCommand connection (MAIL "<imm@noreply.net>")
-    _ <- sendCommand connection (RCPT to)
-    _ <- sendCommand connection (DATA $ B.concat (BL.toChunks mail))
-    _ <- sendCommand connection (QUIT)
-    return ()
-  where  
-    author  = T.pack  $ maybe "Anonymous" id (getItemAuthor item)
-    subject = T.pack  $ maybe "Untitled" id (getItemTitle item)
-    content = TL.pack $ maybe link (\d -> link ++ "<hr/>" ++ d) (getItemDescription item)
-    link    = maybe "" id $ getItemLink item
-
