@@ -9,11 +9,10 @@ import Codec.Binary.UTF8.String
 
 import qualified Config.Dyre as D
 import Config.Dyre.Paths
-import Control.Monad
+--import Control.Monad hiding(forM_)
 
 import Data.Foldable
 import Data.Maybe
-import qualified Data.String.UTF8 as U
 import Data.Time.Clock
 import Data.Time.Clock.POSIX
 import Data.Time.Format
@@ -83,7 +82,7 @@ imm = D.wrapMain dyreParameters
 realMain :: Parameters -> IO ()
 realMain parameters@Parameters{ mMailDirectory = directory } = do
 -- Print configuration error, if any
-    forMaybeM_ (mError parameters) putStrLn
+    forM_ (mError parameters) putStrLn
     
 -- Parse commandline arguments
     options <- getOptions
@@ -132,10 +131,10 @@ initMailDir directory = do
 
 processFeed :: Parameters -> ImmFeed -> IO ()
 processFeed parameters _f@ImmFeed {mURI = uri, mFeed = feed} = do
-    --putStrLn $ "Processing feed: " ++ uri
-    putStrLn $ "Feed title:  " ++ (getFeedTitle  feed)
-    putStrLn $ "Feed author: " ++ (maybe "No author" id $ getFeedAuthor feed)
-    putStrLn $ "Feed home:   " ++ (maybe "No home"   id $ getFeedHome feed)
+    whenLoud $ putStrLn ("Processing feed: " ++ show uri)
+    whenLoud $ putStrLn ("Feed title:  " ++ (getFeedTitle feed))
+    whenLoud $ putStrLn ("Feed author: " ++ (maybe "No author" id $ getFeedAuthor feed))
+    whenLoud $ putStrLn ("Feed home:   " ++ (maybe "No home"   id $ getFeedHome feed))
     
     (_, _, _, d, _) <- getPaths dyreParameters
     let directory = maybe d id $ mCacheDirectory parameters  
