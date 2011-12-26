@@ -20,3 +20,8 @@ uriToFilePath :: URI -> FilePath
 uriToFilePath uri = case uriAuthority uri of
   Just auth -> uriRegName auth ++ "-" ++ (take 8 $ (show . md5 . BL.pack . show) uri)
   _         -> "no-name"       ++ "-" ++ ((show . md5 . BL.pack . show) uri)
+  
+
+-- | Similar to forM_ (from Control.Monad) but for Maybe instead of List.
+forMaybeM_ :: Maybe a -> (a -> IO ()) -> IO ()
+forMaybeM_ = flip $ maybe (return ())

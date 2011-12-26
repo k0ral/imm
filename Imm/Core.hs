@@ -5,8 +5,11 @@ import Imm.Mail
 import Imm.Types
 import Imm.Util
 
+import Codec.Binary.UTF8.String
+
 import qualified Config.Dyre as D
 import Config.Dyre.Paths
+import Control.Monad
 
 import Data.Foldable
 import Data.Maybe
@@ -22,7 +25,6 @@ import Network.URI
 import System.Console.CmdArgs
 import System.Directory
 import System.IO
-import qualified System.IO.UTF8 as U
 import System.IO.Error
 import System.Locale
 import System.Random
@@ -73,7 +75,7 @@ defaultParameters = Parameters {
 }
 -- }}}
 
-
+-- | 
 imm :: Parameters -> IO ()
 imm = D.wrapMain dyreParameters
 
@@ -81,7 +83,7 @@ imm = D.wrapMain dyreParameters
 realMain :: Parameters -> IO ()
 realMain parameters@Parameters{ mMailDirectory = directory } = do
 -- Print configuration error, if any
-    maybe (return ()) putStrLn $ mError parameters
+    forMaybeM_ (mError parameters) putStrLn
     
 -- Parse commandline arguments
     options <- getOptions
@@ -94,8 +96,7 @@ realMain parameters@Parameters{ mMailDirectory = directory } = do
         "Config file:     " ++ c,
         "Cache directory: " ++ d,
         "Lib directory:   " ++ e,
-        ""
-        ])
+        ""])
         
 -- Initialize mailbox
     result <- initMailDir directory
@@ -105,17 +106,17 @@ realMain parameters@Parameters{ mMailDirectory = directory } = do
    
 -- 
 realMain' :: Parameters -> IO ()
-realMain' parameters = do    
+realMain' parameters@Parameters{ mFeedURIs = feedURIs } = do    
 -- Retrieve feeds
-    let uris = mapMaybe   parseURI $ mFeedURIs parameters
     rawData <- mapIOMaybe downloadRaw uris
     feeds   <- mapIOMaybe rawToFeed rawData
     
 -- 
     _ <- mapM (processFeed parameters) feeds 
-    
     return ()
-
+    
+  where
+    uris = mapMaybe parseURI feedURIs
 
 initMailDir :: FilePath -> IO Bool
 initMailDir directory = do
@@ -193,7 +194,7 @@ processItem parameters@Parameters{ mMailDirectory = directory } threshold item =
         
         
 addItemToMailDir :: FilePath -> Item -> IO ()
-addItemToMailDir filePath item = U.writeFile filePath $ show (itemToMail item)
+addItemToMailDir filePath item = writeFile filePath $ show (itemToMail item)
   
 itemToMail :: Item -> Mail
 itemToMail item = defaultMail {
@@ -213,10 +214,14 @@ stringToUTC = parseTime defaultTimeLocale "%a, %e %b %Y %T %z"
 
 downloadRaw :: URI -> IO (Maybe (URI, String))
 downloadRaw uri = do
-    result <- simpleHTTP $ (getRequest . show) uri
+    result <- simpleHTTP (getRequest $ show uri)
     case result of
       Left error_    -> print error_ >> return Nothing
-      Right rawPage  -> return $ Just (uri, rspBody rawPage)
+      Right rawPage  -> case isUTF8Encoded body of
+          False -> return $ Just (uri, body)
+          _     -> return $ Just (uri, decodeString body)
+        where
+          body = rspBody rawPage
 
 rawToFeed :: (URI, String) -> IO (Maybe ImmFeed)
 rawToFeed (uri, rawPage) = do
