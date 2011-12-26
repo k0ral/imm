@@ -1,9 +1,12 @@
 module Imm.Mail where
 
+-- {{{ Imports
 import Imm.Types
+import Imm.Util
 
-import Data.Time.LocalTime
-
+import Text.Feed.Query
+import Text.Feed.Types
+-- }}}
 
 instance Show Mail where 
     show mail = unlines [
@@ -21,4 +24,16 @@ instance Show Mail where
 defaultMail :: Mail
 defaultMail = Mail {
     mMIME = "text/html"
+}
+
+ 
+itemToMail :: Item -> Mail
+itemToMail item = defaultMail {
+    mReturnPath = "<noreply@anonymous.net>",
+    mDate       = stringToUTC $ (maybe "" id $ getItemDate item),
+    mFrom       = maybe "Anonymous" id $ getItemAuthor item,
+    mSubject    = maybe "Untitled" id $ getItemTitle item,
+    mCharset    = "utf-8",
+    mContentDisposition = "inline",
+    mContent = maybe "Empty" id $ getItemDescription item
 }

@@ -2,6 +2,7 @@ module Imm.Core where
 
 -- {{{ Imports
 import Imm.Mail
+import qualified Imm.Maildir as Maildir
 import Imm.Types
 import Imm.Util
 
@@ -9,7 +10,8 @@ import Codec.Binary.UTF8.String
 
 import qualified Config.Dyre as D
 import Config.Dyre.Paths
---import Control.Monad hiding(forM_)
+
+import Control.Monad hiding(forM_)
 
 import Data.Foldable
 import Data.Maybe
@@ -17,7 +19,6 @@ import Data.Time.Clock
 import Data.Time.Clock.POSIX
 import Data.Time.Format
 
-import Network.BSD
 import Network.HTTP hiding(Response)
 import Network.URI
 
@@ -26,7 +27,6 @@ import System.Directory
 import System.IO
 import System.IO.Error
 import System.Locale
-import System.Random
 
 import Text.Feed.Import
 import Text.Feed.Query
@@ -98,7 +98,7 @@ realMain parameters@Parameters{ mMailDirectory = directory } = do
         ""])
         
 -- Initialize mailbox
-    result <- initMailDir directory
+    result <- Maildir.init directory
     case result of
         False -> putStrLn $ "Unable to initialize maildir at: " ++ directory
         _     -> realMain' parameters
@@ -116,17 +116,6 @@ realMain' parameters@Parameters{ mFeedURIs = feedURIs } = do
     
   where
     uris = mapMaybe parseURI feedURIs
-
-initMailDir :: FilePath -> IO Bool
-initMailDir directory = do
-    root <- try $ createDirectoryIfMissing True directory
-    cur  <- try $ createDirectoryIfMissing True $ directory ++ "/cur"
-    new  <- try $ createDirectoryIfMissing True $ directory ++ "/new"
-    tmp  <- try $ createDirectoryIfMissing True $ directory ++ "/tmp"
-    
-    case (root, cur, new, tmp) of
-        (Right _, Right _, Right _, Right _) -> return True
-        _                                    -> return False
 
 
 processFeed :: Parameters -> ImmFeed -> IO ()
@@ -160,23 +149,14 @@ processFeed parameters _f@ImmFeed {mURI = uri, mFeed = feed} = do
 maxMaybe :: (Ord a) => Maybe a -> a -> a
 maxMaybe (Just x) = max x
 maxMaybe Nothing  = id
-        
-getUniqueName :: IO String    
-getUniqueName = do
-    time     <- getPOSIXTime >>= (return . show)
-    hostname <- getHostName
-    rand     <- (getStdRandom $ randomR (1,100000) :: IO Int) >>= (return . show)
-    
-    return $ time ++ "." ++ rand ++ "." ++ hostname
-    
+            
 
 processItem :: Parameters -> Maybe UTCTime -> Item -> IO (Maybe UTCTime)
 processItem parameters@Parameters{ mMailDirectory = directory } threshold item = do
-    putStrLn $ "   Item author: " ++ (maybe "" id $ getItemAuthor item)
-    putStrLn $ "   Item title: " ++ (maybe "" id $ getItemTitle item)
-    putStrLn $ "   Item URI:   " ++ (maybe "" id $ getItemLink  item)
+    whenLoud $ putStrLn ("   Item author: " ++ (maybe "" id $ getItemAuthor item))
+    whenLoud $ putStrLn ("   Item title: " ++ (maybe "" id $ getItemTitle item))
+    whenLoud $ putStrLn ("   Item URI:   " ++ (maybe "" id $ getItemLink  item))
     
-    fileName    <- getUniqueName
     currentTime <- getCurrentTime :: IO UTCTime
     let time = getItemDate item >>= stringToUTC
     print time
@@ -184,32 +164,10 @@ processItem parameters@Parameters{ mMailDirectory = directory } threshold item =
     print ""
     
     case (threshold, time) of
-        (Just x, Just y) -> case x < y of
-            True -> addItemToMailDir (directory ++ "/new/" ++ fileName) item
-            _    -> return ()
-        _     -> addItemToMailDir (directory ++ "/new/" ++ fileName) item  
+        (Just x, Just y) -> when (x < y) $ Maildir.add directory (itemToMail item)
+        _                -> Maildir.add directory (itemToMail item)
         
     return time
-        
-        
-addItemToMailDir :: FilePath -> Item -> IO ()
-addItemToMailDir filePath item = writeFile filePath $ show (itemToMail item)
-  
-itemToMail :: Item -> Mail
-itemToMail item = defaultMail {
-    mReturnPath = "<noreply@anonymous.net>",
-    mDate       = stringToUTC $ (maybe "" id $ getItemDate item),
-    mFrom       = maybe "Anonymous" id $ getItemAuthor item,
-    mSubject    = maybe "Untitled" id $ getItemTitle item,
-    mCharset    = "utf-8",
-    mContentDisposition = "inline",
-    mContent = maybe "Empty" id $ getItemDescription item
-}
-
-    
-stringToUTC :: String -> Maybe UTCTime
-stringToUTC = parseTime defaultTimeLocale "%a, %e %b %Y %T %z"
-
 
 downloadRaw :: URI -> IO (Maybe (URI, String))
 downloadRaw uri = do
@@ -223,7 +181,6 @@ downloadRaw uri = do
           body = rspBody rawPage
 
 rawToFeed :: (URI, String) -> IO (Maybe ImmFeed)
-rawToFeed (uri, rawPage) = do
-  case parseFeedString rawPage of
+rawToFeed (uri, rawPage) = case parseFeedString rawPage of
     Just x  -> return $ Just ImmFeed{ mURI = uri, mFeed = x}
     Nothing -> putStrLn "Unable to parse XML from raw page." >> return Nothing
