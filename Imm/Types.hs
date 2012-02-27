@@ -31,7 +31,7 @@ data ImmFeed = ImmFeed {
 
 data Mail = Mail {
     mReturnPath  :: String,
-    mDate        :: Maybe UTCTime,
+    mDate        :: UTCTime,
     mFrom        :: String,
     mSubject     :: String,
     mMIME        :: String,
@@ -39,3 +39,14 @@ data Mail = Mail {
     mContentDisposition :: String,
     mContent     :: String
 }
+
+instance Show Mail where 
+    show mail = unlines [
+        "Return-Path: " ++ mReturnPath mail,
+        "Date: " ++ (show $ mDate mail),
+        "From: " ++ mFrom mail,
+        "Subject: " ++ mSubject mail,
+        "Content-Type: " ++ mMIME mail ++ "; charset=" ++ mCharset mail,
+        "Content-Disposition: " ++ mContentDisposition mail,
+        "",
+        mContent mail]

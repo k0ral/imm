@@ -17,9 +17,9 @@ import System.Random
 init :: FilePath -> IO Bool
 init directory = do
     root <- try $ createDirectoryIfMissing True directory
-    cur  <- try $ createDirectoryIfMissing True $ directory ++ "/cur"
-    new  <- try $ createDirectoryIfMissing True $ directory ++ "/new"
-    tmp  <- try $ createDirectoryIfMissing True $ directory ++ "/tmp"
+    cur  <- try . createDirectoryIfMissing True . (directory </>) $ "cur"
+    new  <- try . createDirectoryIfMissing True . (directory </>) $ "new"
+    tmp  <- try . createDirectoryIfMissing True . (directory </>) $ "tmp"
     
     case (root, cur, new, tmp) of
         (Right _, Right _, Right _, Right _) -> return True

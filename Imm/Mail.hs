@@ -4,36 +4,30 @@ module Imm.Mail where
 import Imm.Types
 import Imm.Util
 
+import Control.Monad
+
+import Data.Time.Clock.POSIX
+
 import Text.Feed.Query
 import Text.Feed.Types
 -- }}}
 
-instance Show Mail where 
-    show mail = unlines [
-        "Return-Path: " ++ mReturnPath mail,
-        "Date: " ++ (maybe "" show (mDate mail)),
-        "From: " ++ mFrom mail,
-        "Subject: " ++ mSubject mail,
-        "Content-Type: " ++ mMIME mail ++ "; charset=" ++ mCharset mail,
-        "Content-Disposition: " ++ mContentDisposition mail,
-        "",
-        mContent mail
-        ]
-                
                 
 defaultMail :: Mail
 defaultMail = Mail {
-    mMIME = "text/html"
-}
+    mCharset            = "utf-8",
+    mContent            = "",
+    mContentDisposition = "inline",
+    mDate               = posixSecondsToUTCTime 0,
+    mFrom               = "imm",
+    mMIME               = "text/html",
+    mSubject            = "Untitled",
+    mReturnPath         = "<imm@noreply>"}
 
  
 itemToMail :: Item -> Mail
 itemToMail item = defaultMail {
-    mReturnPath = "<noreply@anonymous.net>",
-    mDate       = stringToUTC $ (maybe "" id $ getItemDate item),
+    mDate       = maybe (posixSecondsToUTCTime 0) id . (stringToUTC <=< getItemDate) $ item,
     mFrom       = maybe "Anonymous" id $ getItemAuthor item,
     mSubject    = maybe "Untitled" id $ getItemTitle item,
-    mCharset    = "utf-8",
-    mContentDisposition = "inline",
-    mContent = maybe "Empty" id $ getItemDescription item
-}
+    mContent    = maybe "Empty" id $ getItemDescription item}
