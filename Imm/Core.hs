@@ -17,6 +17,7 @@ import Data.Foldable
 --import Data.Maybe
 import Data.Time
 import Data.Time.Clock.POSIX
+import Data.Time.RFC3339
 
 import Network.HTTP hiding(Response)
 import Network.URI
@@ -131,7 +132,7 @@ processFeed parameters (uri, Right feed) = do
     let timeZero = posixSecondsToUTCTime $ 0 
     let threshold = either
           (const timeZero)
-          (maybe timeZero id . parseDate)
+          (maybe timeZero id . parseTime defaultTimeLocale "%F %T %Z")
           oldTime
     
     lastTime <- foldlM (\acc item -> processItem parameters threshold item >>= (return . (max acc))) threshold (feedItems feed) 

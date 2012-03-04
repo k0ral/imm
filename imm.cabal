@@ -42,8 +42,8 @@ Library
         text,
         time,
         timerep,
-        utf8-string
-        xml,
+        utf8-string,
+        xml
     
     -- Other-modules:       
     -- Build-tools:         
