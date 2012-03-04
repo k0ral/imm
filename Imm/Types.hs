@@ -4,7 +4,8 @@ module Imm.Types where
 -- {{{ Imports
 import Network.URI
 
-import Data.Time.Clock
+import Data.Time
+import Data.Time.RFC2822
 
 import System.Console.CmdArgs
 
@@ -31,7 +32,7 @@ data ImmFeed = ImmFeed {
 
 data Mail = Mail {
     mReturnPath  :: String,
-    mDate        :: UTCTime,
+    mDate        :: Maybe ZonedTime,
     mFrom        :: String,
     mSubject     :: String,
     mMIME        :: String,
@@ -43,7 +44,7 @@ data Mail = Mail {
 instance Show Mail where 
     show mail = unlines [
         "Return-Path: " ++ mReturnPath mail,
-        "Date: " ++ (show $ mDate mail),
+        maybe "" (("Date: " ++) . showRFC2822) . mDate $ mail,
         "From: " ++ mFrom mail,
         "Subject: " ++ mSubject mail,
         "Content-Type: " ++ mMIME mail ++ "; charset=" ++ mCharset mail,

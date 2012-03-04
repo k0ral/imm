@@ -28,21 +28,22 @@ Library
         Imm.Maildir
     Build-depends:
         base == 4.*,
+        bytestring,
+        cmdargs,
         directory,
         dyre,
         feed,
         filepath,
         HTTP,
-        time,
-        xml,
+        mime-mail,
+        network,
         old-locale,
         random,
-        bytestring,
-        mime-mail,
         text,
-        cmdargs,
-        network,
+        time,
+        timerep,
         utf8-string
+        xml,
     
     -- Other-modules:       
     -- Build-tools:         

@@ -15,9 +15,8 @@ import Control.Monad hiding(forM_)
 import Data.Foldable
 --import Data.Functor
 --import Data.Maybe
-import Data.Time.Clock
+import Data.Time
 import Data.Time.Clock.POSIX
-import Data.Time.Format
 
 import Network.HTTP hiding(Response)
 import Network.URI
@@ -129,9 +128,10 @@ processFeed parameters (uri, Right feed) = do
     
 -- 
     oldTime <- try $ readFile (directory </> fileName)
+    let timeZero = posixSecondsToUTCTime $ 0 
     let threshold = either
-          (const $ posixSecondsToUTCTime 0)
-          (maybe (posixSecondsToUTCTime 0) id . parseTime defaultTimeLocale "%F %T %Z")
+          (const timeZero)
+          (maybe timeZero id . parseDate)
           oldTime
     
     lastTime <- foldlM (\acc item -> processItem parameters threshold item >>= (return . (max acc))) threshold (feedItems feed) 
@@ -147,6 +147,7 @@ processFeed parameters (uri, Right feed) = do
 processItem :: Parameters -> UTCTime -> Item -> IO UTCTime
 processItem parameters@Parameters{ mMailDirectory = directory } threshold item = do
     currentTime <- getCurrentTime :: IO UTCTime
+    timeZone    <- getCurrentTimeZone
     let time = getItemDate item
   
     whenLoud . putStr . unlines $ ["",
@@ -155,14 +156,14 @@ processItem parameters@Parameters{ mMailDirectory = directory } threshold item =
         "   Item URI:    " ++ (maybe "" id $ getItemLink  item),
         "   Item date:   " ++ (maybe "" id $ time)]
     
-    case time >>= stringToUTC of
+    case time >>= parseDate of
         Just y -> do
             when (threshold < y) $ do
                 whenLoud . putStrLn $ "==> New entry added to maildir."
-                Maildir.add directory . itemToMail $ item 
+                Maildir.add directory . itemToMail timeZone $ item 
             return y
         _      -> do
-            Maildir.add directory . itemToMail $ item 
+            Maildir.add directory . itemToMail timeZone $ item 
             return threshold
 
 downloadRaw :: URI -> IO (Either String String)
