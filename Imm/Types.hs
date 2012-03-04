@@ -2,44 +2,44 @@
 module Imm.Types where
 
 -- {{{ Imports
-import Network.URI
+--import Network.URI
 
 import Data.Time
 import Data.Time.RFC2822
 
 import System.Console.CmdArgs
 
-import Text.Feed.Types
+--import Text.Feed.Types
 -- }}}
 
-
 data CliOptions = CliOptions {
-    mParameter :: Maybe String
-} deriving (Data, Typeable, Show, Eq)
+    mParameter :: Maybe String} 
+    deriving (Data, Typeable, Show, Eq)
 
 -- | 
 data Parameters = Parameters {
-    mCacheDirectory :: Maybe String,
-    mFeedURIs       :: [String],             -- ^ Feeds list
-    mMailDirectory  :: PortableFilePath,
-    mError          :: Maybe String          -- ^ Error                                                                                                                           
-}
+    mCacheDirectory  :: Maybe String,
+    mError           :: Maybe String}
 
-data ImmFeed = ImmFeed {
+type FeedGroup = (FeedSettings, [String]) 
+
+data FeedSettings = FeedSettings {
+    mMailDirectory  :: PortableFilePath}
+
+{-data ImmFeed = ImmFeed {
     mURI  :: URI,
     mFeed :: Feed
-}
+}-}
 
 data Mail = Mail {
-    mReturnPath  :: String,
-    mDate        :: Maybe ZonedTime,
-    mFrom        :: String,
-    mSubject     :: String,
-    mMIME        :: String,
-    mCharset     :: String,
+    mReturnPath         :: String,
+    mDate               :: Maybe ZonedTime,
+    mFrom               :: String,
+    mSubject            :: String,
+    mMIME               :: String,
+    mCharset            :: String,
     mContentDisposition :: String,
-    mContent     :: String
-}
+    mContent            :: String}
 
 instance Show Mail where 
     show mail = unlines [
@@ -57,8 +57,7 @@ data RefDirs = RefDirs {
     mHome          :: FilePath,        -- ^ Home directory
     mTemporary     :: FilePath,        -- ^ Temporary files directory
     mConfiguration :: FilePath,        -- ^ Configuration directory
-    mData          :: FilePath         -- ^ Data directory
-}
+    mData          :: FilePath}        -- ^ Data directory
 
 type PortableFilePath = RefDirs -> FilePath
 

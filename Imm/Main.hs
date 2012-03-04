@@ -5,4 +5,4 @@ import Imm.Core
 --import Imm.Types
 
 main :: IO ()
-main = imm defaultParameters
+main = imm [] defaultGlobalSettings
