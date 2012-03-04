@@ -1,6 +1,8 @@
 module Imm.Util where
 
 -- {{{ Imports
+import Imm.Types
+
 import Codec.Binary.UTF8.String
 
 import Data.Maybe
@@ -9,7 +11,19 @@ import Data.Time.RFC2822
 import Data.Time.RFC3339
 
 --import Network.URI
+
+import System.Directory
+import System.Environment.XDG.BaseDir
 -- }}}
+
+resolve :: (RefDirs -> a) -> IO a
+resolve f = do
+    homeDir   <- getHomeDirectory
+    tmpDir    <- getTemporaryDirectory
+    configDir <- getUserConfigDir "hbro"
+    dataDir   <- getUserDataDir   "hbro"
+    
+    return . f $ RefDirs homeDir tmpDir configDir dataDir
 
 escapeFileName :: Char -> String
 escapeFileName '/' = "|"
