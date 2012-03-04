@@ -3,32 +3,40 @@ module Imm.Maildir where
 -- {{{ Imports
 import Imm.Mail()
 import Imm.Types
+import Imm.Util
 
 import Data.Time.Clock.POSIX
 
 import Network.BSD
 
+import System.Console.CmdArgs
 import System.Directory
 import System.FilePath
 import System.IO.Error
 import System.Random
 -- }}}
 
-init :: FilePath -> IO Bool
+init :: PortableFilePath -> IO Bool
 init directory = do
-    root <- try $ createDirectoryIfMissing True directory
-    cur  <- try . createDirectoryIfMissing True . (directory </>) $ "cur"
-    new  <- try . createDirectoryIfMissing True . (directory </>) $ "new"
-    tmp  <- try . createDirectoryIfMissing True . (directory </>) $ "tmp"
+    dir  <- resolve directory
+    root <- try $ createDirectoryIfMissing True dir
+    cur  <- try . createDirectoryIfMissing True . (dir </>) $ "cur"
+    new  <- try . createDirectoryIfMissing True . (dir </>) $ "new"
+    tmp  <- try . createDirectoryIfMissing True . (dir </>) $ "tmp"
     
     case (root, cur, new, tmp) of
-        (Right _, Right _, Right _, Right _) -> return True
-        _                                    -> return False
+        (Right _, Right _, Right _, Right _) -> do
+            whenLoud . putStrLn . ("Maildir correctly created at: " ++) $ dir
+            return True
+        _                                    -> do
+            whenNormal . putStrLn . ("Unable to initialize maildir at: " ++) $ dir
+            return False
 
-add :: FilePath -> Mail -> IO ()
+add :: PortableFilePath -> Mail -> IO ()
 add directory mail = do
+    dir      <- resolve directory
     fileName <- getUniqueName
-    writeFile (directory </> "new" </> fileName) (show mail)
+    writeFile (dir </> "new" </> fileName) (show mail)
 
 
 getUniqueName :: IO String    

@@ -21,7 +21,7 @@ data CliOptions = CliOptions {
 data Parameters = Parameters {
     mCacheDirectory :: Maybe String,
     mFeedURIs       :: [String],             -- ^ Feeds list
-    mMailDirectory  :: FilePath,
+    mMailDirectory  :: PortableFilePath,
     mError          :: Maybe String          -- ^ Error                                                                                                                           
 }
 
@@ -51,3 +51,14 @@ instance Show Mail where
         "Content-Disposition: " ++ mContentDisposition mail,
         "",
         mContent mail]
+
+-- | Set of reference directories, typically used to build FilePath-s
+data RefDirs = RefDirs {
+    mHome          :: FilePath,        -- ^ Home directory
+    mTemporary     :: FilePath,        -- ^ Temporary files directory
+    mConfiguration :: FilePath,        -- ^ Configuration directory
+    mData          :: FilePath         -- ^ Data directory
+}
+
+type PortableFilePath = RefDirs -> FilePath
+

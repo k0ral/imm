@@ -1,6 +1,7 @@
 module Imm.Core where
 
 -- {{{ Imports
+import Imm.Config
 import Imm.Mail
 import qualified Imm.Maildir as Maildir
 import Imm.Types
@@ -17,7 +18,6 @@ import Data.Foldable
 --import Data.Maybe
 import Data.Time
 import Data.Time.Clock.POSIX
-import Data.Time.RFC3339
 
 import Network.HTTP hiding(Response)
 import Network.URI
@@ -62,15 +62,6 @@ dyreParameters = D.defaultParams {
 
 showError :: Parameters -> String -> Parameters
 showError parameters message = parameters { mError = Just message }
-
--- | Default configuration.
-defaultParameters :: Parameters
-defaultParameters = Parameters {
-    mCacheDirectory = Nothing,
-    mFeedURIs       = [],
-    mMailDirectory  = "rss",
-    mError          = Nothing
-}
 -- }}}
 
 -- | 
@@ -97,9 +88,7 @@ realMain parameters@Parameters{ mMailDirectory = directory } = do
         
 -- Initialize mailbox
     result <- Maildir.init directory
-    case result of
-        False -> putStrLn $ "Unable to initialize maildir at: " ++ directory
-        _     -> realMain' parameters
+    when result $ realMain' parameters
    
 -- At this point, a maildir has been setup.
 realMain' :: Parameters -> IO ()
