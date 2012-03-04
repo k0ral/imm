@@ -10,6 +10,7 @@ import Data.Time
 
 import Text.Feed.Query
 import Text.Feed.Types
+import Text.Atom.Feed   as Atom
 -- }}}
 
 
@@ -30,4 +31,9 @@ itemToMail timeZone item = defaultMail {
     mDate       = maybe Nothing (Just . utcToZonedTime timeZone) . parseDate <=< getItemDate $ item,
     mFrom       = maybe "Anonymous" id $ getItemAuthor item,
     mSubject    = maybe "Untitled" id $ getItemTitle item,
-    mContent    = maybe "Empty" id $ getItemDescription item}
+    mContent    = getItemContent item}
+
+
+getItemContent :: Item -> String
+getItemContent (AtomItem e) = show (Atom.entryContent e)
+getItemContent item = maybe "Empty" id $ getItemDescription item
