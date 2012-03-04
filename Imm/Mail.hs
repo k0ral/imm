@@ -35,5 +35,13 @@ itemToMail timeZone item = defaultMail {
 
 
 getItemContent :: Item -> String
-getItemContent (AtomItem e) = show (Atom.entryContent e)
+getItemContent (AtomItem e) = maybe "No content" (show . extractHtml) ( Atom.entryContent e)
 getItemContent item = maybe "Empty" id $ getItemDescription item
+
+
+extractHtml :: EntryContent -> String
+extractHtml (HTMLContent c) = c
+extractHtml (XHTMLContent c) = show c
+extractHtml (TextContent t) = t
+extractHtml (MixedContent a b)=show a ++ show b
+extractHtml (ExternalContent mediaType uri) = show mediaType ++ show uri
