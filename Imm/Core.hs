@@ -144,6 +144,7 @@ processItem parameters@Parameters{ mMailDirectory = directory } threshold item =
         "   Item author: " ++ (maybe "" id $ getItemAuthor item),
         "   Item title:  " ++ (maybe "" id $ getItemTitle item),
         "   Item URI:    " ++ (maybe "" id $ getItemLink  item),
+        "   Item Content:    " ++ (Imm.Mail.getItemContent  item),
         "   Item date:   " ++ (maybe "" id $ time)]
     
     case time >>= parseDate of
