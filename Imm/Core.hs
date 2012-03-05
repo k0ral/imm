@@ -51,11 +51,11 @@ getOptions = cmdArgs $ cliOptions
 -- }}}
 
 -- {{{ Configuration
-dyreParameters :: D.Params Parameters
-dyreParameters = D.defaultParams {
+dyreParameters :: [FeedGroup] -> D.Params Parameters
+dyreParameters feedGroups = D.defaultParams {
   D.projectName  = "imm",
   D.showError    = showError,
-  D.realMain     = realMain,
+  D.realMain     = realMain feedGroups,
   D.ghcOpts      = ["-threaded"],
   D.statusOut    = hPutStrLn stderr
 }
@@ -65,12 +65,12 @@ showError parameters message = parameters { mError = Just message }
 -- }}}
 
 -- | 
-imm :: Parameters -> IO ()
-imm = D.wrapMain dyreParameters
+imm :: [FeedGroup] -> Parameters -> IO ()
+imm feedGroups = D.wrapMain (dyreParameters feedGroups)
 
 -- Entry point
-realMain :: Parameters -> IO ()
-realMain parameters@Parameters{ mMailDirectory = directory } = do
+realMain :: [FeedGroup] -> Parameters -> IO ()
+realMain feedGroups parameters = do
 -- Print configuration error, if any
     forM_ (mError parameters) putStrLn
     
@@ -78,7 +78,7 @@ realMain parameters@Parameters{ mMailDirectory = directory } = do
     options <- getOptions
 
 -- Print in-use paths
-    (a, b, c, d, e) <- getPaths dyreParameters 
+    (a, b, c, d, e) <- getPaths (dyreParameters []) 
     whenLoud . putStrLn . unlines $ [
         "Current binary:  " ++ a,
         "Custom binary:   " ++ b,
@@ -87,32 +87,35 @@ realMain parameters@Parameters{ mMailDirectory = directory } = do
         "Lib directory:   " ++ e]
         
 -- Initialize mailbox
-    result <- Maildir.init directory
-    when result $ realMain' parameters
+    void . mapM (processFeedGroup parameters) $ feedGroups
    
 -- At this point, a maildir has been setup.
-realMain' :: Parameters -> IO ()
-realMain' parameters@Parameters{ mFeedURIs = feedURIs } = do    
-    let uris   = map parseURI' feedURIs 
-    rawFeeds  <- mapM (either (return . Left) downloadRaw) uris 
-    let feeds  = zip feedURIs . map (parseFeedString =<<) $ rawFeeds
+processFeedGroup :: Parameters -> FeedGroup -> IO ()
+processFeedGroup parameters _feedGroup@(settings, feedURIs) = do    
+    result <- Maildir.init . mMailDirectory $ settings
     
-    void . mapM (processFeed parameters) $ feeds 
+    when result $ do
+      let uris   = map parseURI' feedURIs 
+      rawFeeds  <- mapM (either (return . Left) downloadRaw) uris 
+      let feeds  = zip feedURIs . map (parseFeedString =<<) $ rawFeeds
+    
+      void . mapM (processFeed parameters settings) $ feeds 
+    
     return ()
 
 parseURI' :: String -> Either String URI
 parseURI' uri = maybe (Left . ("Ill-formatted URI: " ++) $ uri) (Right) . parseURI $ uri
 
-processFeed :: Parameters -> (String, Either String Feed) -> IO ()
-processFeed _ (_, Left e) = putStrLn e
-processFeed parameters (uri, Right feed) = do
+processFeed :: Parameters -> FeedSettings -> (String, Either String Feed) -> IO ()
+processFeed _ _ (_, Left e) = putStrLn e
+processFeed parameters settings (uri, Right feed) = do
     whenLoud . putStr . unlines $ [
         "Processing feed: " ++ uri,
         ("Title:  " ++) . getFeedTitle $ feed,
         ("Author: " ++) . maybe "No author" id . getFeedAuthor $ feed,
         ("Home:   " ++) . maybe "No home"   id . getFeedHome $ feed]
     
-    (_, _, _, d, _) <- getPaths dyreParameters
+    (_, _, _, d, _) <- getPaths (dyreParameters [])
     let directory = maybe d id . mCacheDirectory $ parameters  
     let fileName  = uri >>= escapeFileName
     
@@ -124,7 +127,7 @@ processFeed parameters (uri, Right feed) = do
           (maybe timeZero id . parseTime defaultTimeLocale "%F %T %Z")
           oldTime
     
-    lastTime <- foldlM (\acc item -> processItem parameters threshold item >>= (return . (max acc))) threshold (feedItems feed) 
+    lastTime <- foldlM (\acc item -> processItem parameters settings threshold item >>= (return . (max acc))) threshold (feedItems feed) 
     
 -- 
     (file, handle) <- openTempFile directory fileName
@@ -134,11 +137,10 @@ processFeed parameters (uri, Right feed) = do
     
     return ()
 
-processItem :: Parameters -> UTCTime -> Item -> IO UTCTime
-processItem parameters@Parameters{ mMailDirectory = directory } threshold item = do
-    currentTime <- getCurrentTime :: IO UTCTime
+processItem :: Parameters -> FeedSettings -> UTCTime -> Item -> IO UTCTime
+processItem parameters settings threshold item = do
+--  currentTime <- getCurrentTime :: IO UTCTime
     timeZone    <- getCurrentTimeZone
-    let time = getItemDate item
   
     whenLoud . putStr . unlines $ ["",
         "   Item author: " ++ (maybe "" id $ getItemAuthor item),
@@ -151,11 +153,14 @@ processItem parameters@Parameters{ mMailDirectory = directory } threshold item =
         Just y -> do
             when (threshold < y) $ do
                 whenLoud . putStrLn $ "==> New entry added to maildir."
-                Maildir.add directory . itemToMail timeZone $ item 
+                Maildir.add dir . itemToMail timeZone $ item 
             return y
         _      -> do
-            Maildir.add directory . itemToMail timeZone $ item 
+            Maildir.add dir . itemToMail timeZone $ item 
             return threshold
+  where
+    time = getItemDate item
+    dir  = mMailDirectory settings
 
 downloadRaw :: URI -> IO (Either String String)
 downloadRaw uri = do

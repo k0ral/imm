@@ -9,17 +9,15 @@ import System.FilePath
 -- }}}
 
 main :: IO ()
-main = imm myParameters
+main = imm myFeedGroups myGlobalSettings
 
-myParameters :: Parameters
-myParameters = defaultParameters {
-    mFeedURIs      = myFeeds,
-    mMailDirectory = myMailDirectory
-}
+myGlobalSettings :: Parameters
+myGlobalSettings = defaultGlobalSettings
 
-myFeeds :: [String]
-myFeeds = [
-    "http://planet.haskell.org/rss20.xml"]
+myFeedGroups :: [FeedGroup]
+myFeedGroups = [
+    (exampleFeeds, ["http://planet.haskell.org/rss20.xml"])]
 
-myMailDirectory :: PortableFilePath
-myMailDirectory refDirs = (mHome refDirs) </> "feeds"
+exampleFeeds :: FeedSettings
+exampleFeeds = FeedSettings {
+    mMailDirectory = \refDirs -> (mHome refDirs) </> "feeds"}
