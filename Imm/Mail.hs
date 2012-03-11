@@ -37,13 +37,14 @@ buildMailBody :: Item -> String
 buildMailBody item = 
     unlines $ map ((><) item) [getItemLinkNM, getItemContent]
 
-
+getItemLinkNM :: Item -> String 
 getItemLinkNM item = maybe "No link found" paragraphy  $ getItemLink item
 
 -- ce "magic operator" semble pas défini dans les libs haskell -> WTF ?
 (><) :: a -> (a -> b) -> b
 (><) a b = b a
 
+paragraphy :: String -> String
 paragraphy s = "<p>"++s++"</p>"
 
 

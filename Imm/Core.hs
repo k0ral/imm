@@ -1,7 +1,6 @@
 module Imm.Core where
 
 -- {{{ Imports
-import Imm.Config
 import Imm.Mail
 import qualified Imm.Maildir as Maildir
 import Imm.Types
@@ -11,6 +10,7 @@ import qualified Config.Dyre as D
 import Config.Dyre.Paths
 
 --import Control.Arrow
+import Control.Exception 
 import Control.Monad hiding(forM_)
 
 import Data.Foldable
@@ -26,7 +26,6 @@ import System.Console.CmdArgs
 import System.Directory
 import System.FilePath
 import System.IO
-import System.IO.Error
 import System.Locale
 
 import qualified Text.Feed.Import as F
@@ -120,7 +119,7 @@ processFeed parameters settings (uri, Right feed) = do
     let fileName  = uri >>= escapeFileName
     
 -- 
-    oldTime <- try $ readFile (directory </> fileName)
+    oldTime <- try $ readFile (directory </> fileName) :: IO (Either IOError String)
     let timeZero = posixSecondsToUTCTime $ 0 
     let threshold = either
           (const timeZero)
