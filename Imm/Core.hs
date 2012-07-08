@@ -65,10 +65,10 @@ processFeed parameters settings (uri, Right feed) = do
     let fileName  = uri >>= escapeFileName
     
 -- 
-    oldTime <- try $ readFile (directory </> fileName)
+    oldTime <- try $ readFile (directory </> fileName) :: IO (Either IOError String)
     let timeZero = posixSecondsToUTCTime $ 0 
     let threshold = either
-          (const timeZero :: IOError -> UTCTime)
+          (const timeZero)
           (maybe timeZero id . parseTime defaultTimeLocale "%F %T %Z")
           oldTime
     
@@ -91,6 +91,7 @@ processItem parameters settings threshold item = do
         "   Item author: " ++ (maybe "" id $ getItemAuthor item),
         "   Item title:  " ++ (maybe "" id $ getItemTitle item),
         "   Item URI:    " ++ (maybe "" id $ getItemLink  item),
+        "   Item Content:    " ++ (Imm.Mail.getItemContent  item),
         "   Item date:   " ++ (maybe "" id $ time)]
     
     case time >>= parseDate of
