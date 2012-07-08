@@ -12,16 +12,21 @@ import Data.Time.RFC3339
 
 --import Network.URI
 
+import System.Console.CmdArgs
 import System.Directory
 import System.Environment.XDG.BaseDir
 -- }}}
+
+logNormal, logVerbose :: String -> IO ()
+logNormal  = whenNormal . putStrLn
+logVerbose = whenLoud . putStrLn
 
 resolve :: (RefDirs -> a) -> IO a
 resolve f = do
     homeDir   <- getHomeDirectory
     tmpDir    <- getTemporaryDirectory
-    configDir <- getUserConfigDir "hbro"
-    dataDir   <- getUserDataDir   "hbro"
+    configDir <- getUserConfigDir "imm"
+    dataDir   <- getUserDataDir   "imm"
     
     return . f $ RefDirs homeDir tmpDir configDir dataDir
 

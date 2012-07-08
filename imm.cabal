@@ -21,6 +21,7 @@ Source-repository head
 
 Library
     Exposed-modules:
+        Imm.Boot,
         Imm.Config,
         Imm.Core,
         Imm.Types,

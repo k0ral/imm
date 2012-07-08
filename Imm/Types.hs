@@ -13,12 +13,13 @@ import System.Console.CmdArgs
 -- }}}
 
 data CliOptions = CliOptions {
-    mParameter :: Maybe String} 
-    deriving (Data, Typeable, Show, Eq)
+    mParameter    :: Maybe String,
+    mMasterBinary :: Maybe String} 
+  deriving (Data, Typeable, Show, Eq)
 
 -- | 
-data Parameters = Parameters {
-    mCacheDirectory  :: Maybe String,
+data Settings = Settings {
+    mStateDirectory  :: PortableFilePath,
     mError           :: Maybe String}
 
 type FeedGroup = (FeedSettings, [String]) 

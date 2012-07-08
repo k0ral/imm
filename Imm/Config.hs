@@ -2,9 +2,11 @@ module Imm.Config where
 
 import Imm.Types
 
+import System.FilePath
+
 -- | Default configuration.
-defaultGlobalSettings :: Parameters
-defaultGlobalSettings = Parameters {
-    mCacheDirectory  = Nothing,
-    mError           = Nothing
+defaultSettings :: Settings
+defaultSettings = Settings {
+    mStateDirectory = (</> "state") . mConfiguration,
+    mError          = Nothing
 }

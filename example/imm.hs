@@ -1,18 +1,18 @@
 module Main where
 
 -- {{{ Imports
+import Imm.Boot
 import Imm.Config
-import Imm.Core
 import Imm.Types
 
 import System.FilePath
 -- }}}
 
 main :: IO ()
-main = imm myFeedGroups myGlobalSettings
+main = imm myFeedGroups mySettings
 
-myGlobalSettings :: Parameters
-myGlobalSettings = defaultGlobalSettings
+mySettings :: Settings
+mySettings = defaultSettings
 
 myFeedGroups :: [FeedGroup]
 myFeedGroups = [

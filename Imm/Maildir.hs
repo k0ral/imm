@@ -5,14 +5,17 @@ import Imm.Mail()
 import Imm.Types
 import Imm.Util
 
+--import Control.Monad
+import Control.Exception
+
+import Data.Functor
 import Data.Time.Clock.POSIX
 
 import Network.BSD
 
-import System.Console.CmdArgs
 import System.Directory
 import System.FilePath
-import System.IO.Error
+import System.IO.Error (ioeGetErrorString)
 import System.Random
 -- }}}
 
@@ -20,17 +23,16 @@ init :: PortableFilePath -> IO Bool
 init directory = do
     dir  <- resolve directory
     root <- try $ createDirectoryIfMissing True dir
-    cur  <- try . createDirectoryIfMissing True . (dir </>) $ "cur"
-    new  <- try . createDirectoryIfMissing True . (dir </>) $ "new"
-    tmp  <- try . createDirectoryIfMissing True . (dir </>) $ "tmp"
+    cur  <- try $ createDirectoryIfMissing True (dir </> "cur")
+    new  <- try $ createDirectoryIfMissing True (dir </> "new")
+    tmp  <- try $ createDirectoryIfMissing True (dir </> "tmp")
     
-    case (root, cur, new, tmp) of
-        (Right _, Right _, Right _, Right _) -> do
-            whenLoud . putStrLn . ("Maildir correctly created at: " ++) $ dir
-            return True
-        _                                    -> do
-            whenNormal . putStrLn . ("Unable to initialize maildir at: " ++) $ dir
-            return False
+    either
+        (\e -> do 
+          logNormal $ concat ["Unable to initialize maildir at ", dir, " : ", ioeGetErrorString e]
+          return False)
+        (const $ logVerbose ("Maildir correctly created at: " ++ dir) >> return True)
+        $ sequence [root, cur, new, tmp]
 
 add :: PortableFilePath -> Mail -> IO ()
 add directory mail = do
@@ -39,11 +41,11 @@ add directory mail = do
     writeFile (dir </> "new" </> fileName) (show mail)
 
 
-getUniqueName :: IO String    
+getUniqueName :: IO String 
 getUniqueName = do
-    time     <- getPOSIXTime >>= (return . show)
+    time     <- show <$> getPOSIXTime
     hostname <- getHostName
-    rand     <- (getStdRandom $ randomR (1,100000) :: IO Int) >>= (return . show)
+    rand     <- show <$> (getStdRandom $ randomR (1,100000) :: IO Int)
     
-    return $ time ++ "." ++ rand ++ "." ++ hostname
+    return . concat $ [time, ".", rand, ".", hostname]
 

@@ -1,8 +1,8 @@
 module Main where
 
+import Imm.Boot
 import Imm.Config
-import Imm.Core
 --import Imm.Types
 
 main :: IO ()
-main = imm [] defaultGlobalSettings
+main = imm [] defaultSettings
