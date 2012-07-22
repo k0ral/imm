@@ -27,19 +27,22 @@ instance Show ImmError where
 -- }}}
 
 data CliOptions = CliOptions {
+    mCheck        :: Bool,
     mList         :: Bool,
+    mDenyReconf   :: Bool,         -- ^ Do not recompile configuration even if it has changed
     mMasterBinary :: Maybe String} 
   deriving (Data, Typeable, Show, Eq)
 
 -- | Set of settings for imm
 data Settings = Settings {
-    mStateDirectory :: PortableFilePath,
-    mError          :: Maybe String}
+    mFeedGroups     :: [FeedGroup],
+    mStateDirectory :: PortableFilePath
+}
 
 type FeedGroup = (FeedSettings, [String]) 
 
 data FeedSettings = FeedSettings {
-    mMailDirectory  :: PortableFilePath}
+    mMaildir  :: PortableFilePath}
 
 type ImmFeed = (URI, Feed)
 

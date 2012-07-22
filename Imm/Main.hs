@@ -5,4 +5,4 @@ import Imm.Config
 --import Imm.Types
 
 main :: IO ()
-main = imm [] defaultSettings
+main = imm defaultSettings

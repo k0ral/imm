@@ -29,16 +29,28 @@ import Text.Feed.Query
 import Text.Feed.Types
 -- }}}
 
--- | Internal entry point for imm, after boot process
-main :: [FeedGroup] -> (Settings, CliOptions) -> IO ()
-main feedGroups (settings, _options) = do
-    result <- forM feedGroups $ runEitherT . processFeedGroup settings
-    forM_ (lefts result) print
-
+-- {{{ Quick actions performed for specific commandline options
+printFeedGroup :: FeedGroup -> IO ()
+printFeedGroup (settings, feeds) = do
+    maildir <- resolve $ mMaildir settings
+    putStrLn $ " => Feed group " ++ maildir
+    putStrLn . unlines $ feeds
    
+checkFeedGroup :: FeedGroup -> IO ()
+checkFeedGroup (settings, feeds) = return ()
+-- }}}
+
+-- | Internal entry point for imm, after boot process
+main :: (Settings, CliOptions) -> IO ()
+main (settings, _options) = do
+    result <- forM groups $ runEitherT . processFeedGroup settings
+    forM_ (lefts result) print
+  where
+    groups = mFeedGroups settings
+
 processFeedGroup :: Settings -> FeedGroup -> EitherT ImmError IO ()
 processFeedGroup globalSettings _feedGroup@(feedSettings, feedURIs) = do
-    fmapLT OtherError $ Maildir.init $ mMailDirectory feedSettings
+    fmapLT OtherError $ Maildir.init $ mMaildir feedSettings
     forM_ feedURIs $ \uri -> do
         uri' <- EitherT . return $ parseURI' uri
         feed <- downloadFeed uri'
@@ -80,7 +92,7 @@ processItem _globalSettings feedSettings item = do
     void $ Maildir.add dir . Mail.fromItem timeZone $ item 
   where
     time = getItemDate item
-    dir  = mMailDirectory feedSettings
+    dir  = mMaildir feedSettings
 
 
 downloadRaw :: URI -> EitherT ConnError IO T.Text

@@ -9,10 +9,11 @@ import System.FilePath
 -- }}}
 
 main :: IO ()
-main = imm myFeedGroups mySettings
+main = imm mySettings
 
 mySettings :: Settings
-mySettings = defaultSettings
+mySettings = defaultSettings {
+    mFeedGroups = myFeedGroups }
 
 myFeedGroups :: [FeedGroup]
 myFeedGroups = [
@@ -20,4 +21,4 @@ myFeedGroups = [
 
 exampleFeeds :: FeedSettings
 exampleFeeds = FeedSettings {
-    mMailDirectory = \refDirs -> (mHome refDirs) </> "feeds"}
+    mMaildir = \refDirs -> (mHome refDirs) </> "feeds"}

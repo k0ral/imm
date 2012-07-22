@@ -8,5 +8,5 @@ import System.FilePath
 defaultSettings :: Settings
 defaultSettings = Settings {
     mStateDirectory = (</> "state") . mConfiguration,
-    mError          = Nothing
+    mFeedGroups     = []
 }
