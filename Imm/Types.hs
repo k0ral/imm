@@ -2,14 +2,27 @@
 module Imm.Types where
 
 -- {{{ Imports
---import Network.URI
-
+import qualified Data.Text.Lazy as T
 import Data.Time
-import Data.Time.RFC2822
+
+import Network.URI
+import Network.Stream
 
 import System.Console.CmdArgs
 
---import Text.Feed.Types
+import Text.Feed.Types
+-- }}}
+
+-- {{{ Error handling
+data ImmError = OtherError String | ParseUriError String | ParseTimeError String | ParseItemDateError Item | ParseFeedError String | CE ConnError
+
+instance Show ImmError where
+    show (OtherError e)            = show e
+    show (ParseUriError raw)       = "Cannot parse URI: " ++ raw
+    show (ParseItemDateError item) = "Cannot parse date from item: " ++ show item
+    show (ParseTimeError raw)      = "Cannot parse time: " ++ raw
+    show (ParseFeedError raw)      = "Cannot parse feed: " ++ raw
+    show (CE e)                    = show e
 -- }}}
 
 data CliOptions = CliOptions {
@@ -19,39 +32,25 @@ data CliOptions = CliOptions {
 
 -- | 
 data Settings = Settings {
-    mStateDirectory  :: PortableFilePath,
-    mError           :: Maybe String}
+    mStateDirectory :: PortableFilePath,
+    mError          :: Maybe String}
 
 type FeedGroup = (FeedSettings, [String]) 
 
 data FeedSettings = FeedSettings {
     mMailDirectory  :: PortableFilePath}
 
-{-data ImmFeed = ImmFeed {
-    mURI  :: URI,
-    mFeed :: Feed
-}-}
+type ImmFeed = (URI, Feed)
 
 data Mail = Mail {
     mReturnPath         :: String,
     mDate               :: Maybe ZonedTime,
     mFrom               :: String,
-    mSubject            :: String,
+    mSubject            :: T.Text,
     mMIME               :: String,
     mCharset            :: String,
     mContentDisposition :: String,
-    mContent            :: String}
-
-instance Show Mail where 
-    show mail = unlines [
-        "Return-Path: " ++ mReturnPath mail,
-        maybe "" (("Date: " ++) . showRFC2822) . mDate $ mail,
-        "From: " ++ mFrom mail,
-        "Subject: " ++ mSubject mail,
-        "Content-Type: " ++ mMIME mail ++ "; charset=" ++ mCharset mail,
-        "Content-Disposition: " ++ mContentDisposition mail,
-        "",
-        mContent mail]
+    mContent            :: T.Text}
 
 -- | Set of reference directories, typically used to build FilePath-s
 data RefDirs = RefDirs {

@@ -1,44 +1,41 @@
 module Imm.Maildir where
 
 -- {{{ Imports
-import Imm.Mail()
+import Imm.Mail
 import Imm.Types
 import Imm.Util
 
---import Control.Monad
-import Control.Exception
+import Control.Error
+--import Control.Exception
 
 import Data.Functor
+import qualified Data.Text.Lazy.IO as T
 import Data.Time.Clock.POSIX
 
 import Network.BSD
 
 import System.Directory
 import System.FilePath
-import System.IO.Error (ioeGetErrorString)
+--import System.IO.Error (ioeGetErrorString)
 import System.Random
 -- }}}
 
-init :: PortableFilePath -> IO Bool
+init :: PortableFilePath -> EitherT String IO ()
 init directory = do
-    dir  <- resolve directory
-    root <- try $ createDirectoryIfMissing True dir
-    cur  <- try $ createDirectoryIfMissing True (dir </> "cur")
-    new  <- try $ createDirectoryIfMissing True (dir </> "new")
-    tmp  <- try $ createDirectoryIfMissing True (dir </> "tmp")
+    dir <- io $ resolve directory
+    tryIO $ createDirectoryIfMissing True dir
+    tryIO $ createDirectoryIfMissing True (dir </> "cur")
+    tryIO $ createDirectoryIfMissing True (dir </> "new")
+    tryIO $ createDirectoryIfMissing True (dir </> "tmp")
     
-    either
-        (\e -> do 
-          logNormal $ concat ["Unable to initialize maildir at ", dir, " : ", ioeGetErrorString e]
-          return False)
-        (const $ logVerbose ("Maildir correctly created at: " ++ dir) >> return True)
-        $ sequence [root, cur, new, tmp]
+    io . logVerbose $ "Maildir correctly created at: " ++ dir
 
-add :: PortableFilePath -> Mail -> IO ()
+
+add :: PortableFilePath -> Mail -> Script ()
 add directory mail = do
-    dir      <- resolve directory
-    fileName <- getUniqueName
-    writeFile (dir </> "new" </> fileName) (show mail)
+    dir      <- io $ resolve directory
+    fileName <- io getUniqueName
+    tryIO $ T.writeFile (dir </> "new" </> fileName) (toText mail)
 
 
 getUniqueName :: IO String 

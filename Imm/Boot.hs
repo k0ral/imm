@@ -54,9 +54,9 @@ showError (settings, x) message = (settings { mError = Just message }, x)
 
 -- | 
 imm :: [FeedGroup] -> Settings -> IO ()
-imm feedGroups parameters = do
-    forM_ (mError parameters) putStrLn
+imm feedGroups settings = do
+    forM_ (mError settings) putStrLn
     whenLoud printDyrePaths
     
     options <- getOptions
-    D.wrapMain (dyreParameters feedGroups) (parameters, options)
+    D.wrapMain (dyreParameters feedGroups) (settings, options)
