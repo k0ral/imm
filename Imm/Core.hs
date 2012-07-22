@@ -2,7 +2,7 @@ module Imm.Core where
 
 -- {{{ Imports
 import Imm.Feed
-import Imm.Mail
+import qualified Imm.Mail as Mail
 import qualified Imm.Maildir as Maildir
 import Imm.Types
 import Imm.Util
@@ -29,9 +29,9 @@ import Text.Feed.Query
 import Text.Feed.Types
 -- }}}
 
--- Entry point
-realMain :: [FeedGroup] -> (Settings, CliOptions) -> IO ()
-realMain feedGroups (settings, _options) = do
+-- | Internal entry point for imm, after boot process
+main :: [FeedGroup] -> (Settings, CliOptions) -> IO ()
+main feedGroups (settings, _options) = do
     result <- forM feedGroups $ runEitherT . processFeedGroup settings
     forM_ (lefts result) print
 
@@ -77,7 +77,7 @@ processItem _globalSettings feedSettings item = do
             "   Item date:   " ++ (maybe "" id $ time)]
     
     timeZone <- io getCurrentTimeZone
-    void $ Maildir.add dir . itemToMail timeZone $ item 
+    void $ Maildir.add dir . Mail.fromItem timeZone $ item 
   where
     time = getItemDate item
     dir  = mMailDirectory feedSettings

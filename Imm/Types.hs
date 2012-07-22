@@ -14,6 +14,7 @@ import Text.Feed.Types
 -- }}}
 
 -- {{{ Error handling
+-- | Errors that can be returned by an Imm process
 data ImmError = OtherError String | ParseUriError String | ParseTimeError String | ParseItemDateError Item | ParseFeedError String | CE ConnError
 
 instance Show ImmError where
@@ -26,11 +27,11 @@ instance Show ImmError where
 -- }}}
 
 data CliOptions = CliOptions {
-    mParameter    :: Maybe String,
+    mList         :: Bool,
     mMasterBinary :: Maybe String} 
   deriving (Data, Typeable, Show, Eq)
 
--- | 
+-- | Set of settings for imm
 data Settings = Settings {
     mStateDirectory :: PortableFilePath,
     mError          :: Maybe String}

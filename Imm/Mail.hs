@@ -1,6 +1,7 @@
 module Imm.Mail where
 
 -- {{{ Imports
+import Imm.Feed
 import Imm.Types
 import Imm.Util
 
@@ -12,13 +13,11 @@ import Data.Time.RFC2822
 
 import Text.Feed.Query
 import Text.Feed.Types
-import Text.Atom.Feed   as Atom
-import Text.XML.Light.Proc
 -- }}}
 
 
-defaultMail :: Mail
-defaultMail = Mail {
+bare :: Mail
+bare = Mail {
     mCharset            = "utf-8",
     mContent            = T.pack "",
     mContentDisposition = "inline",
@@ -41,36 +40,9 @@ toText mail = T.unlines [
     mContent mail]
  
 
-itemToMail :: TimeZone -> Item -> Mail
-itemToMail timeZone item = defaultMail {
+fromItem :: TimeZone -> Item -> Mail
+fromItem timeZone item = bare {
     mDate       = maybe Nothing (Just . utcToZonedTime timeZone) . parseDate <=< getItemDate $ item,
     mFrom       = maybe "Anonymous" id $ getItemAuthor item,
     mSubject    = T.pack $ maybe "Untitled" id $ getItemTitle item,
     mContent    = buildMailBody item}
-
-buildMailBody :: Item -> T.Text
-buildMailBody item = 
-    T.unlines $ map ((><) item) [T.pack . getItemLinkNM, getItemContent]
-
-getItemLinkNM :: Item -> String 
-getItemLinkNM item = maybe "No link found" paragraphy  $ getItemLink item
-
--- ce "magic operator" semble pas défini dans les libs haskell -> WTF ?
-(><) :: a -> (a -> b) -> b
-(><) a b = b a
-
-paragraphy :: String -> String
-paragraphy s = "<p>"++s++"</p>"
-
-
-getItemContent :: Item -> T.Text
-getItemContent (AtomItem e) = T.pack . maybe "No content" extractHtml . Atom.entryContent $ e
-getItemContent item = T.pack . maybe "Empty" id . getItemDescription $ item
-
-
-extractHtml :: EntryContent -> String
-extractHtml (HTMLContent c) = c
-extractHtml (XHTMLContent c) = strContent c
-extractHtml (TextContent t) = t
-extractHtml (MixedContent a b)= show a ++ show b
-extractHtml (ExternalContent mediaType uri) = show mediaType ++ show uri

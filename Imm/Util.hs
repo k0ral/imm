@@ -4,8 +4,6 @@ module Imm.Util where
 -- {{{ Imports
 import Imm.Types
 
-import Codec.Binary.UTF8.String
-
 --import Control.Exception
 import Control.Monad.Error
 --import Control.Monad.IO.Class
@@ -44,8 +42,3 @@ escapeFileName x   = x:[]
     
 parseDate :: String -> Maybe UTCTime
 parseDate date = listToMaybe . map zonedTimeToUTC . catMaybes . map ((flip ($)) date) $ [readRFC2822, readRFC3339]
-
-decodeIfNeeded :: String -> String
-decodeIfNeeded text = case isUTF8Encoded text of
-    False -> text
-    _     -> decodeString text

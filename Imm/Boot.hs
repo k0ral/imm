@@ -1,13 +1,11 @@
 module Imm.Boot where
 
 -- {{{ Imports
-import Imm.Core
+import qualified Imm.Core as Imm
 import Imm.Types
 
 import qualified Config.Dyre as D
 import Config.Dyre.Paths
-
-import Data.Foldable
 
 import System.Console.CmdArgs
 import System.IO
@@ -17,7 +15,7 @@ import System.IO
 -- | Available commandline options
 cliOptions :: CliOptions
 cliOptions = CliOptions {
-    mParameter     = def &= help "option description" &= explicit &= name "p" &= name "parameter" &= typ "type of the argument",
+    mList          = def &= help "List all feed sources currently configured." &= explicit &= name "l" &= name "list",
     mMasterBinary  = def &= name "dyre-master-binary" &= explicit
 }
 
@@ -25,9 +23,15 @@ getOptions :: IO CliOptions
 getOptions = cmdArgs $ cliOptions
     &= verbosityArgs [explicit, name "Verbose", name "v"] []
     &= versionArg [ignore]
-    &= help "Fetch and send items from RSS/Atom feeds to a custom mail address."
+    &= help "Convert items from RSS/Atom feeds maildir entries."
     &= helpArg [explicit, name "help", name "h"]
     &= program "imm"
+
+-- | Main function to call.
+imm :: [FeedGroup] -> Settings -> IO ()
+imm feedGroups settings = do
+    options <- getOptions
+    D.wrapMain (dyreParameters feedGroups) (Right (settings, options))
 -- }}}
 
 -- {{{ Dynamic reconfiguration
@@ -39,7 +43,7 @@ printDyrePaths = getPaths (dyreParameters []) >>= \(a, b, c, d, e) -> (putStrLn 
     "Cache directory: " ++ d,
     "Lib directory:   " ++ e, []]
 
-dyreParameters :: [FeedGroup] -> D.Params (Settings, CliOptions)
+dyreParameters :: [FeedGroup] -> D.Params (Either String (Settings, CliOptions))
 dyreParameters feedGroups = D.defaultParams {
   D.projectName  = "imm",
   D.showError    = showError,
@@ -48,15 +52,12 @@ dyreParameters feedGroups = D.defaultParams {
   D.statusOut    = hPutStrLn stderr
 }
 
-showError :: (Settings, a) -> String -> (Settings, a)
-showError (settings, x) message = (settings { mError = Just message }, x)
--- }}}
+showError :: Either String a -> String -> Either String a
+showError _ = Left
 
--- | 
-imm :: [FeedGroup] -> Settings -> IO ()
-imm feedGroups settings = do
-    forM_ (mError settings) putStrLn
+realMain :: [FeedGroup] -> Either String (Settings, CliOptions) -> IO ()
+realMain _ (Left e) = putStrLn e
+realMain feedGroups (Right s) = do
     whenLoud printDyrePaths
-    
-    options <- getOptions
-    D.wrapMain (dyreParameters feedGroups) (settings, options)
+    Imm.main feedGroups s
+-- }}}
