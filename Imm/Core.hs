@@ -70,7 +70,7 @@ processFeed globalSettings feedSettings (uri, feed) = do
     lastCheck <- io $ getLastCheck globalSettings (uri, feed)
     forM_ (feedItems feed) $ \item -> do
       date <- EitherT . return $ getItemDate' item
-      when (date > lastCheck) $ fmapLT OtherError $ processItem globalSettings feedSettings item
+      when (date > lastCheck) $ fmapLT OtherError $ processItem globalSettings feedSettings (item, feed)
       return ()
     
     currentTime <- io getCurrentTime
@@ -79,8 +79,8 @@ processFeed globalSettings feedSettings (uri, feed) = do
     getItemDate' x = note (ParseItemDateError x) . (parseDate <=< getItemDate) $ x
       
       
-processItem :: Settings -> FeedSettings -> Item -> Script ()
-processItem _globalSettings feedSettings item = do
+processItem :: Settings -> FeedSettings -> (Item, Feed) -> Script ()
+processItem globalSettings feedSettings (item, feed) = do
     io . logVerbose $ unlines ["",
             "   Item author: " ++ (maybe "" id $ getItemAuthor item),
             "   Item title:  " ++ (maybe "" id $ getItemTitle item),
@@ -89,7 +89,7 @@ processItem _globalSettings feedSettings item = do
             "   Item date:   " ++ (maybe "" id $ time)]
     
     timeZone <- io getCurrentTimeZone
-    void $ Maildir.add dir . Mail.fromItem timeZone $ item 
+    void $ Maildir.add dir . Mail.fromItem globalSettings timeZone $ (item, feed)
   where
     time = getItemDate item
     dir  = mMaildir feedSettings

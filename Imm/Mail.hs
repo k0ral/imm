@@ -40,9 +40,9 @@ toText mail = T.unlines [
     mContent mail]
  
 
-fromItem :: TimeZone -> Item -> Mail
-fromItem timeZone item = bare {
+fromItem :: Settings -> TimeZone -> (Item, Feed) -> Mail
+fromItem settings timeZone (item, feed) = bare {
     mDate       = maybe Nothing (Just . utcToZonedTime timeZone) . parseDate <=< getItemDate $ item,
-    mFrom       = maybe "Anonymous" id $ getItemAuthor item,
+    mFrom       = maybe (getFeedTitle feed) id $ getItemAuthor item,
     mSubject    = T.pack $ maybe "Untitled" id $ getItemTitle item,
     mContent    = buildMailBody item}

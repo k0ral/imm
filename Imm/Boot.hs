@@ -23,7 +23,7 @@ cliOptions = CliOptions {
 
 getOptions :: IO CliOptions
 getOptions = cmdArgs $ cliOptions
-    &= verbosityArgs [explicit, name "Verbose", name "v"] []
+    &= verbosityArgs [explicit, name "verbose", name "v"] []
     &= versionArg [ignore]
     &= help "Convert items from RSS/Atom feeds to maildir entries."
     &= helpArg [explicit, name "help", name "h"]
