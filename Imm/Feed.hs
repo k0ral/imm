@@ -11,6 +11,8 @@ import qualified Data.Text.Lazy as T
 import Data.Time
 import Data.Time.Clock.POSIX
 
+import Network.URI
+
 import System.Directory
 import System.FilePath
 import System.IO
@@ -22,9 +24,20 @@ import Text.Feed.Types
 import Text.XML.Light.Proc
 -- }}}
 
+-- {{{ Util
+getStateFile :: ImmFeed -> FilePath
+getStateFile (uri@URI{ uriAuthority = Just auth }, _) = toFileName =<< ((++ (uriQuery uri)) . (++ (uriPath uri)) . uriRegName $ auth)
+getStateFile (uri, _) = show uri >>= toFileName
+
+toFileName :: Char -> String
+toFileName '/' = "."
+toFileName '?' = "."
+toFileName x = [x]
+-- }}}
+
 
 getLastCheck :: Settings -> ImmFeed -> IO UTCTime
-getLastCheck settings (uri, _feed) = do
+getLastCheck settings (uri, feed) = do
     directory <- resolve $ mStateDirectory settings
     
     result <- runEitherT $ do
@@ -36,20 +49,22 @@ getLastCheck settings (uri, _feed) = do
         return
         result
   where
-    fileName = show uri >>= escapeFileName
+    fileName = getStateFile (uri, feed)
     timeZero = posixSecondsToUTCTime $ 0 
     parseTime' string = note (ParseTimeError string) $ parseTime defaultTimeLocale "%c" string
 
 
 storeLastCheck :: Settings -> ImmFeed -> UTCTime -> EitherT ImmError IO ()
-storeLastCheck settings (uri, _) date = do
+storeLastCheck settings (uri, feed) date = do
     directory <- io . resolve $ mStateDirectory settings
-    let fileName = show uri >>= escapeFileName
     
     (file, stream) <- fmapLT OtherError . tryIO $ openTempFile directory fileName
     io $ hPutStrLn stream (formatTime defaultTimeLocale "%c" date)
     io $ hClose stream
     fmapLT OtherError . tryIO $ renameFile file (directory </> fileName)
+  where
+    fileName = getStateFile (uri, feed)
+    
 
 getItemLinkNM :: Item -> String 
 getItemLinkNM item = maybe "No link found" paragraphy  $ getItemLink item

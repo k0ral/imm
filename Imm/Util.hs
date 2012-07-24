@@ -35,10 +35,6 @@ resolve f = do
     dataDir   <- getUserDataDir   "imm"
     
     return . f $ RefDirs homeDir tmpDir configDir dataDir
-
-escapeFileName :: Char -> String
-escapeFileName '/' = "|"
-escapeFileName x   = x:[]
     
 parseDate :: String -> Maybe UTCTime
 parseDate date = listToMaybe . map zonedTimeToUTC . catMaybes . map ((flip ($)) date) $ [readRFC2822, readRFC3339]

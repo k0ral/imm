@@ -6,7 +6,6 @@ import Imm.Types
 import Imm.Util
 
 import Control.Error
---import Control.Exception
 
 import Data.Functor
 import qualified Data.Text.Lazy.IO as T
@@ -16,7 +15,6 @@ import Network.BSD
 
 import System.Directory
 import System.FilePath
---import System.IO.Error (ioeGetErrorString)
 import System.Random
 -- }}}
 
