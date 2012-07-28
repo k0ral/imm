@@ -5,6 +5,7 @@ module Imm.Types where
 -- {{{ Imports
 import Control.Monad.Error
 
+import Data.Text.Encoding.Error
 import qualified Data.Text.Lazy as T
 import Data.Time
 
@@ -21,6 +22,7 @@ import Text.Feed.Types
 -- | Errors that can be returned by an Imm process
 data ImmError = 
     OtherError         String
+  | UnicodeError       UnicodeException
   | ParseUriError      String
   | ParseTimeError     String
   | ParseItemDateError Item
@@ -29,7 +31,9 @@ data ImmError =
   | IOE                IOError
 
 instance Show ImmError where
-    show (OtherError e)            = show e
+    show (OtherError e)            = e
+    show (UnicodeError (DecodeError e _)) = e
+    show (UnicodeError (EncodeError e _)) = e
     show (ParseUriError raw)       = "Cannot parse URI: " ++ raw
     show (ParseItemDateError item) = "Cannot parse date from item: " ++ show item
     show (ParseTimeError raw)      = "Cannot parse time: " ++ raw

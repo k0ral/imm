@@ -22,6 +22,7 @@ import Data.Foldable
 import Data.Time
 import Data.Time.Clock.POSIX
 
+import Network.Browser
 import Network.HTTP hiding(Response)
 import Network.URI hiding(parseURI)
 
@@ -103,7 +104,6 @@ processItem feedSettings (item, feed) = do
     
     timeZone <- io getCurrentTimeZone
     Maildir.add dir =<< Mail.build timeZone (item, feed)
-    return ()
   where
     dir = mMaildir feedSettings
 
@@ -111,10 +111,11 @@ processItem feedSettings (item, feed) = do
 downloadRaw :: (MonadIO m, MonadError ImmError m) => URI -> m T.Text
 downloadRaw uri = do
     logVerbose $ "Downloading " ++ show uri
-    response <- do
-        r <- io $ simpleHTTP (mkRequest GET uri :: Request B.ByteString)
-        either (throwError . CE) return r
-    return . decodeUtf8 $ rspBody response
+    response <- io . browse $ do
+        setAllowRedirects True
+        request (mkRequest GET uri :: Request B.ByteString)
+        --either (throwError . CE) return r
+    either (throwError . UnicodeError) return . decodeUtf8' . rspBody . snd $ response
 
 
 downloadFeed :: (MonadIO m, MonadError ImmError m) => URI -> m ImmFeed

@@ -11,6 +11,7 @@ import Control.Monad.Error
 --import Control.Monad.IO.Class
 
 import Data.Maybe
+import qualified Data.Text.Lazy as T
 import qualified Data.Time as T
 import Data.Time.RFC2822
 import Data.Time.RFC3339
@@ -53,7 +54,7 @@ resolve f = io $ do
 
 -- {{{ Parsing functions should use be monad agnostic    
 parseDate :: String -> Maybe T.UTCTime
-parseDate date = listToMaybe . map T.zonedTimeToUTC . catMaybes . map ((flip ($)) date) $ [readRFC2822, readRFC3339]
+parseDate date = listToMaybe . map T.zonedTimeToUTC . catMaybes . flip map [readRFC2822, readRFC3339] $ \f -> f . T.unpack . T.strip . T.pack $ date
 
 parseFeedString :: MonadError ImmError m => String -> m Feed
 parseFeedString x = maybe (throwError . ParseFeedError $ show x) return $ F.parseFeedString x
