@@ -2,7 +2,6 @@
 module Imm.Main where
 
 -- {{{ Imports
---import Imm.Core
 import Imm.Feed
 import qualified Imm.Mail as Mail
 import qualified Imm.Maildir as Maildir
@@ -27,6 +26,8 @@ import Network.HTTP hiding(Response)
 import Network.URI hiding(parseURI)
 
 import Prelude hiding(mapM_)
+
+import System.Directory
 
 --import Text.Feed.Import
 import Text.Feed.Query hiding(getItemDate)
@@ -55,15 +56,21 @@ checkFeedGroup (settings, feeds) = return ()
 -- }}}
 
 -- | Internal entry point for imm, after boot process
-main :: (MonadReader Settings m, MonadIO m) => m ()
+main :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => m ()
 main = do
-    result <- asks mFeedGroups >>= mapM (runErrorT . processFeedGroup)
-    io $ forM_ (lefts result) print
+    checkStateDirectory    
+    asks mFeedGroups >>= mapM_ (\x -> processFeedGroup x `catchError` (io . print))
+
+checkStateDirectory :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => m ()
+checkStateDirectory = asks mStateDirectory >>= resolve >>= try . io . createDirectoryIfMissing True
+
 
 processFeedGroup :: (MonadIO m, MonadReader Settings m, MonadError ImmError m) => FeedGroup -> m ()
 processFeedGroup _feedGroup@(config, feedURIs) = do
     Maildir.init $ mMaildir config
-    forM_ feedURIs $ parseURI >=> downloadFeed >=> processFeed config
+    forM_ feedURIs $ \uri ->
+        (parseURI uri >>= downloadFeed >>= processFeed config)
+        `catchError` (io . print)
 
 
 processFeed :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => FeedSettings -> ImmFeed -> m ()
@@ -75,11 +82,12 @@ processFeed feedSettings (uri, feed) = do
         "Home:   " ++ (maybe "No home"   id $ getFeedHome feed)]
     
     lastCheck <- getLastCheck uri
-    forM_ (feedItems feed) $ \item -> do
-      date <- getItemDate item
-      when (date > lastCheck) $ processItem feedSettings (item, feed)
-      return ()
-    
+    forM_ (feedItems feed) $ \item -> 
+      do
+        date <- getItemDate item
+        when (date > lastCheck) $ processItem feedSettings (item, feed)
+      `catchError` (io . print)
+
     storeLastCheck uri =<< io getCurrentTime
     
       

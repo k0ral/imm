@@ -41,15 +41,11 @@ toFileName x = [x]
 getLastCheck :: (MonadReader Settings m, MonadIO m) => URI -> m UTCTime
 getLastCheck feedUri = do
     directory <- asks mStateDirectory >>= resolve
-    
-    result <- runErrorT $ do
+    result    <- runErrorT $ do
         content <- try $ readFile (directory </> fileName)
-        ErrorT . return $ parseTime content
+        parseTime content
         
-    either 
-        (\e -> io (print e) >> return timeZero)
-        return
-        result
+    either (const $ return timeZero) return result
   where
     fileName = getStateFile feedUri
     timeZero = posixSecondsToUTCTime 0 

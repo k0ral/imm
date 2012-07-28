@@ -7,6 +7,7 @@ import Imm.Types
 import qualified Config.Dyre as D
 import Config.Dyre.Paths
 
+import Control.Monad.Error
 import Control.Monad.Reader
 
 import System.Console.CmdArgs
@@ -68,5 +69,5 @@ realMain (Left e) = putStrLn e
 realMain (Right (settings, options))
   | mList  options = mapM_ (flip runReaderT settings . printFeedGroupStatus) $ mFeedGroups settings
   | mCheck options = mapM_ (flip runReaderT settings . checkFeedGroup) $ mFeedGroups settings
-  | otherwise      = whenLoud printDyrePaths >> runReaderT main settings
+  | otherwise      = whenLoud printDyrePaths >> runErrorT (runReaderT main settings) >>= either print return
 -- }}}
