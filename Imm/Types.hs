@@ -1,7 +1,10 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Imm.Types where
 
 -- {{{ Imports
+import Control.Monad.Error
+
 import qualified Data.Text.Lazy as T
 import Data.Time
 
@@ -9,13 +12,21 @@ import Network.URI
 import Network.Stream
 
 import System.Console.CmdArgs
+import System.IO.Error
 
 import Text.Feed.Types
 -- }}}
 
 -- {{{ Error handling
 -- | Errors that can be returned by an Imm process
-data ImmError = OtherError String | ParseUriError String | ParseTimeError String | ParseItemDateError Item | ParseFeedError String | CE ConnError
+data ImmError = 
+    OtherError         String
+  | ParseUriError      String
+  | ParseTimeError     String
+  | ParseItemDateError Item
+  | ParseFeedError     String
+  | CE                 ConnError
+  | IOE                IOError
 
 instance Show ImmError where
     show (OtherError e)            = show e
@@ -24,8 +35,13 @@ instance Show ImmError where
     show (ParseTimeError raw)      = "Cannot parse time: " ++ raw
     show (ParseFeedError raw)      = "Cannot parse feed: " ++ raw
     show (CE e)                    = show e
+    show (IOE e)                   = ioeGetLocation e ++ " " ++ maybe "" id (ioeGetFileName e) ++ " " ++ ioeGetErrorString e
+
+instance Error ImmError where
+    strMsg x = OtherError x
 -- }}}
 
+-- {{{ Settings type
 data CliOptions = CliOptions {
     mCheck        :: Bool,
     mList         :: Bool,
@@ -35,16 +51,22 @@ data CliOptions = CliOptions {
 
 -- | Set of settings for imm
 data Settings = Settings {
+    mStateDirectory :: PortableFilePath,
     mFeedGroups     :: [FeedGroup],
-    mStateDirectory :: PortableFilePath
+    mFromBuilder    :: (Item, Feed) -> String,
+    mSubjectBuilder :: (Item, Feed) -> T.Text,
+    mBodyBuilder    :: (Item, Feed) -> T.Text   -- ^ sic!
 }
+-- }}}
 
+-- {{{ Feed types
 type FeedGroup = (FeedSettings, [String]) 
 
 data FeedSettings = FeedSettings {
     mMaildir  :: PortableFilePath}
 
 type ImmFeed = (URI, Feed)
+-- }}}
 
 data Mail = Mail {
     mReturnPath         :: String,
@@ -54,7 +76,7 @@ data Mail = Mail {
     mMIME               :: String,
     mCharset            :: String,
     mContentDisposition :: String,
-    mContent            :: T.Text}
+    mBody               :: T.Text}
 
 -- | Set of reference directories, typically used to build FilePath-s
 data RefDirs = RefDirs {

@@ -1,11 +1,13 @@
 module Imm.Boot where
 
 -- {{{ Imports
-import qualified Imm.Core as Imm
+import Imm.Main
 import Imm.Types
 
 import qualified Config.Dyre as D
 import Config.Dyre.Paths
+
+import Control.Monad.Reader
 
 import System.Console.CmdArgs
 import System.IO
@@ -28,22 +30,18 @@ getOptions = cmdArgs $ cliOptions
     &= help "Convert items from RSS/Atom feeds to maildir entries."
     &= helpArg [explicit, name "help", name "h"]
     &= program "imm"
-
--- | Main function to call.
-imm :: Settings -> IO ()
-imm settings = do
-    options <- getOptions
-    D.wrapMain dyreParameters (Right (settings, options))
 -- }}}
 
 -- {{{ Dynamic reconfiguration
 printDyrePaths :: IO ()
-printDyrePaths = getPaths dyreParameters >>= \(a, b, c, d, e) -> (putStrLn . unlines) [
-    "Current binary:  " ++ a,
-    "Custom binary:   " ++ b,
-    "Config file:     " ++ c,
-    "Cache directory: " ++ d,
-    "Lib directory:   " ++ e, []]
+printDyrePaths = do
+    (a, b, c, d, e) <- getPaths dyreParameters
+    putStrLn . unlines $ [
+        "Current binary:  " ++ a,
+        "Custom binary:   " ++ b,
+        "Config file:     " ++ c,
+        "Cache directory: " ++ d,
+        "Lib directory:   " ++ e, []]
 
 dyreParameters :: D.Params (Either String (Settings, CliOptions))
 dyreParameters = D.defaultParams {
@@ -56,14 +54,19 @@ dyreParameters = D.defaultParams {
 
 showError :: Either String a -> String -> Either String a
 showError _ = Left
+-- }}}
+
+-- | Main function to call.
+imm :: Settings -> IO ()
+imm settings = do
+    options <- getOptions
+    D.wrapMain dyreParameters (Right (settings, options))
 
 -- Main dispatcher, depending on commandline options
 realMain :: Either String (Settings, CliOptions) -> IO ()
 realMain (Left e) = putStrLn e
-realMain (Right (s, options))
-  | mList  options = mapM_ Imm.printFeedGroup $ mFeedGroups s
-  | mCheck options = mapM_ Imm.checkFeedGroup $ mFeedGroups s
-  | otherwise      = do
-    whenLoud printDyrePaths
-    Imm.main (s, options)
+realMain (Right (settings, options))
+  | mList  options = mapM_ (flip runReaderT settings . printFeedGroupStatus) $ mFeedGroups settings
+  | mCheck options = mapM_ (flip runReaderT settings . checkFeedGroup) $ mFeedGroups settings
+  | otherwise      = whenLoud printDyrePaths >> runReaderT main settings
 -- }}}

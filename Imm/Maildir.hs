@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Imm.Maildir where
 
 -- {{{ Imports
@@ -5,7 +6,8 @@ import Imm.Mail
 import Imm.Types
 import Imm.Util
 
-import Control.Error
+--import Control.Monad.IO.Class
+import Control.Monad.Error
 
 import Data.Functor
 import qualified Data.Text.Lazy.IO as T
@@ -18,26 +20,25 @@ import System.FilePath
 import System.Random
 -- }}}
 
-init :: PortableFilePath -> EitherT String IO ()
+init :: (MonadIO m, MonadError ImmError m) => PortableFilePath -> m ()
 init directory = do
     dir <- io $ resolve directory
-    tryIO $ createDirectoryIfMissing True dir
-    tryIO $ createDirectoryIfMissing True (dir </> "cur")
-    tryIO $ createDirectoryIfMissing True (dir </> "new")
-    tryIO $ createDirectoryIfMissing True (dir </> "tmp")
-    
-    io . logVerbose $ "Maildir correctly created at: " ++ dir
+    try $ createDirectoryIfMissing True dir
+    try $ createDirectoryIfMissing True (dir </> "cur")
+    try $ createDirectoryIfMissing True (dir </> "new")
+    try $ createDirectoryIfMissing True (dir </> "tmp")
+    logVerbose $ "Maildir correctly created at: " ++ dir
 
 
-add :: PortableFilePath -> Mail -> Script ()
+add :: (MonadIO m, MonadError ImmError m) => PortableFilePath -> Mail -> m ()
 add directory mail = do
-    dir      <- io $ resolve directory
+    dir      <- resolve directory
     fileName <- io getUniqueName
-    tryIO $ T.writeFile (dir </> "new" </> fileName) (toText mail)
+    try $ T.writeFile (dir </> "new" </> fileName) (toText mail)
 
 
-getUniqueName :: IO String 
-getUniqueName = do
+getUniqueName :: MonadIO m => m String 
+getUniqueName = io $ do
     time     <- show <$> getPOSIXTime
     hostname <- getHostName
     rand     <- show <$> (getStdRandom $ randomR (1,100000) :: IO Int)
