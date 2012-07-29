@@ -15,15 +15,14 @@ import Control.Monad.Reader hiding(forM_, mapM_)
 
 import qualified Data.ByteString.Lazy as B
 import qualified Data.Text.Lazy as T
-import Data.Text.Lazy.Encoding
 import Data.Either
 import Data.Foldable
 --import Data.Functor
 import Data.Time
 import Data.Time.Clock.POSIX
 
-import Network.Browser
-import Network.HTTP hiding(Response)
+import Network.Browser hiding(request)
+import Network.HTTP
 import Network.URI hiding(parseURI)
 
 import Prelude hiding(mapM_)
@@ -95,7 +94,7 @@ processFeed feedSettings (uri, feed) = do
 processItem :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => FeedSettings -> (Item, Feed) -> m ()
 processItem feedSettings (item, feed) = do
     date <- getItemDate item
-    logVerbose $ unlines ["",
+    logVerbose $ unlines [
             "   Item author: " ++ (maybe "" id $ getItemAuthor item),
             "   Item title:  " ++ (maybe "" id $ getItemTitle item),
             "   Item URI:    " ++ (maybe "" id $ getItemLink  item),
@@ -108,17 +107,17 @@ processItem feedSettings (item, feed) = do
     dir = mMaildir feedSettings
 
 
-downloadRaw :: (MonadIO m, MonadError ImmError m) => URI -> m T.Text
+downloadRaw :: (MonadIO m, MonadError ImmError m) => URI -> m B.ByteString
 downloadRaw uri = do
     logVerbose $ "Downloading " ++ show uri
-    response <- io . browse $ do
+    (_, r) <- io . browse $ do
         setAllowRedirects True
         request (mkRequest GET uri :: Request B.ByteString)
-        --either (throwError . CE) return r
-    either (throwError . UnicodeError) return . decodeUtf8' . rspBody . snd $ response
+    when (rspCode r == (4,0,4)) $ throwError (HTTPError $ rspReason r)
+    return . rspBody $ r
 
 
 downloadFeed :: (MonadIO m, MonadError ImmError m) => URI -> m ImmFeed
 downloadFeed uri = do
-    feed <- parseFeedString . T.unpack =<< downloadRaw uri
+    feed <- parseFeedString . T.unpack =<< decodeUtf8 =<< downloadRaw uri
     return (uri, feed)

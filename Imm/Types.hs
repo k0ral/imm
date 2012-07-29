@@ -15,6 +15,7 @@ import Network.Stream
 import System.Console.CmdArgs
 import System.IO.Error
 
+import Text.Feed.Query
 import Text.Feed.Types
 -- }}}
 
@@ -22,6 +23,7 @@ import Text.Feed.Types
 -- | Errors that can be returned by an Imm process
 data ImmError = 
     OtherError         String
+  | HTTPError          String
   | UnicodeError       UnicodeException
   | ParseUriError      String
   | ParseTimeError     String
@@ -32,10 +34,16 @@ data ImmError =
 
 instance Show ImmError where
     show (OtherError e)            = e
+    show (HTTPError e)             = e
     show (UnicodeError (DecodeError e _)) = e
     show (UnicodeError (EncodeError e _)) = e
     show (ParseUriError raw)       = "Cannot parse URI: " ++ raw
-    show (ParseItemDateError item) = "Cannot parse date from item: " ++ show item
+    show (ParseItemDateError item) = unlines [
+        "Cannot parse date from item: ",
+        "    title: "       ++ (show $ getItemTitle item),
+        "    link:"         ++ (show $ getItemLink item),
+        "    publish date:" ++ (show $ getItemPublishDate item),
+        "    date:"         ++ (show $ getItemDate item)]
     show (ParseTimeError raw)      = "Cannot parse time: " ++ raw
     show (ParseFeedError raw)      = "Cannot parse feed: " ++ raw
     show (CE e)                    = show e
