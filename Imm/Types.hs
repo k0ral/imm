@@ -6,7 +6,7 @@ module Imm.Types where
 import Control.Monad.Error
 
 import Data.Text.Encoding.Error
-import qualified Data.Text.Lazy as T
+import Data.Text.Lazy as T hiding(unlines)
 import Data.Time
 
 import Network.URI
@@ -58,44 +58,46 @@ data CliOptions = CliOptions {
     mCheck        :: Bool,
     mList         :: Bool,
     mDenyReconf   :: Bool,         -- ^ Do not recompile configuration even if it has changed
-    mMasterBinary :: Maybe String} 
-  deriving (Data, Typeable, Show, Eq)
+    mMasterBinary :: Maybe String
+} deriving (Data, Typeable, Show, Eq)
 
 -- | Set of settings for imm
 data Settings = Settings {
     mStateDirectory :: PortableFilePath,
-    mFeedGroups     :: [FeedGroup],
+    mMaildir        :: PortableFilePath,
     mFromBuilder    :: (Item, Feed) -> String,
-    mSubjectBuilder :: (Item, Feed) -> T.Text,
-    mBodyBuilder    :: (Item, Feed) -> T.Text   -- ^ sic!
+    mSubjectBuilder :: (Item, Feed) -> Text,
+    mBodyBuilder    :: (Item, Feed) -> Text   -- ^ sic!
 }
+
+-- | 
+type CustomSettings = Settings -> Settings
 -- }}}
 
 -- {{{ Feed types
-type FeedGroup = (FeedSettings, [String]) 
-
-data FeedSettings = FeedSettings {
-    mMaildir  :: PortableFilePath}
-
-type ImmFeed = (URI, Feed)
+type FeedList  = [(CustomSettings, String)]
+type ImmFeed   = (URI, Feed)
 -- }}}
 
 data Mail = Mail {
     mReturnPath         :: String,
     mDate               :: Maybe ZonedTime,
     mFrom               :: String,
-    mSubject            :: T.Text,
+    mSubject            :: Text,
     mMIME               :: String,
     mCharset            :: String,
     mContentDisposition :: String,
-    mBody               :: T.Text}
+    mBody               :: Text
+}
 
+-- {{{ Generic file paths
 -- | Set of reference directories, typically used to build FilePath-s
 data RefDirs = RefDirs {
     mHome          :: FilePath,        -- ^ Home directory
     mTemporary     :: FilePath,        -- ^ Temporary files directory
     mConfiguration :: FilePath,        -- ^ Configuration directory
-    mData          :: FilePath}        -- ^ Data directory
+    mData          :: FilePath         -- ^ Data directory
+}
 
 type PortableFilePath = RefDirs -> FilePath
-
+-- }}}

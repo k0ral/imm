@@ -5,6 +5,7 @@ module Imm.Feed where
 import Imm.Types
 import Imm.Util
 
+import Control.Conditional
 import Control.Monad.Error
 import Control.Monad.Reader
 
@@ -13,7 +14,7 @@ import qualified Data.Text.Lazy as T
 import Data.Time hiding(parseTime)
 import Data.Time.Clock.POSIX
 
-import Network.URI
+import Network.URI as N
 
 import System.Directory
 import System.FilePath
@@ -36,6 +37,16 @@ toFileName '/' = "."
 toFileName '?' = "."
 toFileName x = [x]
 -- }}}
+
+-- | 
+printStatus :: (MonadReader Settings m, MonadIO m) => String -> m ()
+printStatus feedUri = do
+    prefix <- case N.parseURI feedUri of
+        Just uri -> do
+          lastCheck <- getLastCheck uri
+          return $ (lastCheck == posixSecondsToUTCTime 0) ? "[NEW] " ?? ("[Last update: "++ show lastCheck ++ "]")
+        _ -> return "[Not an URI]"
+    io . putStrLn $ prefix ++ " " ++ feedUri
 
 
 getLastCheck :: (MonadReader Settings m, MonadIO m) => URI -> m UTCTime

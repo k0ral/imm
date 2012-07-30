@@ -16,12 +16,12 @@ import Text.Feed.Types
 defaultSettings :: Settings
 defaultSettings = Settings {
     mStateDirectory = (</> "state") . mConfiguration,
-    mFeedGroups     = [],
+    mMaildir        = (</> "feeds") . mHome,
     mFromBuilder    = \(item, feed) -> maybe (getFeedTitle feed) id $ getItemAuthor item,
     mSubjectBuilder = \(item, _feed) -> T.pack . maybe "Untitled" id $ getItemTitle item,
-    mBodyBuilder    = \(item, _feed) -> contentBuilder item
+    mBodyBuilder    = \(item, _feed) -> defaultBodyBuilder item
 }
 
-contentBuilder :: Item -> T.Text
-contentBuilder item = 
+defaultBodyBuilder :: Item -> T.Text
+defaultBodyBuilder item = 
     T.unlines $ map (flip ($) item) [T.pack . getItemLinkNM, getItemContent]

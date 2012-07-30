@@ -1,6 +1,8 @@
 module Imm.Boot where
 
 -- {{{ Imports
+import Imm.Config
+import Imm.Feed
 import Imm.Main
 import Imm.Types
 
@@ -44,7 +46,7 @@ printDyrePaths = do
         "Cache directory: " ++ d,
         "Lib directory:   " ++ e, []]
 
-dyreParameters :: D.Params (Either String (Settings, CliOptions))
+dyreParameters :: D.Params (Either String (FeedList, CliOptions))
 dyreParameters = D.defaultParams {
   D.projectName  = "imm",
   D.showError    = showError,
@@ -58,16 +60,16 @@ showError _ = Left
 -- }}}
 
 -- | Main function to call.
-imm :: Settings -> IO ()
-imm settings = do
+imm :: FeedList -> IO ()
+imm feeds = do
     options <- getOptions
-    D.wrapMain dyreParameters (Right (settings, options))
+    D.wrapMain dyreParameters (Right (feeds, options))
 
 -- Main dispatcher, depending on commandline options
-realMain :: Either String (Settings, CliOptions) -> IO ()
+realMain :: Either String (FeedList, CliOptions) -> IO ()
 realMain (Left e) = putStrLn e
-realMain (Right (settings, options))
-  | mList  options = mapM_ (flip runReaderT settings . printFeedGroupStatus) $ mFeedGroups settings
-  | mCheck options = mapM_ (flip runReaderT settings . checkFeedGroup) $ mFeedGroups settings
-  | otherwise      = whenLoud printDyrePaths >> runErrorT (runReaderT main settings) >>= either print return
+realMain (Right (feeds, options))
+  | mList  options = mapM_ (\(f, u) -> runReaderT (printStatus u) (f defaultSettings)) feeds
+--  | mCheck options = mapM_ (flip runReaderT settings . checkFeedGroup) $ mFeedGroups settings
+  | otherwise      = whenLoud printDyrePaths >> runErrorT (main feeds) >>= either print return
 -- }}}
