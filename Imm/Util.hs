@@ -62,7 +62,7 @@ decodeUtf8 = either (throwError . UnicodeError) return . decodeUtf8'
 
 
 parseDate :: String -> Maybe T.UTCTime
-parseDate date = listToMaybe . map T.zonedTimeToUTC . catMaybes . flip map [readRFC2822, readRFC3339, T.parseTime defaultTimeLocale "%a, %d %b %G %T"] $ \f -> f . T.unpack . T.strip . T.pack $ date
+parseDate date = listToMaybe . map T.zonedTimeToUTC . catMaybes . flip map [readRFC2822, readRFC3339, T.parseTime defaultTimeLocale "%a, %d %b %G %T", T.parseTime defaultTimeLocale "%Y-%m-%d", T.parseTime defaultTimeLocale "%e %b %Y"] $ \f -> f . T.unpack . T.strip . T.pack $ date
 
 parseFeedString :: MonadError ImmError m => String -> m Feed
 parseFeedString x = maybe (throwError . ParseFeedError $ show x) return $ F.parseFeedString x

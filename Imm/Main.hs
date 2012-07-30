@@ -13,11 +13,13 @@ import Control.Monad hiding(forM_, mapM_)
 import Control.Monad.Error hiding(forM_, mapM_)
 import Control.Monad.Reader hiding(forM_, mapM_)
 
-import qualified Data.ByteString.Lazy as B
-import qualified Data.Text.Lazy as T
+import Data.ByteString as B (concat)
+import Data.ByteString.Lazy as B hiding(putStrLn, concat)
+import Data.Text.Lazy as T hiding(unlines)
 import Data.Either
 import Data.Foldable
 --import Data.Functor
+import Data.Text.ICU.Convert
 import Data.Time
 import Data.Time.Clock.POSIX
 
@@ -107,17 +109,23 @@ processItem feedSettings (item, feed) = do
     dir = mMaildir feedSettings
 
 
-downloadRaw :: (MonadIO m, MonadError ImmError m) => URI -> m B.ByteString
+downloadRaw :: (MonadIO m, MonadError ImmError m) => URI -> m ByteString
 downloadRaw uri = do
     logVerbose $ "Downloading " ++ show uri
     (_, r) <- io . browse $ do
         setAllowRedirects True
-        request (mkRequest GET uri :: Request B.ByteString)
+        request (mkRequest GET uri :: Request ByteString)
     when (rspCode r == (4,0,4)) $ throwError (HTTPError $ rspReason r)
     return . rspBody $ r
 
 
 downloadFeed :: (MonadIO m, MonadError ImmError m) => URI -> m ImmFeed
 downloadFeed uri = do
-    feed <- parseFeedString . T.unpack =<< decodeUtf8 =<< downloadRaw uri
+    feed <- parseFeedString . T.unpack =<< decode =<< downloadRaw uri
     return (uri, feed)
+
+decode :: (MonadIO m, MonadError ImmError m) => ByteString -> m Text
+decode raw = do
+    catchError (decodeUtf8 raw) $ return $ do
+        conv <- io $ open "ISO-8859-1" Nothing
+        return . T.fromChunks . (\a -> [a]) . toUnicode conv . B.concat . B.toChunks $ raw

@@ -45,6 +45,7 @@ Library
         old-locale,
         random,
         text,
+        text-icu,
         time,
         timerep,
         utf8-string,
