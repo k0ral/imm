@@ -1,3 +1,4 @@
+-- | Default settings
 module Imm.Config where
 
 -- {{{ Imports
@@ -19,9 +20,11 @@ defaultSettings = Settings {
     mMaildir        = (</> "feeds") . mHome,
     mFromBuilder    = \(item, feed) -> maybe (getFeedTitle feed) id $ getItemAuthor item,
     mSubjectBuilder = \(item, _feed) -> T.pack . maybe "Untitled" id $ getItemTitle item,
-    mBodyBuilder    = \(item, _feed) -> defaultBodyBuilder item
+    mBodyBuilder    = defaultBodyBuilder
 }
 
-defaultBodyBuilder :: Item -> T.Text
-defaultBodyBuilder item = 
+-- | Default builder for mail body.
+-- Writes the item's URI and then the item's content.
+defaultBodyBuilder :: (Item, Feed) -> T.Text
+defaultBodyBuilder (item, _feed) = 
     T.unlines $ map (flip ($) item) [T.pack . getItemLinkNM, getItemContent]

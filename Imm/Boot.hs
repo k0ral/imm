@@ -1,3 +1,4 @@
+-- | Low level functions used at start-up to parse commandline and handle dynamic reconfiguration.
 module Imm.Boot where
 
 -- {{{ Imports
@@ -17,15 +18,16 @@ import System.IO
 -- }}}
 
 -- {{{ Commandline options
--- | Available commandline options
+-- | Available commandline options.
 cliOptions :: CliOptions
 cliOptions = CliOptions {
     mCheck         = def &= explicit &= name "c" &= name "check" &= help "Check availability and validity of all feed sources currently configured.",
-    mList          = def &= explicit &= name "l" &= name "list"  &= help "List all feed sources currently configured.",
+    mList          = def &= explicit &= name "l" &= name "list"  &= help "List all feed sources currently configured, along with their status.",
     mDenyReconf    = def &= explicit &= name "deny-reconf"       &= help "Deny recompilation even if the configuration file has changed.",
-    mMasterBinary  = def &= explicit &= name "dyre-master-binary"
+    mMasterBinary  = def &= explicit &= name "dyre-master-binary" &= help "Flag used internally for dynamic reconfiguration purposes."
 }
 
+-- | Retrieve and parse commandline options.
 getOptions :: IO CliOptions
 getOptions = cmdArgs $ cliOptions
     &= verbosityArgs [explicit, name "verbose", name "v"] []
@@ -36,6 +38,7 @@ getOptions = cmdArgs $ cliOptions
 -- }}}
 
 -- {{{ Dynamic reconfiguration
+-- | Print various paths used for dynamic reconfiguration.
 printDyrePaths :: IO ()
 printDyrePaths = do
     (a, b, c, d, e) <- getPaths dyreParameters
@@ -46,6 +49,7 @@ printDyrePaths = do
         "Cache directory: " ++ d,
         "Lib directory:   " ++ e, []]
 
+-- | Dynamic configuration settings.
 dyreParameters :: D.Params (Either String (FeedList, CliOptions))
 dyreParameters = D.defaultParams {
   D.projectName  = "imm",
@@ -59,13 +63,13 @@ showError :: Either String a -> String -> Either String a
 showError _ = Left
 -- }}}
 
--- | Main function to call.
+-- | Main function to call in your configuration file.
 imm :: FeedList -> IO ()
 imm feeds = do
     options <- getOptions
     D.wrapMain dyreParameters (Right (feeds, options))
 
--- Main dispatcher, depending on commandline options
+-- | Internal dispatcher, decides which function to execute depending on commandline options.
 realMain :: Either String (FeedList, CliOptions) -> IO ()
 realMain (Left e) = putStrLn e
 realMain (Right (feeds, options))

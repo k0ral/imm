@@ -3,17 +3,21 @@
 module Imm.Types where
 
 -- {{{ Imports
+import Control.Exception
 import Control.Monad.Error
 
 import Data.Text.Encoding.Error
 import Data.Text.Lazy as T hiding(unlines)
 import Data.Time
 
+import Network.HTTP.Conduit
 import Network.URI
-import Network.Stream
+--import Network.Stream
+
+import Prelude hiding(catch)
 
 import System.Console.CmdArgs
-import System.IO.Error
+import System.IO.Error hiding(catch)
 
 import Text.Feed.Query
 import Text.Feed.Types
@@ -23,18 +27,17 @@ import Text.Feed.Types
 -- | Errors that can be returned by an Imm process
 data ImmError = 
     OtherError         String
-  | HTTPError          String
+  | HTTPError          HttpException
   | UnicodeError       UnicodeException
   | ParseUriError      String
   | ParseTimeError     String
   | ParseItemDateError Item
   | ParseFeedError     String
-  | CE                 ConnError
-  | IOE                IOError
+  | IOE                IOException
 
 instance Show ImmError where
     show (OtherError e)            = e
-    show (HTTPError e)             = e
+    show (HTTPError e)             = show e
     show (UnicodeError (DecodeError e _)) = e
     show (UnicodeError (EncodeError e _)) = e
     show (ParseUriError raw)       = "Cannot parse URI: " ++ raw
@@ -46,8 +49,7 @@ instance Show ImmError where
         "    date:"         ++ (show $ getItemDate item)]
     show (ParseTimeError raw)      = "Cannot parse time: " ++ raw
     show (ParseFeedError raw)      = "Cannot parse feed: " ++ raw
-    show (CE e)                    = show e
-    show (IOE e)                   = ioeGetLocation e ++ " " ++ maybe "" id (ioeGetFileName e) ++ " " ++ ioeGetErrorString e
+    show (IOE e)                   = ioeGetLocation e ++ ": " ++ maybe "" id (ioeGetFileName e) ++ " " ++ ioeGetErrorString e
 
 instance Error ImmError where
     strMsg x = OtherError x

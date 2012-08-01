@@ -6,6 +6,7 @@ import Imm.Config
 import Imm.Feed
 import qualified Imm.Mail as Mail
 import qualified Imm.Maildir as Maildir
+import Imm.HTTP as HTTP
 import Imm.Types
 import Imm.Util
 
@@ -21,8 +22,6 @@ import Data.Foldable
 import Data.Text.ICU.Convert
 import Data.Time
 
-import Network.Browser hiding(request)
-import Network.HTTP
 import Network.URI hiding(parseURI)
 
 import Prelude hiding(mapM_)
@@ -36,8 +35,7 @@ import Text.Feed.Types
 
 -- | Internal entry point for imm, after boot process
 main :: (MonadIO m, MonadError ImmError m) => FeedList -> m ()
-main feeds = do
-    forM_ feeds $ \(f, u) -> (runReaderT (processFeed u) (f defaultSettings)) `catchError` (io . print)
+main feeds = forM_ feeds $ \(f, u) -> (runReaderT (processFeed u) (f defaultSettings)) `catchError` (io . print)
 
 checkStateDirectory :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => m ()
 checkStateDirectory = asks mStateDirectory >>= resolve >>= try . io . createDirectoryIfMissing True
@@ -81,20 +79,11 @@ processItem (item, feed) = do
     Maildir.add dir =<< Mail.build timeZone (item, feed)
 
 
-downloadRaw :: (MonadIO m, MonadError ImmError m) => URI -> m ByteString
-downloadRaw uri = do
-    logVerbose $ "Downloading " ++ show uri
-    (_, r) <- io . browse $ do
-        setAllowRedirects True
-        request (mkRequest GET uri :: Request ByteString)
-    when (rspCode r == (4,0,4)) $ throwError (HTTPError $ rspReason r)
-    return . rspBody $ r
-
-
 downloadFeed :: (MonadIO m, MonadError ImmError m) => URI -> m ImmFeed
 downloadFeed uri = do
-    feed <- parseFeedString . T.unpack =<< decode =<< downloadRaw uri
+    feed <- parseFeedString . T.unpack =<< decode =<< HTTP.getRaw uri
     return (uri, feed)
+
 
 decode :: (MonadIO m, MonadError ImmError m) => ByteString -> m Text
 decode raw = do

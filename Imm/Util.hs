@@ -1,6 +1,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
+-- | Various utilities
 module Imm.Util where
 
 -- {{{ Imports
@@ -18,8 +19,6 @@ import Data.Time as T
 import Data.Time.RFC2822
 import Data.Time.RFC3339
 
-import Network.Browser as N
-import Network.HTTP
 import Network.URI as N
 
 import System.Console.CmdArgs
@@ -72,12 +71,6 @@ parseURI uri = maybe (throwError $ ParseUriError uri) return $ N.parseURI uri
 -- | Monad-agnostic version of Data.Time.Format.parseTime
 parseTime :: (MonadError ImmError m) => String -> m UTCTime
 parseTime string = maybe (throwError $ ParseTimeError string) return $ T.parseTime defaultTimeLocale "%c" string
-
--- | Monad-agnostic version of Network.Browser.request
-request :: Request ByteString -> BrowserAction (HandleStream B.ByteString) (URI, Response ByteString)
-request r = io $ (E.catch :: IO a -> (IOError -> IO a) -> IO a)
-    (browse $ N.request r)
-    (\e -> return (rqURI r, Response (4,0,4) ("Unable to connect to " ++ show (rqURI r)) [] B.empty))    
 -- }}}
 
 

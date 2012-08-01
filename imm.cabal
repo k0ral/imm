@@ -23,6 +23,7 @@ Library
     Exposed-modules:
         Imm.Boot,
         Imm.Config,
+        Imm.HTTP,
         Imm.Main,
         Imm.Feed,
         Imm.Types,
@@ -38,7 +39,7 @@ Library
         dyre,
         feed,
         filepath,
-        HTTP,
+        http-conduit,
         mime-mail,
         mtl,
         network,
