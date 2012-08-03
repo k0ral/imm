@@ -77,7 +77,16 @@ storeLastCheck feedUri date = do
     try $ renameFile file (directory </> fileName)
   where
     fileName = getStateFile feedUri
+
+--markAsRead :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => URI => m ()
+markAsRead uri = io getCurrentTime >>= storeLastCheck uri >> (logVerbose $ "Feed " ++ show uri ++ " marked as read.")
+
+markAsUnread uri = do
+    directory <- asks mStateDirectory >>= resolve
+    try $ removeFile $ directory </> (getStateFile uri)
+    logVerbose $ "Feed " ++ show uri ++ " marked as unread."
     
+
 -- {{{ Item utilities
 getItemLinkNM :: Item -> String 
 getItemLinkNM item = maybe "No link found" paragraphy  $ getItemLink item

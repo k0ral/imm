@@ -68,6 +68,8 @@ instance Error ImmError where
 data CliOptions = CliOptions {
     mCheck        :: Bool,
     mList         :: Bool,
+    mMarkAsRead   :: Bool,
+    mMarkAsUnread :: Bool,
     mDenyReconf   :: Bool,         -- ^ Do not recompile configuration even if it has changed
     mMasterBinary :: Maybe String
 } deriving (Data, Typeable, Show, Eq)

@@ -44,12 +44,12 @@ checkStateDirectory = asks mStateDirectory >>= resolve >>= try . io . createDire
 -- | Initialize maildir, download and parse feed, create mails for each new item
 processFeed :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => String -> m ()
 processFeed uriString = do
+    logNormal $ "Processing feed: " ++ uriString
     checkStateDirectory
     Maildir.init =<< asks mMaildir
     (uri, feed) <- downloadFeed =<< parseURI uriString
 
     logVerbose $ unlines [
-        "Processing feed: " ++ show uri,
         "Title:  " ++ (getFeedTitle feed),
         "Author: " ++ (maybe "No author" id $ getFeedAuthor feed),
         "Home:   " ++ (maybe "No home"   id $ getFeedHome feed)]
@@ -61,16 +61,16 @@ processFeed uriString = do
         when (date > lastCheck) $ processItem (item, feed)
       `catchError` (io . print)
 
-    storeLastCheck uri =<< io getCurrentTime
+    markAsRead uri
     
       
 processItem :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => (Item, Feed) -> m ()
 processItem (item, feed) = do
     date <- getItemDate item
     logVerbose $ unlines [
-            "   Item author: " ++ (maybe "" id $ getItemAuthor item),
-            "   Item title:  " ++ (maybe "" id $ getItemTitle item),
-            "   Item URI:    " ++ (maybe "" id $ getItemLink  item),
+            "   Item author: " ++ (maybe "<empty>" id $ getItemAuthor item),
+            "   Item title:  " ++ (maybe "<empty>" id $ getItemTitle item),
+            "   Item URI:    " ++ (maybe "<empty>" id $ getItemLink  item),
             -- "   Item Body:   " ++ (Imm.Mail.getItemContent  item),
             "   Item date:   " ++ show date]
     
