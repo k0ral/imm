@@ -1,18 +1,21 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveDataTypeable, GeneralizedNewtypeDeriving, ScopedTypeVariables #-}
 module Imm.Types where
 
 -- {{{ Imports
-import Control.Exception
+--import Control.Exception
 import Control.Monad.Error
 
+import Data.Text.Encoding
 import Data.Text.Encoding.Error
-import Data.Text.Lazy as T hiding(unlines)
+import Data.Text as T hiding(unlines)
+import Data.Text.Lazy as TL hiding(unlines)
 import Data.Time
 
-import Network.HTTP.Conduit
+import Network.HTTP.Conduit hiding(HandshakeFailed)
+import Network.HTTP.Types.Status
 import Network.URI
 --import Network.Stream
+import Network.TLS
 
 import Prelude hiding(catch)
 
@@ -28,28 +31,32 @@ import Text.Feed.Types
 data ImmError = 
     OtherError         String
   | HTTPError          HttpException
+  | TLSError           HandshakeFailed
   | UnicodeError       UnicodeException
   | ParseUriError      String
   | ParseTimeError     String
   | ParseItemDateError Item
   | ParseFeedError     String
-  | IOE                IOException
+  | IOE                IOError
 
 instance Show ImmError where
     show (OtherError e)            = e
-    show (HTTPError e)             = show e
+    show (HTTPError (StatusCodeException status _headers)) = 
+        "/!\\ HTTP error: " ++ show (statusCode status) ++ " " ++ (T.unpack . decodeUtf8) (statusMessage status)
+    show (HTTPError e)             = "/!\\ HTTP error: " ++ show e
+    show (TLSError (HandshakeFailed e)) = "/!\\ TLS error: " ++ show e
     show (UnicodeError (DecodeError e _)) = e
     show (UnicodeError (EncodeError e _)) = e
-    show (ParseUriError raw)       = "Cannot parse URI: " ++ raw
+    show (ParseUriError raw)       = "/!\\ Cannot parse URI: " ++ raw
     show (ParseItemDateError item) = unlines [
-        "Cannot parse date from item: ",
+        "/!\\ Cannot parse date from item: ",
         "    title: "       ++ (show $ getItemTitle item),
         "    link:"         ++ (show $ getItemLink item),
         "    publish date:" ++ (show $ getItemPublishDate item),
         "    date:"         ++ (show $ getItemDate item)]
-    show (ParseTimeError raw)      = "Cannot parse time: " ++ raw
-    show (ParseFeedError raw)      = "Cannot parse feed: " ++ raw
-    show (IOE e)                   = ioeGetLocation e ++ ": " ++ maybe "" id (ioeGetFileName e) ++ " " ++ ioeGetErrorString e
+    show (ParseTimeError raw)      = "/!\\ Cannot parse time: " ++ raw
+    show (ParseFeedError raw)      = "/!\\ Cannot parse feed: " ++ raw
+    show (IOE e)                   = "/!\\ IO error: " ++ ioeGetLocation e ++ ": " ++ maybe "" id (ioeGetFileName e) ++ " " ++ ioeGetErrorString e
 
 instance Error ImmError where
     strMsg x = OtherError x
@@ -68,8 +75,8 @@ data Settings = Settings {
     mStateDirectory :: PortableFilePath,
     mMaildir        :: PortableFilePath,
     mFromBuilder    :: (Item, Feed) -> String,
-    mSubjectBuilder :: (Item, Feed) -> Text,
-    mBodyBuilder    :: (Item, Feed) -> Text   -- ^ sic!
+    mSubjectBuilder :: (Item, Feed) -> TL.Text,
+    mBodyBuilder    :: (Item, Feed) -> TL.Text   -- ^ sic!
 }
 
 -- | 
@@ -85,11 +92,11 @@ data Mail = Mail {
     mReturnPath         :: String,
     mDate               :: Maybe ZonedTime,
     mFrom               :: String,
-    mSubject            :: Text,
+    mSubject            :: TL.Text,
     mMIME               :: String,
     mCharset            :: String,
     mContentDisposition :: String,
-    mBody               :: Text
+    mBody               :: TL.Text
 }
 
 -- {{{ Generic file paths

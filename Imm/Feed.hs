@@ -21,9 +21,10 @@ import System.FilePath
 import System.IO
 import System.Locale
 
-import Text.Atom.Feed hiding(URI)
+import qualified Text.Atom.Feed as Atom
+import Text.Feed.Import as F
 import Text.Feed.Query as F
-import Text.Feed.Types
+import Text.Feed.Types as F
 import Text.XML.Light.Proc
 -- }}}
 
@@ -37,6 +38,10 @@ toFileName '/' = "."
 toFileName '?' = "."
 toFileName x = [x]
 -- }}}
+
+-- | Monad-agnostic version of 'Text.Feed.Import.parseFeedString'
+parseFeedString :: MonadError ImmError m => String -> m Feed
+parseFeedString x = maybe (throwError $ ParseFeedError x) return $ F.parseFeedString x
 
 -- | 
 printStatus :: (MonadReader Settings m, MonadIO m) => String -> m ()
@@ -79,7 +84,7 @@ getItemLinkNM item = maybe "No link found" paragraphy  $ getItemLink item
 
 
 getItemContent :: Item -> T.Text
-getItemContent (AtomItem e) = T.pack . maybe "No content" extractHtml . entryContent $ e
+getItemContent (AtomItem e) = T.pack . maybe "No content" extractHtml . Atom.entryContent $ e
 getItemContent item = T.pack . maybe "Empty" id . getItemDescription $ item
 
 getItemDate :: MonadError ImmError m => Item -> m UTCTime
@@ -87,12 +92,12 @@ getItemDate x = maybe (throwError $ ParseItemDateError x) return $ parseDate =<<
 -- }}}
 
 
-extractHtml :: EntryContent -> String
-extractHtml (HTMLContent c) = c
-extractHtml (XHTMLContent c) = strContent c
-extractHtml (TextContent t) = t
-extractHtml (MixedContent a b)= show a ++ show b
-extractHtml (ExternalContent mediaType uri) = show mediaType ++ show uri
+extractHtml :: Atom.EntryContent -> String
+extractHtml (Atom.HTMLContent c) = c
+extractHtml (Atom.XHTMLContent c) = strContent c
+extractHtml (Atom.TextContent t) = t
+extractHtml (Atom.MixedContent a b) = show a ++ show b
+extractHtml (Atom.ExternalContent mediaType uri) = show mediaType ++ show uri
 
 
 paragraphy :: String -> String

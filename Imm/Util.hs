@@ -25,9 +25,6 @@ import System.Console.CmdArgs
 import System.Directory
 import System.Environment.XDG.BaseDir
 import System.Locale
-
-import qualified Text.Feed.Import as F
-import Text.Feed.Types
 -- }}}
 
 -- {{{ Monadic utilities
@@ -59,10 +56,6 @@ resolve f = io $ do
 -- | Monad-agnostic version of Data.Text.Encoding.decodeUtf8
 decodeUtf8 :: MonadError ImmError m => B.ByteString -> m T.Text
 decodeUtf8 = either (throwError . UnicodeError) return . decodeUtf8'
-
--- | Monad-agnostic version of Text.Feed.Import.parseFeedString
-parseFeedString :: MonadError ImmError m => String -> m Feed
-parseFeedString x = maybe (throwError $ ParseFeedError x) return $ F.parseFeedString x
 
 -- | Monad-agnostic version of Network.URI.parseURI
 parseURI :: (MonadError ImmError m) => String -> m URI

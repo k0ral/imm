@@ -40,6 +40,7 @@ Library
         feed,
         filepath,
         http-conduit,
+        http-types,
         mime-mail,
         mtl,
         network,
@@ -49,6 +50,7 @@ Library
         text-icu,
         time,
         timerep,
+        tls,
         utf8-string,
         xdg-basedir,
         xml

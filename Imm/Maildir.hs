@@ -27,7 +27,6 @@ init directory = do
     try $ createDirectoryIfMissing True (dir </> "cur")
     try $ createDirectoryIfMissing True (dir </> "new")
     try $ createDirectoryIfMissing True (dir </> "tmp")
-    logVerbose $ "Maildir correctly created at: " ++ dir
 
 
 add :: (MonadIO m, MonadError ImmError m) => PortableFilePath -> Mail -> m ()
