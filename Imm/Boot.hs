@@ -5,6 +5,7 @@ module Imm.Boot where
 import Imm.Config
 import Imm.Feed
 import Imm.Main
+import qualified Imm.OPML as OPML
 import Imm.Types
 import Imm.Util
 
@@ -13,6 +14,8 @@ import Config.Dyre.Paths
 
 import Control.Monad.Error
 import Control.Monad.Reader
+
+import Data.Functor
 
 import System.Console.CmdArgs
 import System.IO
@@ -23,6 +26,7 @@ import System.IO
 cliOptions :: CliOptions
 cliOptions = CliOptions {
     mCheck         = def &= explicit &= name "c" &= name "check" &= help "Check availability and validity of all feed sources currently configured.",
+    mImportOPML    = def &= explicit &= name "i" &= name "import" &= help "Import feeds list from an OPML descriptor.",
     mList          = def &= explicit &= name "l" &= name "list"  &= help "List all feed sources currently configured, along with their status.",
     mMarkAsRead    = def &= explicit &= name "R" &= name "mark-read" &= help "Mark every item of processed feeds as read, ie set last update as now without writing any mail.",
     mMarkAsUnread  = def &= explicit &= name "U" &= name "mark-unread" &= help "Mark every item of processed feeds as unread, ie delete corresponding state files.",
@@ -76,6 +80,7 @@ imm feeds = do
 realMain :: Either String (FeedList, CliOptions) -> IO ()
 realMain (Left e) = putStrLn e
 realMain (Right (feeds, options))
+  | mImportOPML options = (maybe (return ()) addFeeds) =<< OPML.read <$> hGetContents stdin
   | mList  options = mapM_ (\(f, u) -> runReaderT (printStatus u) (f defaultSettings)) feeds
   | mMarkAsRead options = mapM_ (\(f,u) -> runReaderT (runErrorT $ checkStateDirectory >> parseURI u >>= markAsRead) (f defaultSettings)) feeds
   | mMarkAsUnread options = mapM_ (\(f,u) -> runReaderT (runErrorT $ parseURI u >>= markAsUnread) (f defaultSettings)) feeds
