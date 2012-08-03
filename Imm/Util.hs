@@ -25,16 +25,21 @@ import System.Console.CmdArgs
 import System.Directory
 import System.Environment.XDG.BaseDir
 import System.Locale
+import System.Timeout as S
 -- }}}
 
 -- {{{ Monadic utilities
--- | Shortcut to liftIO
+-- | Shortcut to 'liftIO'
 io :: MonadIO m => IO a -> m a
 io = liftIO
 
--- | Monad-agnostic version of Control.Exception.try
+-- | Monad-agnostic version of 'Control.Exception.try'
 try :: (MonadIO m, MonadError ImmError m) => IO a -> m a
 try = (io . E.try) >=> either (throwError . IOE) return 
+
+-- | Monad-agnostic version of 'System.timeout'
+timeout :: (MonadIO m, MonadError ImmError m) => Int -> IO a -> m a
+timeout n f = maybe (throwError TimeOut) (io . return) =<< (io $ S.timeout n (io f))
 -- }}}
 
 -- | Print logs with arbitrary importance

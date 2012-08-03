@@ -28,6 +28,6 @@ getRaw uri = do
 -- | Monad-agnostic version of 'simpleHttp'
 --simpleHTTP :: (MonadIO m, MonadError ImmError m) => String => m ByteString
 simpleHTTP uri = do
-    result <- io $ (Right <$> simpleHttp uri) `catch` (return . Left . IOE) `catch` (return . Left . HTTPError) `catch` (return . Left . TLSError)
+    result <- timeout 5000000 $ (Right <$> simpleHttp uri) `catch` (return . Left . IOE) `catch` (return . Left . HTTPError) `catch` (return . Left . TLSError)
     either throwError return result
     

@@ -38,6 +38,7 @@ data ImmError =
   | ParseItemDateError Item
   | ParseFeedError     String
   | IOE                IOError
+  | TimeOut
 
 instance Show ImmError where
     show (OtherError e)            = e
@@ -57,6 +58,7 @@ instance Show ImmError where
     show (ParseTimeError raw)      = "/!\\ Cannot parse time: " ++ raw
     show (ParseFeedError raw)      = "/!\\ Cannot parse feed: " ++ raw
     show (IOE e)                   = "/!\\ IO error: " ++ ioeGetLocation e ++ ": " ++ maybe "" id (ioeGetFileName e) ++ " " ++ ioeGetErrorString e
+    show TimeOut                   = "/!\\ Process has timed out"
 
 instance Error ImmError where
     strMsg x = OtherError x
