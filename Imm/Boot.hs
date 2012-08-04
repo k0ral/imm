@@ -2,46 +2,37 @@
 module Imm.Boot where
 
 -- {{{ Imports
-import Imm.Config
-import Imm.Feed
-import Imm.Main
-import qualified Imm.OPML as OPML
+import qualified Imm.Main as Main
 import Imm.Types
-import Imm.Util
 
 import qualified Config.Dyre as D
 import Config.Dyre.Paths
 
-import Control.Monad.Error
-import Control.Monad.Reader
-
-import Data.Functor
-
 import System.Console.CmdArgs
+import System.Console.CmdArgs.Explicit
 import System.IO
 -- }}}
 
 -- {{{ Commandline options
 -- | Available commandline options.
-cliOptions :: CliOptions
-cliOptions = CliOptions {
-    mCheck         = def &= explicit &= name "c" &= name "check" &= help "Check availability and validity of all feed sources currently configured.",
-    mImportOPML    = def &= explicit &= name "i" &= name "import" &= help "Import feeds list from an OPML descriptor.",
-    mList          = def &= explicit &= name "l" &= name "list"  &= help "List all feed sources currently configured, along with their status.",
-    mMarkAsRead    = def &= explicit &= name "R" &= name "mark-read" &= help "Mark every item of processed feeds as read, ie set last update as now without writing any mail.",
-    mMarkAsUnread  = def &= explicit &= name "U" &= name "mark-unread" &= help "Mark every item of processed feeds as unread, ie delete corresponding state files.",
-    mDenyReconf    = def &= explicit &= name "deny-reconf"       &= help "Deny recompilation even if the configuration file has changed.",
-    mMasterBinary  = def &= explicit &= name "dyre-master-binary" &= help "Flag used internally for dynamic reconfiguration purposes."
-}
-
--- | Retrieve and parse commandline options.
-getOptions :: IO CliOptions
-getOptions = cmdArgs $ cliOptions
+cliOptions :: Mode (CmdArgs CliOptions)
+cliOptions = cmdArgsMode $ baseOptions
     &= verbosityArgs [explicit, name "verbose", name "v"] []
     &= versionArg [ignore]
     &= help "Convert items from RSS/Atom feeds to maildir entries."
     &= helpArg [explicit, name "help", name "h"]
     &= program "imm"
+  where
+    baseOptions = CliOptions {
+        --    mCheck         = def &= explicit &= name "c" &= name "check" &= help "Check availability and validity of all feed sources currently configured.",
+            mFeedURI       = def &= explicit &= name "f" &= name "feed"   &= help "Only process given feed." &= typ "URI",
+            mImportOPML    = def &= explicit &= name "i" &= name "import" &= help "Import feeds list from an OPML descriptor (read from stdin).",
+            mList          = def &= explicit &= name "l" &= name "list"  &= help "List all feed sources currently configured, along with their status.",
+            mMarkAsRead    = def &= explicit &= name "R" &= name "mark-read" &= help "Mark every item of processed feeds as read, ie set last update as now without writing any mail.",
+            mMarkAsUnread  = def &= explicit &= name "U" &= name "mark-unread" &= help "Mark every item of processed feeds as unread, ie delete corresponding state files.",
+            mUpdate        = def &= explicit &= name "u" &= name "update" &= help "Update list of feeds (mostly used option).",
+            mDenyReconf    = def &= explicit &= name "deny-reconf"       &= help "Deny recompilation even if the configuration file has changed.",
+            mMasterBinary  = def &= explicit &= name "dyre-master-binary" &= help "Flag used internally for dynamic reconfiguration purposes." &= typ "PATH"}
 -- }}}
 
 -- {{{ Dynamic reconfiguration
@@ -57,7 +48,7 @@ printDyrePaths = do
         "Lib directory:   " ++ e, []]
 
 -- | Dynamic configuration settings.
-dyreParameters :: D.Params (Either String (FeedList, CliOptions))
+dyreParameters :: D.Params (Either String FeedList)
 dyreParameters = D.defaultParams {
   D.projectName  = "imm",
   D.showError    = showError,
@@ -72,18 +63,25 @@ showError _ = Left
 
 -- | Main function to call in your configuration file.
 imm :: FeedList -> IO ()
-imm feeds = do
-    options <- getOptions
-    D.wrapMain dyreParameters (Right (feeds, options))
+imm = D.wrapMain dyreParameters . Right
 
 -- | Internal dispatcher, decides which function to execute depending on commandline options.
-realMain :: Either String (FeedList, CliOptions) -> IO ()
+realMain :: Either String FeedList -> IO ()
 realMain (Left e) = putStrLn e
-realMain (Right (feeds, options))
-  | mImportOPML options = (maybe (return ()) addFeeds) =<< OPML.read <$> hGetContents stdin
-  | mList  options = mapM_ (\(f, u) -> runReaderT (printStatus u) (f defaultSettings)) feeds
-  | mMarkAsRead options = mapM_ (\(f,u) -> runReaderT (runErrorT $ checkStateDirectory >> parseURI u >>= markAsRead) (f defaultSettings)) feeds
-  | mMarkAsUnread options = mapM_ (\(f,u) -> runReaderT (runErrorT $ parseURI u >>= markAsUnread) (f defaultSettings)) feeds
---  | mCheck options = mapM_ (flip runReaderT settings . checkFeedGroup) $ mFeedGroups settings
-  | otherwise      = whenLoud printDyrePaths >> runErrorT (main feeds) >>= either print return
+realMain (Right feeds) = do
+    options <- cmdArgsRun cliOptions
+    whenLoud printDyrePaths
+    let feeds' = case (mFeedURI options) of
+          Just uri -> filter (\(_, u) -> u == uri) feeds
+          _        -> feeds
+    realMain' (feeds', options)
+  where
+    realMain' (f, options)
+      | mImportOPML options   = Main.importOPML
+      | mList       options   = Main.list f
+      | mMarkAsRead options   = Main.markAsRead f
+      | mMarkAsUnread options = Main.markAsUnread f
+--      | mCheck options = Main.check f
+      | mUpdate     options   = Main.update f
+      | otherwise             = print $ helpText [] HelpFormatDefault cliOptions
 -- }}}

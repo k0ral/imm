@@ -11,10 +11,12 @@ import qualified Control.Exception as E
 import Control.Monad.Error
 --import Control.Monad.IO.Class
 
-import Data.ByteString.Lazy as B hiding(putStrLn, map)
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import Data.Maybe
+import Data.Text.ICU.Convert
 import Data.Text.Lazy.Encoding hiding(decodeUtf8)
-import qualified Data.Text.Lazy as T
+import qualified Data.Text.Lazy as TL
 import Data.Time as T
 import Data.Time.RFC2822
 import Data.Time.RFC3339
@@ -24,6 +26,7 @@ import Network.URI as N
 import System.Console.CmdArgs
 import System.Directory
 import System.Environment.XDG.BaseDir
+import System.IO
 import System.Locale
 import System.Timeout as S
 -- }}}
@@ -43,7 +46,8 @@ timeout n f = maybe (throwError TimeOut) (io . return) =<< (io $ S.timeout n (io
 -- }}}
 
 -- | Print logs with arbitrary importance
-logNormal, logVerbose :: MonadIO m => String -> m ()
+logError, logNormal, logVerbose :: MonadIO m => String -> m ()
+logError   = io . hPutStr stderr
 logNormal  = io . whenNormal . putStrLn
 logVerbose = io . whenLoud . putStrLn
 
@@ -59,8 +63,15 @@ resolve f = io $ do
 
 -- {{{ Monad-agnostic version of various error-prone functions
 -- | Monad-agnostic version of Data.Text.Encoding.decodeUtf8
-decodeUtf8 :: MonadError ImmError m => B.ByteString -> m T.Text
+decodeUtf8 :: MonadError ImmError m => BL.ByteString -> m TL.Text
 decodeUtf8 = either (throwError . UnicodeError) return . decodeUtf8'
+
+decode :: (MonadIO m, MonadError ImmError m) => BL.ByteString -> m TL.Text
+decode raw = do
+    catchError (decodeUtf8 raw) $ return $ do
+        conv <- io $ open "ISO-8859-1" Nothing
+        return . TL.fromChunks . (\a -> [a]) . toUnicode conv . B.concat . BL.toChunks $ raw
+
 
 -- | Monad-agnostic version of Network.URI.parseURI
 parseURI :: (MonadError ImmError m) => String -> m URI
@@ -73,4 +84,4 @@ parseTime string = maybe (throwError $ ParseTimeError string) return $ T.parseTi
 
 
 parseDate :: String -> Maybe UTCTime
-parseDate date = listToMaybe . map T.zonedTimeToUTC . catMaybes . flip map [readRFC2822, readRFC3339, T.parseTime defaultTimeLocale "%a, %d %b %G %T", T.parseTime defaultTimeLocale "%Y-%m-%d", T.parseTime defaultTimeLocale "%e %b %Y"] $ \f -> f . T.unpack . T.strip . T.pack $ date
+parseDate date = listToMaybe . map T.zonedTimeToUTC . catMaybes . flip map [readRFC2822, readRFC3339, T.parseTime defaultTimeLocale "%a, %d %b %G %T", T.parseTime defaultTimeLocale "%Y-%m-%d", T.parseTime defaultTimeLocale "%e %b %Y", T.parseTime defaultTimeLocale "%a, %e %b %Y %k:%M:%S %z", T.parseTime defaultTimeLocale "%a, %e %b %Y %T %Z"] $ \f -> f . TL.unpack . TL.strip . TL.pack $ date

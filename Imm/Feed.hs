@@ -1,13 +1,16 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, RankNTypes, KindSignatures #-}
 module Imm.Feed where
 
 -- {{{ Imports
+import qualified Imm.HTTP as HTTP
+import qualified Imm.Mail as Mail
+import qualified Imm.Maildir as Maildir
 import Imm.Types
 import Imm.Util
 
-import Control.Conditional
+import Control.Conditional hiding(when)
 import Control.Monad.Error
-import Control.Monad.Reader
+import Control.Monad.Reader hiding(when)
 
 --import Data.Functor
 import qualified Data.Text.Lazy as T
@@ -40,8 +43,8 @@ toFileName x = [x]
 -- }}}
 
 -- | Monad-agnostic version of 'Text.Feed.Import.parseFeedString'
-parseFeedString :: MonadError ImmError m => String -> m Feed
-parseFeedString x = maybe (throwError $ ParseFeedError x) return $ F.parseFeedString x
+parse :: MonadError ImmError m => String -> m Feed
+parse x = maybe (throwError $ ParseFeedError x) return $ parseFeedString x
 
 -- | 
 printStatus :: (MonadReader Settings m, MonadIO m) => String -> m ()
@@ -78,9 +81,51 @@ storeLastCheck feedUri date = do
   where
     fileName = getStateFile feedUri
 
---markAsRead :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => URI => m ()
+download :: (MonadIO m, MonadError ImmError m) => URI -> m ImmFeed
+download uri = do
+    feed <- parse . T.unpack =<< decode =<< HTTP.getRaw uri
+    return (uri, feed)
+
+-- | Create mails for each new item
+update :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => ImmFeed -> m ()
+update (uri, feed) = do
+    logNormal $ "Updating feed " ++ show uri
+--    checkStateDirectory
+    Maildir.init =<< asks mMaildir
+
+    logVerbose $ unlines [
+        "Title:  " ++ (getFeedTitle feed),
+        "Author: " ++ (maybe "No author" id $ getFeedAuthor feed),
+        "Home:   " ++ (maybe "No home"   id $ getFeedHome feed)]
+    
+    lastCheck <- getLastCheck uri
+    forM_ (feedItems feed) $ \item -> 
+      do
+        date <- getDate item
+        when (date > lastCheck) $ updateItem (item, feed)
+      `catchError` (io . print)
+
+    markAsRead uri
+
+updateItem :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => (Item, Feed) -> m ()
+updateItem (item, feed) = do
+    date <- getDate item
+    logVerbose $ unlines [
+            "   Item author: " ++ (maybe "<empty>" id $ getItemAuthor item),
+            "   Item title:  " ++ (maybe "<empty>" id $ getItemTitle item),
+            "   Item URI:    " ++ (maybe "<empty>" id $ getItemLink  item),
+            -- "   Item Body:   " ++ (Imm.Mail.getItemContent  item),
+            "   Item date:   " ++ show date]
+    
+    timeZone <- io getCurrentTimeZone
+    dir      <- asks mMaildir
+    Maildir.add dir =<< Mail.build timeZone (item, feed)
+
+
+markAsRead :: forall (m :: * -> *) . (MonadIO m, MonadError ImmError m, MonadReader Settings m) => URI -> m ()
 markAsRead uri = io getCurrentTime >>= storeLastCheck uri >> (logVerbose $ "Feed " ++ show uri ++ " marked as read.")
 
+markAsUnread :: forall (m :: * -> *) . (MonadIO m, MonadError ImmError m, MonadReader Settings m) => URI -> m ()
 markAsUnread uri = do
     directory <- asks mStateDirectory >>= resolve
     try $ removeFile $ directory </> (getStateFile uri)
@@ -96,8 +141,8 @@ getItemContent :: Item -> T.Text
 getItemContent (AtomItem e) = T.pack . maybe "No content" extractHtml . Atom.entryContent $ e
 getItemContent item = T.pack . maybe "Empty" id . getItemDescription $ item
 
-getItemDate :: MonadError ImmError m => Item -> m UTCTime
-getItemDate x = maybe (throwError $ ParseItemDateError x) return $ parseDate =<< F.getItemDate x
+getDate :: MonadError ImmError m => Item -> m UTCTime
+getDate x = maybe (throwError $ ParseItemDateError x) return $ parseDate =<< F.getItemDate x
 -- }}}
 
 

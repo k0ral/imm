@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+-- | Utilities to manipulate maildirs.
 module Imm.Maildir where
 
 -- {{{ Imports

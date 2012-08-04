@@ -7,8 +7,8 @@ import Control.Monad.Error
 
 import Data.Text.Encoding
 import Data.Text.Encoding.Error
-import Data.Text as T hiding(unlines)
-import Data.Text.Lazy as TL hiding(unlines)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import Data.Time
 
 import Network.HTTP.Conduit hiding(HandshakeFailed)
@@ -66,11 +66,13 @@ instance Error ImmError where
 
 -- {{{ Settings type
 data CliOptions = CliOptions {
-    mCheck        :: Bool,
+--    mCheck        :: Bool,
+    mFeedURI      :: Maybe String,
     mImportOPML   :: Bool,
     mList         :: Bool,
     mMarkAsRead   :: Bool,
     mMarkAsUnread :: Bool,
+    mUpdate       :: Bool,
     mDenyReconf   :: Bool,         -- ^ Do not recompile configuration even if it has changed
     mMasterBinary :: Maybe String
 } deriving (Data, Typeable, Show, Eq)
