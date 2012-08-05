@@ -17,24 +17,23 @@ import Data.Time.Clock.POSIX
 import Network.BSD
 
 import System.Directory
-import System.FilePath
+--import System.FilePath
 import System.Random
 -- }}}
 
-init :: (MonadIO m, MonadError ImmError m) => PortableFilePath -> m ()
+init :: (MonadIO m, MonadError ImmError m) => IO FilePath -> m ()
 init directory = do
-    dir <- io $ resolve directory
-    try $ createDirectoryIfMissing True dir
-    try $ createDirectoryIfMissing True (dir </> "cur")
-    try $ createDirectoryIfMissing True (dir </> "new")
-    try $ createDirectoryIfMissing True (dir </> "tmp")
+    try $ createDirectoryIfMissing True =<< directory
+    try $ createDirectoryIfMissing True =<< (directory >/> "cur")
+    try $ createDirectoryIfMissing True =<< (directory >/> "new")
+    try $ createDirectoryIfMissing True =<< (directory >/> "tmp")
 
 
-add :: (MonadIO m, MonadError ImmError m) => PortableFilePath -> Mail -> m ()
+add :: (MonadIO m, MonadError ImmError m) => IO FilePath -> Mail -> m ()
 add directory mail = do
-    dir      <- resolve directory
     fileName <- io getUniqueName
-    try $ T.writeFile (dir </> "new" </> fileName) (toText mail)
+    dir      <- directory >/> "new" >/> fileName 
+    try $ T.writeFile dir (toText mail)
 
 
 getUniqueName :: MonadIO m => m String 

@@ -79,8 +79,8 @@ data CliOptions = CliOptions {
 
 -- | Set of settings for imm
 data Settings = Settings {
-    mStateDirectory :: PortableFilePath,
-    mMaildir        :: PortableFilePath,
+    mStateDirectory :: IO FilePath,              -- In IO monad to allow the use of platform-dependent directories
+    mMaildir        :: IO FilePath,              -- In IO monad to allow the use of platform-dependent directories
     mFromBuilder    :: (Item, Feed) -> String,
     mSubjectBuilder :: (Item, Feed) -> TL.Text,
     mBodyBuilder    :: (Item, Feed) -> TL.Text   -- ^ sic!
@@ -105,15 +105,3 @@ data Mail = Mail {
     mContentDisposition :: String,
     mBody               :: TL.Text
 }
-
--- {{{ Generic file paths
--- | Set of reference directories, typically used to build FilePath-s
-data RefDirs = RefDirs {
-    mHome          :: FilePath,        -- ^ Home directory
-    mTemporary     :: FilePath,        -- ^ Temporary files directory
-    mConfiguration :: FilePath,        -- ^ Configuration directory
-    mData          :: FilePath         -- ^ Data directory
-}
-
-type PortableFilePath = RefDirs -> FilePath
--- }}}

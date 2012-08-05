@@ -13,7 +13,8 @@ import Data.Default
 import Data.Foldable hiding(concat)
 import qualified Data.Text.Lazy as T
 
-import System.FilePath
+import System.Directory
+import System.Environment.XDG.BaseDir
 
 import Text.Feed.Query
 -- }}}
@@ -21,8 +22,8 @@ import Text.Feed.Query
 
 instance Default Settings where
     def = Settings {
-        mStateDirectory = (</> "state") . mConfiguration,
-        mMaildir        = (</> "feeds") . mHome,
+        mStateDirectory = getUserConfigDir "imm" >/> "state",
+        mMaildir        = getHomeDirectory >/> "feeds",
         mFromBuilder    = \(item, feed) -> maybe (getFeedTitle feed) id $ getItemAuthor item,
         mSubjectBuilder = \(item, _feed) -> T.pack . maybe "Untitled" id $ getItemTitle item,
         mBodyBuilder    = \(item, _feed) -> T.unlines $ map (flip ($) item) [T.pack . getItemLinkNM, getItemContent]}

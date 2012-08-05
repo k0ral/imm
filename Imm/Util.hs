@@ -13,6 +13,7 @@ import Control.Monad.Error
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import Data.Functor
 import Data.Maybe
 import Data.Text.ICU.Convert
 import Data.Text.Lazy.Encoding hiding(decodeUtf8)
@@ -24,12 +25,16 @@ import Data.Time.RFC3339
 import Network.URI as N
 
 import System.Console.CmdArgs
-import System.Directory
-import System.Environment.XDG.BaseDir
+import System.FilePath
 import System.IO
 import System.Locale
 import System.Timeout as S
 -- }}}
+
+
+-- | Like '(</>)' with first argument in IO to build platform-dependent paths.
+(>/>) :: (MonadIO m) => IO FilePath -> FilePath -> m FilePath
+(>/>) a b = io $ (</> b) <$> a
 
 -- {{{ Monadic utilities
 -- | Shortcut to 'liftIO'
@@ -51,15 +56,6 @@ logError   = io . hPutStr stderr
 logNormal  = io . whenNormal . putStrLn
 logVerbose = io . whenLoud . putStrLn
 
--- | Evaluate given function while replacing directory variables appropriately for the current system
-resolve :: MonadIO m => (RefDirs -> a) -> m a
-resolve f = io $ do
-    homeDir   <- getHomeDirectory
-    tmpDir    <- getTemporaryDirectory
-    configDir <- getUserConfigDir "imm"
-    dataDir   <- getUserDataDir   "imm"
-    
-    return . f $ RefDirs homeDir tmpDir configDir dataDir
 
 -- {{{ Monad-agnostic version of various error-prone functions
 -- | Monad-agnostic version of Data.Text.Encoding.decodeUtf8

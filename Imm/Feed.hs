@@ -20,7 +20,7 @@ import Data.Time.Clock.POSIX
 import Network.URI as N
 
 import System.Directory
-import System.FilePath
+--import System.FilePath
 import System.IO
 import System.Locale
 
@@ -59,9 +59,9 @@ printStatus feedUri = do
 
 getLastCheck :: (MonadReader Settings m, MonadIO m) => URI -> m UTCTime
 getLastCheck feedUri = do
-    directory <- asks mStateDirectory >>= resolve
+    directory <- asks mStateDirectory
     result    <- runErrorT $ do
-        content <- try $ readFile (directory </> fileName)
+        content <- try $ readFile =<< (directory >/> fileName)
         parseTime content
         
     either (const $ return timeZero) return result
@@ -72,12 +72,12 @@ getLastCheck feedUri = do
 
 storeLastCheck :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => URI -> UTCTime -> m ()
 storeLastCheck feedUri date = do
-    directory <- asks mStateDirectory >>= resolve
+    directory <- asks mStateDirectory
     
-    (file, stream) <- try $ openTempFile directory fileName
+    (file, stream) <- try $ (`openTempFile` fileName) =<< directory
     io $ hPutStrLn stream (formatTime defaultTimeLocale "%c" date)
     io $ hClose stream
-    try $ renameFile file (directory </> fileName)
+    try $ renameFile file =<< (directory >/> fileName)
   where
     fileName = getStateFile feedUri
 
@@ -127,8 +127,8 @@ markAsRead uri = io getCurrentTime >>= storeLastCheck uri >> (logVerbose $ "Feed
 
 markAsUnread :: forall (m :: * -> *) . (MonadIO m, MonadError ImmError m, MonadReader Settings m) => URI -> m ()
 markAsUnread uri = do
-    directory <- asks mStateDirectory >>= resolve
-    try $ removeFile $ directory </> (getStateFile uri)
+    directory <- asks mStateDirectory
+    try $ removeFile =<< directory >/> (getStateFile uri)
     logVerbose $ "Feed " ++ show uri ++ " marked as unread."
     
 

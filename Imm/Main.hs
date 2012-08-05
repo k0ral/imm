@@ -46,4 +46,4 @@ update feeds = io . forM_ feeds $ \(f, u) -> do
 
 
 checkStateDirectory :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => m ()
-checkStateDirectory = asks mStateDirectory >>= resolve >>= try . io . createDirectoryIfMissing True
+checkStateDirectory = try . io . (createDirectoryIfMissing True =<<) =<< asks mStateDirectory
