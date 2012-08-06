@@ -12,7 +12,7 @@ import Control.Conditional hiding(when)
 import Control.Monad.Error
 import Control.Monad.Reader hiding(when)
 
---import Data.Functor
+import Data.Either
 import qualified Data.Text.Lazy as T
 import Data.Time hiding(parseTime)
 import Data.Time.Clock.POSIX
@@ -86,10 +86,17 @@ download uri = do
     feed <- parse . T.unpack =<< decode =<< HTTP.getRaw uri
     return (uri, feed)
 
+-- | 
+check :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => ImmFeed -> m ()
+check (uri, feed) = do
+    lastCheck <- getLastCheck uri
+    dates     <- return . rights =<< forM (feedItems feed) (runErrorT . getDate)
+    let newItems = filter (> lastCheck) dates
+    io . putStrLn $ "==> " ++ show (length newItems) ++ " new item(s) "
+
 -- | Create mails for each new item
 update :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => ImmFeed -> m ()
 update (uri, feed) = do
-    logNormal $ "Updating feed " ++ show uri
 --    checkStateDirectory
     Maildir.init =<< asks mMaildir
 
@@ -99,12 +106,12 @@ update (uri, feed) = do
         "Home:   " ++ (maybe "No home"   id $ getFeedHome feed)]
     
     lastCheck <- getLastCheck uri
-    forM_ (feedItems feed) $ \item -> 
+    results <- forM (feedItems feed) $ \item -> 
       do
         date <- getDate item
-        when (date > lastCheck) $ updateItem (item, feed)
-      `catchError` (io . print)
-
+        (date > lastCheck) ? (updateItem (item, feed) >> return 1) ?? return 0
+      `catchError` (\e -> (io . print) e >> return 0 )
+    io . putStrLn $ "==> " ++ show (sum results) ++ " new item(s)"
     markAsRead uri
 
 updateItem :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => (Item, Feed) -> m ()

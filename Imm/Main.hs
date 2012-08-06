@@ -24,24 +24,36 @@ import System.IO
 -- }}}
 
 
+check :: (MonadIO m) => FeedList -> m ()
+check feeds = io . forM_ feeds $ \(f, u) -> do    
+    result <- runErrorT . (`runReaderT` (f def)) $ do
+        logNormal $ "Checking: " ++ u
+        Feed.check =<< Feed.download =<< parseURI u
+    either print return result
+
+
 importOPML :: (MonadIO m) => m ()
 importOPML = io $ (maybe (return ()) addFeeds) =<< OPML.read <$> hGetContents stdin
+
 
 list :: (MonadIO m) => FeedList -> m ()
 list = io . mapM_ (\(f, u) -> runReaderT (printStatus u) (f def))
 
+
 markAsRead :: (MonadIO m) => FeedList -> m ()
 markAsRead = mapM_ (\(f,u) -> runReaderT (runErrorT $ checkStateDirectory >> parseURI u >>= Feed.markAsRead) (f def))
+
 
 markAsUnread :: (MonadIO m) => FeedList -> m ()
 markAsUnread = mapM_ (\(f,u) -> runReaderT (runErrorT $ parseURI u >>= Feed.markAsUnread) (f def))
 
+
 update :: (MonadIO m) => FeedList -> m ()
 update feeds = io . forM_ feeds $ \(f, u) -> do
     result <- runErrorT . (`runReaderT` (f def)) $ do
-        feed <- Feed.download =<< parseURI u
+        logNormal $ "Updating: " ++ u
         checkStateDirectory
-        Feed.update feed
+        Feed.update =<< Feed.download =<< parseURI u
     either print return result
 
 

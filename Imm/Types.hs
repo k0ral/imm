@@ -66,7 +66,7 @@ instance Error ImmError where
 
 -- {{{ Settings type
 data CliOptions = CliOptions {
---    mCheck        :: Bool,
+    mCheck        :: Bool,
     mFeedURI      :: Maybe String,
     mImportOPML   :: Bool,
     mList         :: Bool,

@@ -24,7 +24,7 @@ cliOptions = cmdArgsMode $ baseOptions
     &= program "imm"
   where
     baseOptions = CliOptions {
-        --    mCheck         = def &= explicit &= name "c" &= name "check" &= help "Check availability and validity of all feed sources currently configured.",
+            mCheck         = def &= explicit &= name "c" &= name "check" &= help "Check availability and validity of all feed sources currently configured, without writing any mail.",
             mFeedURI       = def &= explicit &= name "f" &= name "feed"   &= help "Only process given feed." &= typ "URI",
             mImportOPML    = def &= explicit &= name "i" &= name "import" &= help "Import feeds list from an OPML descriptor (read from stdin).",
             mList          = def &= explicit &= name "l" &= name "list"  &= help "List all feed sources currently configured, along with their status.",
@@ -77,11 +77,11 @@ realMain (Right feeds) = do
     realMain' (feeds', options)
   where
     realMain' (f, options)
+      | mCheck      options   = Main.check f
       | mImportOPML options   = Main.importOPML
       | mList       options   = Main.list f
       | mMarkAsRead options   = Main.markAsRead f
       | mMarkAsUnread options = Main.markAsUnread f
---      | mCheck options = Main.check f
       | mUpdate     options   = Main.update f
       | otherwise             = print $ helpText [] HelpFormatDefault cliOptions
 -- }}}
