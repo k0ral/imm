@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables, KindSignatures #-}
--- | HTTP client related functions
 module Imm.HTTP where
 
 -- {{{ Imports
@@ -20,7 +19,7 @@ import Network.URI
 import Prelude hiding(catch)
 -- }}}
 
-
+-- | Perform an HTTP GET request and return the response body as raw 'ByteString'
 getRaw :: (MonadIO m, MonadError ImmError m) => URI -> m BL.ByteString
 getRaw uri = do
     logVerbose $ "Downloading " ++ show uri
@@ -29,7 +28,7 @@ getRaw uri = do
     return $ responseBody res
 
 
--- | Monad-agnostic version of 'withManager
+-- | Monad-agnostic version of 'withManager'
 withManager' f = do
     res <- timeout 11000000 $ (Right <$> withManager f) `catch` (return . Left . IOE) `catch` (return . Left . HTTPError) `catch` (return . Left . TLSError)
     either throwError return res
@@ -41,7 +40,7 @@ parseURL uri = do
     either throwError return result
     
 
--- | Build an HTTP request for given URI.
+-- | Build an HTTP request for given URI
 request :: (MonadError ImmError m, MonadIO m) => String -> m (Request a)
 request uri = do
     req <- parseURL uri

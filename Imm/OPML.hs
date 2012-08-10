@@ -6,6 +6,7 @@ import Text.OPML.Syntax
 import Text.XML.Light.Types
 -- }}}
 
+-- | Parse an OPML string and return a list of feed groups
 read :: String -> Maybe [(String, [String])]
 read rawOPML = do
     opml <- parseOPMLString rawOPML

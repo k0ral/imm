@@ -8,6 +8,7 @@ import qualified Imm.Maildir as Maildir
 import Imm.Types
 import Imm.Util
 
+import Control.Applicative
 import Control.Conditional hiding(when)
 import Control.Monad.Error
 import Control.Monad.Reader hiding(when)
@@ -47,14 +48,11 @@ parse :: MonadError ImmError m => String -> m Feed
 parse x = maybe (throwError $ ParseFeedError x) return $ parseFeedString x
 
 -- | 
-printStatus :: (MonadReader Settings m, MonadIO m) => String -> m ()
-printStatus feedUri = do
-    prefix <- case N.parseURI feedUri of
-        Just uri -> do
-          lastCheck <- getLastCheck uri
-          return $ (lastCheck == posixSecondsToUTCTime 0) ? "[NEW] " ?? ("[Last update: "++ show lastCheck ++ "]")
-        _ -> return "[Not an URI]"
-    io . putStrLn $ prefix ++ " " ++ feedUri
+printStatus :: (MonadReader Settings m, MonadIO m) => URI -> m ()
+printStatus uri = do
+    lastCheck <- getLastCheck uri
+    let prefix = (lastCheck == posixSecondsToUTCTime 0) ? "[NEW] " ?? ("[Last update: "++ show lastCheck ++ "]")
+    io . putStrLn $ prefix ++ " " ++ show uri
 
 
 getLastCheck :: (MonadReader Settings m, MonadIO m) => URI -> m UTCTime
@@ -95,7 +93,7 @@ check (uri, feed) = do
     io . putStrLn $ "==> " ++ show (length newItems) ++ " new item(s) "
 
 -- | Create mails for each new item
-update :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => ImmFeed -> m ()
+update :: (Applicative m, MonadReader Settings m, MonadIO m, MonadError ImmError m) => ImmFeed -> m ()
 update (uri, feed) = do
 --    checkStateDirectory
     Maildir.init =<< asks mMaildir
@@ -114,7 +112,7 @@ update (uri, feed) = do
     io . putStrLn $ "==> " ++ show (sum results) ++ " new item(s)"
     markAsRead uri
 
-updateItem :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => (Item, Feed) -> m ()
+updateItem :: (Applicative m, MonadReader Settings m, MonadIO m, MonadError ImmError m) => (Item, Feed) -> m ()
 updateItem (item, feed) = do
     date <- getDate item
     logVerbose $ unlines [

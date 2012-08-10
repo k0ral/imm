@@ -1,7 +1,4 @@
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE FlexibleContexts #-}
--- | Various utilities
+{-# LANGUAGE NoMonomorphismRestriction, RankNTypes, FlexibleContexts #-}
 module Imm.Util where
 
 -- {{{ Imports
@@ -62,22 +59,19 @@ logVerbose = io . whenLoud . putStrLn
 decodeUtf8 :: MonadError ImmError m => BL.ByteString -> m TL.Text
 decodeUtf8 = either (throwError . UnicodeError) return . decodeUtf8'
 
-decode :: (MonadIO m, MonadError ImmError m) => BL.ByteString -> m TL.Text
-decode raw = do
-    catchError (decodeUtf8 raw) $ return $ do
-        conv <- io $ open "ISO-8859-1" Nothing
-        return . TL.fromChunks . (\a -> [a]) . toUnicode conv . B.concat . BL.toChunks $ raw
-
-
--- | Monad-agnostic version of Network.URI.parseURI
+-- | Monad-agnostic version of 'Network.URI.parseURI'
 parseURI :: (MonadError ImmError m) => String -> m URI
 parseURI uri = maybe (throwError $ ParseUriError uri) return $ N.parseURI uri
 
--- | Monad-agnostic version of Data.Time.Format.parseTime
+-- | Monad-agnostic version of 'Data.Time.Format.parseTime'
 parseTime :: (MonadError ImmError m) => String -> m UTCTime
 parseTime string = maybe (throwError $ ParseTimeError string) return $ T.parseTime defaultTimeLocale "%c" string
 -- }}}
 
+decode :: (MonadIO m, MonadError ImmError m) => BL.ByteString -> m TL.Text
+decode raw = catchError (decodeUtf8 raw) $ return $ do
+    conv <- io $ open "ISO-8859-1" Nothing
+    return . TL.fromChunks . (\a -> [a]) . toUnicode conv . B.concat . BL.toChunks $ raw
 
 parseDate :: String -> Maybe UTCTime
 parseDate date = listToMaybe . map T.zonedTimeToUTC . catMaybes . flip map [readRFC2822, readRFC3339, T.parseTime defaultTimeLocale "%a, %d %b %G %T", T.parseTime defaultTimeLocale "%Y-%m-%d", T.parseTime defaultTimeLocale "%e %b %Y", T.parseTime defaultTimeLocale "%a, %e %b %Y %k:%M:%S %z", T.parseTime defaultTimeLocale "%a, %e %b %Y %T %Z"] $ \f -> f . TL.unpack . TL.strip . TL.pack $ date

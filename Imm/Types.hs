@@ -27,7 +27,6 @@ import Text.Feed.Types
 -- }}}
 
 -- {{{ Error handling
--- | Errors that can be returned by an Imm process
 data ImmError = 
     OtherError         String
   | HTTPError          HttpException
@@ -65,6 +64,7 @@ instance Error ImmError where
 -- }}}
 
 -- {{{ Settings type
+-- | Available commandline options (cf imm -h)
 data CliOptions = CliOptions {
     mCheck        :: Bool,
     mFeedURI      :: Maybe String,
@@ -72,21 +72,17 @@ data CliOptions = CliOptions {
     mList         :: Bool,
     mMarkAsRead   :: Bool,
     mMarkAsUnread :: Bool,
-    mUpdate       :: Bool,
-    mDenyReconf   :: Bool,         -- ^ Do not recompile configuration even if it has changed
-    mMasterBinary :: Maybe String
+    mUpdate       :: Bool
 } deriving (Data, Typeable, Show, Eq)
 
--- | Set of settings for imm
 data Settings = Settings {
-    mStateDirectory :: IO FilePath,              -- In IO monad to allow the use of platform-dependent directories
-    mMaildir        :: IO FilePath,              -- In IO monad to allow the use of platform-dependent directories
-    mFromBuilder    :: (Item, Feed) -> String,
-    mSubjectBuilder :: (Item, Feed) -> TL.Text,
-    mBodyBuilder    :: (Item, Feed) -> TL.Text   -- ^ sic!
+    mStateDirectory :: IO FilePath,              -- ^ Where feeds' state (last update time) will be stored
+    mMaildir        :: IO FilePath,              -- ^ Where mails will be written
+    mFromBuilder    :: (Item, Feed) -> String,   -- ^ Called to write the From: header of feed mails
+    mSubjectBuilder :: (Item, Feed) -> TL.Text,  -- ^ Called to write the Subject: header of feed mails
+    mBodyBuilder    :: (Item, Feed) -> TL.Text   -- ^ Called to write the body of feed mails (sic!)
 }
 
--- | 
 type CustomSettings = Settings -> Settings
 -- }}}
 

@@ -1,10 +1,9 @@
 {-# LANGUAGE FlexibleContexts #-}
--- | Main high level process functions.
 module Imm.Main where
 
 -- {{{ Imports
 import Imm.Config
-import Imm.Feed as Feed
+import qualified Imm.Feed as Feed
 import Imm.OPML as OPML
 import Imm.Types
 import Imm.Util
@@ -33,11 +32,11 @@ check feeds = io . forM_ feeds $ \(f, u) -> do
 
 
 importOPML :: (MonadIO m) => m ()
-importOPML = io $ (maybe (return ()) addFeeds) =<< OPML.read <$> hGetContents stdin
+importOPML = io $ mapM_ addFeeds =<< OPML.read <$> hGetContents stdin
 
 
 list :: (MonadIO m) => FeedList -> m ()
-list = io . mapM_ (\(f, u) -> runReaderT (printStatus u) (f def))
+list = io . mapM_ (\(f, u) -> runReaderT (runErrorT $ parseURI u >>= Feed.printStatus) (f def))
 
 
 markAsRead :: (MonadIO m) => FeedList -> m ()

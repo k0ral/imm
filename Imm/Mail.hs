@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
--- | Utilities to manipulate mails.
 module Imm.Mail where
 
 -- {{{ Imports
@@ -7,6 +6,7 @@ module Imm.Mail where
 import Imm.Types
 import Imm.Util
 
+import Control.Applicative
 import Control.Monad
 import Control.Monad.Reader
 
@@ -31,6 +31,7 @@ instance Default Mail where
         mSubject            = T.pack "Untitled",
         mReturnPath         = "<imm@noreply>"}
 
+
 toText :: Mail -> T.Text
 toText mail = T.unlines [
     T.pack $ "Return-Path: " ++ mReturnPath mail,
@@ -42,30 +43,12 @@ toText mail = T.unlines [
     T.pack "",
     mBody mail]
  
-
-build :: MonadReader Settings m => TimeZone -> (Item, Feed) -> m Mail
+-- | Build mail from a given feed, using builders functions from 'Settings'.
+build :: (Applicative m, MonadReader Settings m) => TimeZone -> (Item, Feed) -> m Mail
 build timeZone (item, feed) = do
-    from    <- buildFrom    (item, feed)
-    subject <- buildSubject (item, feed)
-    body    <- buildBody    (item, feed)
+    from    <- asks mFromBuilder    <*> return (item, feed)
+    subject <- asks mSubjectBuilder <*> return (item, feed)
+    body    <- asks mBodyBuilder    <*> return (item, feed)
     return def {mDate = date, mFrom = from, mSubject = subject, mBody = body}
   where
     date = maybe Nothing (Just . utcToZonedTime timeZone) . parseDate <=< F.getItemDate $ item
-
-
-buildFrom :: MonadReader Settings m => (Item, Feed) -> m String
-buildFrom (item, feed) = do
-    builder <- asks mFromBuilder
-    return $ builder (item, feed)
-
-
-buildSubject :: MonadReader Settings m => (Item, Feed) -> m T.Text
-buildSubject (item, feed) = do
-    builder <- asks mSubjectBuilder
-    return $ builder (item, feed)
-
-
-buildBody :: MonadReader Settings m => (Item, Feed) -> m T.Text
-buildBody (item, feed) = do
-    builder <- asks mBodyBuilder
-    return $ builder (item, feed)

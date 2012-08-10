@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
--- | Utilities to manipulate maildirs.
 module Imm.Maildir where
 
 -- {{{ Imports
@@ -21,6 +20,7 @@ import System.Directory
 import System.Random
 -- }}}
 
+-- | Build a maildir with subdirectories cur, new and tmp.
 init :: (MonadIO m, MonadError ImmError m) => IO FilePath -> m ()
 init directory = do
     try $ createDirectoryIfMissing True =<< directory
@@ -28,14 +28,14 @@ init directory = do
     try $ createDirectoryIfMissing True =<< (directory >/> "new")
     try $ createDirectoryIfMissing True =<< (directory >/> "tmp")
 
-
+-- | Add a mail to the maildir
 add :: (MonadIO m, MonadError ImmError m) => IO FilePath -> Mail -> m ()
 add directory mail = do
     fileName <- io getUniqueName
     dir      <- directory >/> "new" >/> fileName 
     try $ T.writeFile dir (toText mail)
 
-
+-- | Return an allegedly unique filename; useful to add new mail files in a maildir.
 getUniqueName :: MonadIO m => m String 
 getUniqueName = io $ do
     time     <- show <$> getPOSIXTime
@@ -43,4 +43,3 @@ getUniqueName = io $ do
     rand     <- show <$> (getStdRandom $ randomR (1,100000) :: IO Int)
     
     return . concat $ [time, ".", rand, ".", hostname]
-
