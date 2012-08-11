@@ -1,5 +1,5 @@
 Name:                imm
-Version:             0.4.0.0
+Version:             0.4.1.0
 Synopsis:            Retrieve RSS/Atom feeds and write one mail per new item in a maildir.
 --Description:         
 --Homepage:
@@ -35,7 +35,7 @@ Library
         base == 4.*,
         bytestring,
         case-insensitive,
-        cmdargs,
+        cmdargs >= 0.9,
         cond,
         data-default,
         directory,
@@ -53,7 +53,7 @@ Library
         text,
         text-icu,
         time,
-        timerep,
+        timerep >= 1.0.3,
         tls,
         utf8-string,
         xdg-basedir,
