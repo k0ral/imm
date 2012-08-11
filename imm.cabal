@@ -1,7 +1,7 @@
 Name:                imm
 Version:             0.4.1.0
 Synopsis:            Retrieve RSS/Atom feeds and write one mail per new item in a maildir.
---Description:         
+Description:         Cf README
 --Homepage:
 Category:            Web
 
@@ -13,7 +13,7 @@ Maintainer:          koral att mailoo dott org
 
 Cabal-version:       >=1.8
 Build-type:          Simple
--- Extra-source-files:  
+Extra-source-files:  README
 
 Source-repository head
     Type:     git
@@ -21,16 +21,17 @@ Source-repository head
 
 Library
     Exposed-modules:
+        Imm,
         Imm.Boot,
         Imm.Config,
-        Imm.HTTP,
-        Imm.Main,
+        Imm.Core,
         Imm.Feed,
+        Imm.HTTP,
+        Imm.Mail,
+        Imm.Maildir,
         Imm.OPML,
         Imm.Types,
-        Imm.Util,
-        Imm.Mail,
-        Imm.Maildir
+        Imm.Util
     Build-depends:
         base == 4.*,
         bytestring,

@@ -12,6 +12,7 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Char
 import Data.Default
 import Data.Foldable hiding(concat)
+import Data.Maybe
 import Data.Text.ICU.Convert
 import qualified Data.Text.Lazy as TL
 
@@ -26,12 +27,12 @@ instance Default Settings where
     def = Settings {
         mStateDirectory = getUserConfigDir "imm" >/> "state",
         mMaildir        = getHomeDirectory >/> "feeds",
-        mFromBuilder    = \(item, feed) -> maybe (getFeedTitle feed) id $ getItemAuthor item,
-        mSubjectBuilder = \(item, _feed) -> TL.pack . maybe "Untitled" id $ getItemTitle item,
-        mBodyBuilder    = \(item, _feed) -> TL.unlines $ map (flip ($) item) [TL.pack . getItemLinkNM, getItemContent],
+        mFromBuilder    = \(item, feed) -> fromMaybe (getFeedTitle feed) $ getItemAuthor item,
+        mSubjectBuilder = \(item, _feed) -> TL.pack . fromMaybe "Untitled" $ getItemTitle item,
+        mBodyBuilder    = \(item, _feed) -> TL.unlines $ map ($ item) [TL.pack . getItemLinkNM, getItemContent],
         mDecoder        = \raw -> catchError (decodeUtf8 raw) $ return $ do
             conv <- io $ open "ISO-8859-1" Nothing
-            return . TL.fromChunks . (\a -> [a]) . toUnicode conv . B.concat . BL.toChunks $ raw
+            return . TL.fromChunks . (: []) . toUnicode conv . B.concat . BL.toChunks $ raw
     }
 
 -- | Return the Haskell code to write in the configuration file to add a feed.

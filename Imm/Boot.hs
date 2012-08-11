@@ -1,7 +1,7 @@
 module Imm.Boot where
 
 -- {{{ Imports
-import qualified Imm.Main as Main
+import qualified Imm.Core as Core
 import Imm.Types
 
 import qualified Config.Dyre as D
@@ -64,17 +64,17 @@ realMain (Right feeds) = do
     whenLoud printDyrePaths
     options <- cmdArgsRun cliOptions
 
-    let feeds' = case (mFeedURI options) of
+    let feeds' = case mFeedURI options of
           Just uri -> filter (\(_, u) -> u == uri) feeds
           _        -> feeds
 
     realMain' (feeds', options)
   where
     realMain' (f, options)
-      | mCheck        options = Main.check f
-      | mImportOPML   options = Main.importOPML
-      | mList         options = Main.list f
-      | mMarkAsRead   options = Main.markAsRead f
-      | mMarkAsUnread options = Main.markAsUnread f
-      | mUpdate       options = Main.update f
+      | mCheck        options = Core.check f
+      | mImportOPML   options = Core.importOPML
+      | mList         options = Core.list f
+      | mMarkAsRead   options = Core.markAsRead f
+      | mMarkAsUnread options = Core.markAsUnread f
+      | mUpdate       options = Core.update f
       | otherwise             = print $ helpText [] HelpFormatDefault cliOptions

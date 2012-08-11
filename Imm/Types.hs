@@ -6,6 +6,7 @@ module Imm.Types where
 import Control.Monad.Error
 
 import qualified Data.ByteString.Lazy as BL
+import Data.Maybe
 import Data.Text.Encoding
 import Data.Text.Encoding.Error
 import qualified Data.Text as T
@@ -57,11 +58,11 @@ instance Show ImmError where
         "    date:"         ++ (show $ getItemDate item)]
     show (ParseTimeError raw)      = "/!\\ Cannot parse time: " ++ raw
     show (ParseFeedError raw)      = "/!\\ Cannot parse feed: " ++ raw
-    show (IOE e)                   = "/!\\ IO error: " ++ ioeGetLocation e ++ ": " ++ maybe "" id (ioeGetFileName e) ++ " " ++ ioeGetErrorString e
+    show (IOE e)                   = "/!\\ IO error: " ++ ioeGetLocation e ++ ": " ++ fromMaybe "" (ioeGetFileName e) ++ " " ++ ioeGetErrorString e
     show TimeOut                   = "/!\\ Process has timed out"
 
 instance Error ImmError where
-    strMsg x = OtherError x
+    strMsg = OtherError
 -- }}}
 
 -- {{{ Settings type

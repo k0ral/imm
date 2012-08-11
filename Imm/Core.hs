@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
-module Imm.Main where
+module Imm.Core where
 
 -- {{{ Imports
 import Imm.Config
@@ -19,20 +19,19 @@ import Data.Functor
 import Prelude hiding(mapM_)
 
 import System.Directory
-import System.IO
 -- }}}
 
 
 check :: (MonadIO m) => FeedList -> m ()
 check feeds = io . forM_ feeds $ \(f, u) -> do    
-    result <- runErrorT . (`runReaderT` (f def)) $ do
+    result <- runErrorT . (`runReaderT` f def) $ do
         logNormal $ "Checking: " ++ u
         Feed.check =<< Feed.download =<< parseURI u
     either print return result
 
 
 importOPML :: (MonadIO m) => m ()
-importOPML = io $ mapM_ addFeeds =<< OPML.read <$> hGetContents stdin
+importOPML = io $ mapM_ addFeeds =<< OPML.read <$> getContents
 
 
 list :: (MonadIO m) => FeedList -> m ()
@@ -49,7 +48,7 @@ markAsUnread = mapM_ (\(f,u) -> runReaderT (runErrorT $ parseURI u >>= Feed.mark
 
 update :: (MonadIO m) => FeedList -> m ()
 update feeds = io . forM_ feeds $ \(f, u) -> do
-    result <- runErrorT . (`runReaderT` (f def)) $ do
+    result <- runErrorT . (`runReaderT` f def) $ do
         logNormal $ "Updating: " ++ u
         checkStateDirectory
         Feed.update =<< Feed.download =<< parseURI u

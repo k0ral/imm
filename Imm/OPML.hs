@@ -12,7 +12,7 @@ read rawOPML = do
     opml <- parseOPMLString rawOPML
     let groups     = opmlBody opml
         groupNames = map opmlText groups
-        feeds      = \group -> opmlOutlineChildren group
-        feedURI    = \feed -> (concat . map attrVal) . (filter ((== "xmlUrl") . qName . attrKey)) . opmlOutlineAttrs $ feed
+        feeds      = opmlOutlineChildren
+        feedURI    = concatMap attrVal . filter ((== "xmlUrl") . qName . attrKey) . opmlOutlineAttrs
     
-    return $ zip groupNames (map (map feedURI) (map feeds groups))
+    return $ zip groupNames (map (map feedURI . feeds) groups)

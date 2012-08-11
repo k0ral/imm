@@ -1,7 +1,6 @@
 --module Executable where
 
-import Imm.Boot
---import Imm.Types
+import Imm
 
 main :: IO ()
 main = imm []

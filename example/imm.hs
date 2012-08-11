@@ -1,10 +1,7 @@
 module Main where
 
 -- {{{ Imports
-import Imm.Boot
-import Imm.Config
-import Imm.Types
-import Imm.Util 
+import Imm
 
 import System.Directory
 import System.Environment.XDG.BaseDir

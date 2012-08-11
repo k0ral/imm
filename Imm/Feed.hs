@@ -14,6 +14,7 @@ import Control.Monad.Error
 import Control.Monad.Reader hiding(when)
 
 import Data.Either
+import Data.Maybe
 import qualified Data.Text.Lazy as T
 import Data.Time hiding(parseTime)
 import Data.Time.Clock.POSIX
@@ -35,7 +36,7 @@ import Text.XML.Light.Proc
 -- {{{ Util
 -- | A state file stores the last check time for a single feed, identified with its 'URI'.
 getStateFile :: URI -> FilePath
-getStateFile feedUri@URI{ uriAuthority = Just auth } = toFileName =<< ((++ (uriQuery feedUri)) . (++ (uriPath feedUri)) . uriRegName $ auth)
+getStateFile feedUri@URI{ uriAuthority = Just auth } = toFileName =<< ((++ uriQuery feedUri) . (++ uriPath feedUri) . uriRegName $ auth)
 getStateFile feedUri = show feedUri >>= toFileName
 
 -- | Remove forbidden characters in a filename.
@@ -103,9 +104,9 @@ update (uri, feed) = do
     Maildir.init =<< asks mMaildir
 
     logVerbose $ unlines [
-        "Title:  " ++ (getFeedTitle feed),
-        "Author: " ++ (maybe "No author" id $ getFeedAuthor feed),
-        "Home:   " ++ (maybe "No home"   id $ getFeedHome feed)]
+        "Title:  " ++ getFeedTitle feed,
+        "Author: " ++ fromMaybe "No author" (getFeedAuthor feed),
+        "Home:   " ++ fromMaybe "No home"   (getFeedHome feed)]
     
     lastCheck <- getLastCheck uri
     results <- forM (feedItems feed) $ \item -> 
@@ -121,9 +122,9 @@ updateItem :: (Applicative m, MonadReader Settings m, MonadIO m, MonadError ImmE
 updateItem (item, feed) = do
     date <- getDate item
     logVerbose $ unlines [
-            "   Item author: " ++ (maybe "<empty>" id $ getItemAuthor item),
-            "   Item title:  " ++ (maybe "<empty>" id $ getItemTitle item),
-            "   Item URI:    " ++ (maybe "<empty>" id $ getItemLink  item),
+            "   Item author: " ++ fromMaybe "<empty>" (getItemAuthor item),
+            "   Item title:  " ++ fromMaybe "<empty>" (getItemTitle item),
+            "   Item URI:    " ++ fromMaybe "<empty>" (getItemLink  item),
             -- "   Item Body:   " ++ (Imm.Mail.getItemContent  item),
             "   Item date:   " ++ show date]
     
@@ -139,7 +140,7 @@ markAsRead uri = io getCurrentTime >>= storeLastCheck uri >> (logVerbose $ "Feed
 markAsUnread :: forall (m :: * -> *) . (MonadIO m, MonadError ImmError m, MonadReader Settings m) => URI -> m ()
 markAsUnread uri = do
     directory <- asks mStateDirectory
-    try $ removeFile =<< directory >/> (getStateFile uri)
+    try $ removeFile =<< directory >/> getStateFile uri
     logVerbose $ "Feed " ++ show uri ++ " marked as unread."
     
 
@@ -150,7 +151,7 @@ getItemLinkNM item = maybe "No link found" paragraphy $ getItemLink item
 
 getItemContent :: Item -> T.Text
 getItemContent (AtomItem e) = T.pack . maybe "No content" extractHtml . Atom.entryContent $ e
-getItemContent item = T.pack . maybe "Empty" id . getItemDescription $ item
+getItemContent item = T.pack . fromMaybe "Empty" . getItemDescription $ item
 
 getDate :: MonadError ImmError m => Item -> m UTCTime
 getDate x = maybe (throwError $ ParseItemDateError x) return $ parseDate =<< F.getItemDate x
