@@ -7,7 +7,7 @@ In a nutshell
 
 **Technically**, *imm* is a little tool that retrieves a list of RSS/Atom feeds and fills a maildir with new items.
 
-**Functionnally**, *imm* makes it possible to use mail readers for feeds, for the sake of *I-want-the-mutt-of-feed-readers* zealots.
+**Functionally**, *imm* makes it possible to use mail readers for feeds, for the sake of *I-want-the-mutt-of-feed-readers* zealots.
 
 *imm* is written and configured in *Haskell*.
 
