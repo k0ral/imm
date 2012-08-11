@@ -33,10 +33,12 @@ import Text.XML.Light.Proc
 -- }}}
 
 -- {{{ Util
+-- | A state file stores the last check time for a single feed, identified with its 'URI'.
 getStateFile :: URI -> FilePath
 getStateFile feedUri@URI{ uriAuthority = Just auth } = toFileName =<< ((++ (uriQuery feedUri)) . (++ (uriPath feedUri)) . uriRegName $ auth)
 getStateFile feedUri = show feedUri >>= toFileName
 
+-- | Remove forbidden characters in a filename.
 toFileName :: Char -> String
 toFileName '/' = "."
 toFileName '?' = "."
@@ -54,7 +56,7 @@ printStatus uri = do
     let prefix = (lastCheck == posixSecondsToUTCTime 0) ? "[NEW] " ?? ("[Last update: "++ show lastCheck ++ "]")
     io . putStrLn $ prefix ++ " " ++ show uri
 
-
+-- | Read the last check time in the state file.
 getLastCheck :: (MonadReader Settings m, MonadIO m) => URI -> m UTCTime
 getLastCheck feedUri = do
     directory <- asks mStateDirectory
@@ -67,7 +69,7 @@ getLastCheck feedUri = do
     fileName = getStateFile feedUri
     timeZero = posixSecondsToUTCTime 0 
 
-
+-- | Write the last check time in the state file.
 storeLastCheck :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => URI -> UTCTime -> m ()
 storeLastCheck feedUri date = do
     directory <- asks mStateDirectory
@@ -79,9 +81,11 @@ storeLastCheck feedUri date = do
   where
     fileName = getStateFile feedUri
 
-download :: (MonadIO m, MonadError ImmError m) => URI -> m ImmFeed
+-- | Retrieve, decode and parse the given resource as a feed.
+download :: (MonadIO m, MonadError ImmError m, MonadReader Settings m) => URI -> m ImmFeed
 download uri = do
-    feed <- parse . T.unpack =<< decode =<< HTTP.getRaw uri
+    decoder <- asks mDecoder
+    feed <- parse . T.unpack =<< decoder =<< HTTP.getRaw uri
     return (uri, feed)
 
 -- | 
@@ -92,7 +96,7 @@ check (uri, feed) = do
     let newItems = filter (> lastCheck) dates
     io . putStrLn $ "==> " ++ show (length newItems) ++ " new item(s) "
 
--- | Create mails for each new item
+-- | Write mails for each new item, and update the last check time in state file.
 update :: (Applicative m, MonadReader Settings m, MonadIO m, MonadError ImmError m) => ImmFeed -> m ()
 update (uri, feed) = do
 --    checkStateDirectory
@@ -112,6 +116,7 @@ update (uri, feed) = do
     io . putStrLn $ "==> " ++ show (sum results) ++ " new item(s)"
     markAsRead uri
 
+
 updateItem :: (Applicative m, MonadReader Settings m, MonadIO m, MonadError ImmError m) => (Item, Feed) -> m ()
 updateItem (item, feed) = do
     date <- getDate item
@@ -126,10 +131,11 @@ updateItem (item, feed) = do
     dir      <- asks mMaildir
     Maildir.add dir =<< Mail.build timeZone (item, feed)
 
-
+-- | Simply set the last check time to now.
 markAsRead :: forall (m :: * -> *) . (MonadIO m, MonadError ImmError m, MonadReader Settings m) => URI -> m ()
 markAsRead uri = io getCurrentTime >>= storeLastCheck uri >> (logVerbose $ "Feed " ++ show uri ++ " marked as read.")
 
+-- | Simply remove the state file.
 markAsUnread :: forall (m :: * -> *) . (MonadIO m, MonadError ImmError m, MonadReader Settings m) => URI -> m ()
 markAsUnread uri = do
     directory <- asks mStateDirectory
@@ -139,7 +145,7 @@ markAsUnread uri = do
 
 -- {{{ Item utilities
 getItemLinkNM :: Item -> String 
-getItemLinkNM item = maybe "No link found" paragraphy  $ getItemLink item
+getItemLinkNM item = maybe "No link found" paragraphy $ getItemLink item
 
 
 getItemContent :: Item -> T.Text

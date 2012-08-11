@@ -46,14 +46,11 @@ printDyrePaths = do
 dyreParameters :: D.Params (Either String FeedList)
 dyreParameters = D.defaultParams {
   D.projectName  = "imm",
-  D.showError    = showError,
+  D.showError    = \_ -> Left,
   D.realMain     = realMain,
   D.ghcOpts      = ["-threaded"],
   D.statusOut    = hPutStrLn stderr
 }
-
-showError :: Either String a -> String -> Either String a
-showError _ = Left
 -- }}}
 
 -- | Main function to call in the configuration file.

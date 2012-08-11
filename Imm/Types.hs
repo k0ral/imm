@@ -1,10 +1,11 @@
-{-# LANGUAGE DeriveDataTypeable, GeneralizedNewtypeDeriving, ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable, GeneralizedNewtypeDeriving, ScopedTypeVariables, RankNTypes, FlexibleContexts #-}
 module Imm.Types where
 
 -- {{{ Imports
 --import Control.Exception
 import Control.Monad.Error
 
+import qualified Data.ByteString.Lazy as BL
 import Data.Text.Encoding
 import Data.Text.Encoding.Error
 import qualified Data.Text as T
@@ -76,13 +77,15 @@ data CliOptions = CliOptions {
 } deriving (Data, Typeable, Show, Eq)
 
 data Settings = Settings {
-    mStateDirectory :: IO FilePath,              -- ^ Where feeds' state (last update time) will be stored
-    mMaildir        :: IO FilePath,              -- ^ Where mails will be written
-    mFromBuilder    :: (Item, Feed) -> String,   -- ^ Called to write the From: header of feed mails
-    mSubjectBuilder :: (Item, Feed) -> TL.Text,  -- ^ Called to write the Subject: header of feed mails
-    mBodyBuilder    :: (Item, Feed) -> TL.Text   -- ^ Called to write the body of feed mails (sic!)
+    mStateDirectory :: IO FilePath,                                    -- ^ Where feeds' state (last update time) will be stored
+    mMaildir        :: IO FilePath,                                    -- ^ Where mails will be written
+    mFromBuilder    :: (Item, Feed) -> String,                         -- ^ Called to write the From: header of feed mails
+    mSubjectBuilder :: (Item, Feed) -> TL.Text,                        -- ^ Called to write the Subject: header of feed mails
+    mBodyBuilder    :: (Item, Feed) -> TL.Text,                        -- ^ Called to write the body of feed mails (sic!)
+    mDecoder        :: (MonadIO m, MonadError ImmError m) => Decoder m -- ^ Called when decoding the HTTP response from a feed URI
 }
 
+type Decoder m      = BL.ByteString -> m TL.Text
 type CustomSettings = Settings -> Settings
 -- }}}
 

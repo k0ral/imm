@@ -27,7 +27,6 @@ getRaw uri = do
     res <- withManager' (httpLbs req)
     return $ responseBody res
 
-
 -- | Monad-agnostic version of 'withManager'
 withManager' f = do
     res <- timeout 11000000 $ (Right <$> withManager f) `catch` (return . Left . IOE) `catch` (return . Left . HTTPError) `catch` (return . Left . TLSError)
@@ -39,7 +38,6 @@ parseURL uri = do
     result <- io $ (Right <$> parseUrl uri) `catch` (return . Left . HTTPError)
     either throwError return result
     
-
 -- | Build an HTTP request for given URI
 request :: (MonadError ImmError m, MonadIO m) => String -> m (Request a)
 request uri = do

@@ -8,11 +8,9 @@ import qualified Control.Exception as E
 import Control.Monad.Error
 --import Control.Monad.IO.Class
 
-import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Functor
 import Data.Maybe
-import Data.Text.ICU.Convert
 import Data.Text.Lazy.Encoding hiding(decodeUtf8)
 import qualified Data.Text.Lazy as TL
 import Data.Time as T
@@ -29,7 +27,7 @@ import System.Timeout as S
 -- }}}
 
 
--- | Like '(</>)' with first argument in IO to build platform-dependent paths.
+-- | Like '</>' with first argument in IO to build platform-dependent paths.
 (>/>) :: (MonadIO m) => IO FilePath -> FilePath -> m FilePath
 (>/>) a b = io $ (</> b) <$> a
 
@@ -68,10 +66,6 @@ parseTime :: (MonadError ImmError m) => String -> m UTCTime
 parseTime string = maybe (throwError $ ParseTimeError string) return $ T.parseTime defaultTimeLocale "%c" string
 -- }}}
 
-decode :: (MonadIO m, MonadError ImmError m) => BL.ByteString -> m TL.Text
-decode raw = catchError (decodeUtf8 raw) $ return $ do
-    conv <- io $ open "ISO-8859-1" Nothing
-    return . TL.fromChunks . (\a -> [a]) . toUnicode conv . B.concat . BL.toChunks $ raw
 
 parseDate :: String -> Maybe UTCTime
 parseDate date = listToMaybe . map T.zonedTimeToUTC . catMaybes . flip map [readRFC2822, readRFC3339, T.parseTime defaultTimeLocale "%a, %d %b %G %T", T.parseTime defaultTimeLocale "%Y-%m-%d", T.parseTime defaultTimeLocale "%e %b %Y", T.parseTime defaultTimeLocale "%a, %e %b %Y %k:%M:%S %z", T.parseTime defaultTimeLocale "%a, %e %b %Y %T %Z"] $ \f -> f . TL.unpack . TL.strip . TL.pack $ date
