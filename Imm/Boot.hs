@@ -80,4 +80,4 @@ realMain (Right feeds) = do
       | mMarkAsRead   options = Main.markAsRead f
       | mMarkAsUnread options = Main.markAsUnread f
       | mUpdate       options = Main.update f
-      | otherwise             = print $ helpText [] HelpFormatDefault cliOptions
+      | otherwise             = print $ helpText HelpFormatDefault cliOptions
