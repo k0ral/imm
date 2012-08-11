@@ -4,21 +4,19 @@ module Main where
 import Imm.Boot
 import Imm.Config
 import Imm.Types
+import Imm.Util 
 
-import System.FilePath
+import System.Directory
+import System.Environment.XDG.BaseDir
 -- }}}
 
 main :: IO ()
-main = imm mySettings
+main = imm myConf
 
-mySettings :: Settings
-mySettings = defaultSettings {
-    mFeedGroups = myFeedGroups }
 
-myFeedGroups :: [FeedGroup]
-myFeedGroups = [
-    (exampleFeeds, ["http://planet.haskell.org/rss20.xml"])]
+myConf :: FeedList
+myConf = zip (repeat mySettings) feeds
 
-exampleFeeds :: FeedSettings
-exampleFeeds = FeedSettings {
-    mMaildir = \refDirs -> (mHome refDirs) </> "feeds"}
+
+ 
+feeds =  ["http://planet.haskell.org/rss20.xml","http://xkcd.com/rss.xml" ]
