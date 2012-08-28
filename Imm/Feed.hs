@@ -27,10 +27,13 @@ import System.IO
 import System.Locale
 
 import qualified Text.Atom.Feed as Atom
+import qualified Text.RSS1.Syntax as RSS1
+import qualified Text.RSS.Syntax as RSS
 import Text.Feed.Import as F
 import Text.Feed.Query as F
 import Text.Feed.Types as F
 import Text.XML.Light.Proc
+import Text.XML.Light.Types
 -- }}}
 
 -- {{{ Util
@@ -150,7 +153,9 @@ getItemLinkNM item = maybe "No link found" paragraphy $ getItemLink item
 
 
 getItemContent :: Item -> T.Text
-getItemContent (AtomItem e) = T.pack . maybe "No content" extractHtml . Atom.entryContent $ e
+getItemContent (AtomItem i) = T.pack . maybe "No content" extractHtml . Atom.entryContent $ i
+getItemContent (RSSItem  i) = T.pack . concat . map concat . map (map cdData . onlyText) . map elContent . RSS.rssItemOther $ i
+getItemContent (RSS1Item i) = T.pack . concat . catMaybes . map (RSS1.contentValue) . RSS1.itemContent $ i
 getItemContent item = T.pack . fromMaybe "Empty" . getItemDescription $ item
 
 getDate :: MonadError ImmError m => Item -> m UTCTime
