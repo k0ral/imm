@@ -7,7 +7,7 @@ Category:            Web
 
 License:             OtherLicense
 License-file:        LICENSE
--- Copyright:           
+-- Copyright:
 Author:              kamaradclimber, koral
 Maintainer:          koral att mailoo dott org
 
@@ -17,7 +17,7 @@ Extra-source-files:  README
 
 Source-repository head
     Type:     git
-    Location: git@github:k0ral/imm.git
+    Location: git@github.com:k0ral/imm.git
 
 Library
     Exposed-modules:
@@ -59,9 +59,9 @@ Library
         utf8-string,
         xdg-basedir,
         xml
-    
-    -- Other-modules:       
-    -- Build-tools:         
+
+    -- Other-modules:
+    -- Build-tools:
     Ghc-options: -Wall
 
 Executable imm
