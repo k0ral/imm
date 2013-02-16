@@ -14,8 +14,10 @@ import Control.Monad.Error
 import Control.Monad.Reader hiding(when)
 
 import Data.Either
+import Data.Generics.Aliases (orElse)
 import Data.Maybe
-import qualified Data.Text.Lazy as T
+import Data.List (find)
+import qualified Data.Text.Lazy as T hiding(find)
 import Data.Time hiding(parseTime)
 import Data.Time.Clock.POSIX
 
@@ -153,13 +155,24 @@ getItemLinkNM item = maybe "No link found" paragraphy $ getItemLink item
 
 
 getItemContent :: Item -> T.Text
-getItemContent (AtomItem i) = T.pack . maybe "No content" extractHtml . Atom.entryContent $ i
+getItemContent (AtomItem i) = T.pack . maybe "No content" extractHtml . getAtomContent $ i
 getItemContent (RSSItem  i) = T.pack . concat . map concat . map (map cdData . onlyText) . map elContent . RSS.rssItemOther $ i
 getItemContent (RSS1Item i) = T.pack . concat . catMaybes . map (RSS1.contentValue) . RSS1.itemContent $ i
 getItemContent item = T.pack . fromMaybe "Empty" . getItemDescription $ item
 
 getDate :: MonadError ImmError m => Item -> m UTCTime
 getDate x = maybe (throwError $ ParseItemDateError x) return $ parseDate =<< F.getItemDate x
+
+t2eCentent :: Atom.TextContent -> Atom.EntryContent
+t2eCentent (Atom.TextString s) =  Atom.TextContent s
+t2eCentent (Atom.HTMLString s) =  Atom.HTMLContent s
+t2eCentent (Atom.XHTMLString e) =  Atom.XHTMLContent e
+
+useSummary :: Atom.Entry -> Maybe Atom.EntryContent
+useSummary e =  fmap t2eCentent (Atom.entrySummary e)
+
+getAtomContent :: Atom.Entry -> Maybe Atom.EntryContent
+getAtomContent e = orElse (Atom.entryContent e) (useSummary e)
 -- }}}
 
 

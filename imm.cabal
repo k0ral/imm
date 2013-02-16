@@ -51,6 +51,7 @@ Library
         old-locale,
         opml,
         random,
+        syb,
         text,
         text-icu,
         time,
