@@ -17,7 +17,7 @@ import Network.HTTP.Conduit hiding(HandshakeFailed)
 import Network.HTTP.Types.Status
 import Network.URI
 --import Network.Stream
-import Network.TLS
+import Network.TLS hiding(DecodeError)
 
 import Prelude hiding(catch)
 
