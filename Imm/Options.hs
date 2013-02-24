@@ -120,7 +120,7 @@ description = [
     Option []        ["deny-reconf"]        (NoArg id)                                      "Do not recompile configuration even if it has changed",
     Option []        ["dyre-debug"]         (NoArg id)                                      "Use './cache/' as the cache directory and ./ as the configuration directory. Useful to debug the program"]
 
--- | Usage text (cf @hbro -h@)
+-- | Usage text (cf @imm -h@)
 usage :: String
 usage = usageInfo "Usage: imm [OPTIONS] [URI]\n\nConvert items from RSS/Atom feeds to maildir entries. If one or more URI(s) are given, they will be processed instead of the feeds list from configuration\n" description
 
