@@ -1,5 +1,5 @@
 Name:                imm
-Version:             0.4.1.0
+Version:             0.5.0.0
 Synopsis:            Retrieve RSS/Atom feeds and write one mail per new item in a maildir.
 Description:         Cf README
 --Homepage:
@@ -25,18 +25,20 @@ Library
         Imm.Boot,
         Imm.Config,
         Imm.Core,
+        Imm.Database,
+        Imm.Dyre,
+        Imm.Error,
         Imm.Feed,
         Imm.HTTP,
         Imm.Mail,
         Imm.Maildir,
         Imm.OPML,
-        Imm.Types,
+        Imm.Options,
         Imm.Util
     Build-depends:
         base == 4.*,
         bytestring,
         case-insensitive,
-        cmdargs >= 0.9,
         cond,
         data-default,
         directory,
@@ -45,7 +47,9 @@ Library
         filepath,
         http-conduit,
         http-types,
+        lens,
         mime-mail,
+        monad-control,
         mtl,
         network,
         old-locale,
@@ -53,12 +57,21 @@ Library
         random,
         text,
         text-icu,
+        transformers-base,
         time,
         timerep >= 1.0.3,
         tls,
         utf8-string,
         xdg-basedir,
         xml
+    Extensions:
+        ConstraintKinds,
+        KindSignatures,
+        FlexibleContexts,
+        FunctionalDependencies,
+        GeneralizedNewtypeDeriving,
+        MultiParamTypeClasses,
+        RankNTypes
 
     -- Other-modules:
     -- Build-tools:

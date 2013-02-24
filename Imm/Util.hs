@@ -1,12 +1,11 @@
-{-# LANGUAGE NoMonomorphismRestriction, RankNTypes, FlexibleContexts #-}
 module Imm.Util where
 
 -- {{{ Imports
-import Imm.Types
+import Imm.Error
 
 import qualified Control.Exception as E
+import Control.Monad.Base
 import Control.Monad.Error
---import Control.Monad.IO.Class
 
 import qualified Data.ByteString.Lazy as BL
 import Data.Functor
@@ -19,38 +18,29 @@ import Data.Time.RFC3339
 
 import Network.URI as N
 
-import System.Console.CmdArgs
 import System.FilePath
-import System.IO
 import System.Locale
 import System.Timeout as S
 -- }}}
 
 
 -- | Like '</>' with first argument in IO to build platform-dependent paths.
-(>/>) :: (MonadIO m) => IO FilePath -> FilePath -> m FilePath
+(>/>) :: (MonadBase IO m) => IO FilePath -> FilePath -> m FilePath
 (>/>) a b = io $ (</> b) <$> a
 
 -- {{{ Monadic utilities
--- | Shortcut to 'liftIO'
-io :: MonadIO m => IO a -> m a
-io = liftIO
+-- | Shortcut to 'liftBase' with 'IO' as base monad
+io :: MonadBase IO m => IO a -> m a
+io = liftBase
 
 -- | Monad-agnostic version of 'Control.Exception.try'
-try :: (MonadIO m, MonadError ImmError m) => IO a -> m a
-try = (io . E.try) >=> either (throwError . IOE) return 
+try :: (MonadBase IO m, MonadError ImmError m) => IO a -> m a
+try = (io . E.try) >=> either (throwError . IOE) return
 
 -- | Monad-agnostic version of 'System.timeout'
-timeout :: (MonadIO m, MonadError ImmError m) => Int -> IO a -> m a
+timeout :: (MonadBase IO m, MonadError ImmError m) => Int -> IO a -> m a
 timeout n f = maybe (throwError TimeOut) (io . return) =<< (io $ S.timeout n (io f))
 -- }}}
-
--- | Print logs with arbitrary importance
-logError, logNormal, logVerbose :: MonadIO m => String -> m ()
-logError   = io . hPutStr stderr
-logNormal  = io . whenNormal . putStrLn
-logVerbose = io . whenLoud . putStrLn
-
 
 -- {{{ Monad-agnostic version of various error-prone functions
 -- | Monad-agnostic version of Data.Text.Encoding.decodeUtf8
@@ -65,7 +55,3 @@ parseURI uri = maybe (throwError $ ParseUriError uri) return $ N.parseURI uri
 parseTime :: (MonadError ImmError m) => String -> m UTCTime
 parseTime string = maybe (throwError $ ParseTimeError string) return $ T.parseTime defaultTimeLocale "%c" string
 -- }}}
-
-
-parseDate :: String -> Maybe UTCTime
-parseDate date = listToMaybe . map T.zonedTimeToUTC . catMaybes . flip map [readRFC2822, readRFC3339, T.parseTime defaultTimeLocale "%a, %d %b %G %T", T.parseTime defaultTimeLocale "%Y-%m-%d", T.parseTime defaultTimeLocale "%e %b %Y", T.parseTime defaultTimeLocale "%a, %e %b %Y %k:%M:%S %z", T.parseTime defaultTimeLocale "%a, %e %b %Y %T %Z"] $ \f -> f . TL.unpack . TL.strip . TL.pack $ date

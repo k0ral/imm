@@ -1,30 +1,30 @@
-{-# LANGUAGE FlexibleContexts, RankNTypes, KindSignatures #-}
 module Imm.Feed where
 
 -- {{{ Imports
+import Imm.Config
+import Imm.Database
+import Imm.Error
 import qualified Imm.HTTP as HTTP
-import qualified Imm.Mail as Mail
-import qualified Imm.Maildir as Maildir
-import Imm.Types
+import Imm.Options hiding(markAsRead)
 import Imm.Util
 
-import Control.Applicative
+-- import Control.Applicative
 import Control.Conditional hiding(when)
+import Control.Monad.Base
 import Control.Monad.Error
-import Control.Monad.Reader hiding(when)
 
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
+import Data.Char
 import Data.Either
+import Data.Functor
 import Data.Maybe
-import qualified Data.Text.Lazy as T
-import Data.Time hiding(parseTime)
+import qualified Data.Text.Lazy as TL
+import Data.Text.ICU.Convert
+import Data.Time as T hiding(parseTime)
 import Data.Time.Clock.POSIX
 
 import Network.URI as N
-
-import System.Directory
---import System.FilePath
-import System.IO
-import System.Locale
 
 import qualified Text.Atom.Feed as Atom
 import qualified Text.RSS1.Syntax as RSS1
@@ -36,130 +36,95 @@ import Text.XML.Light.Proc
 import Text.XML.Light.Types
 -- }}}
 
--- {{{ Util
--- | A state file stores the last check time for a single feed, identified with its 'URI'.
-getStateFile :: URI -> FilePath
-getStateFile feedUri@URI{ uriAuthority = Just auth } = toFileName =<< ((++ uriQuery feedUri) . (++ uriPath feedUri) . uriRegName $ auth)
-getStateFile feedUri = show feedUri >>= toFileName
+type FeedID    = URI
+type ImmFeed   = (FeedID, Feed)
 
--- | Remove forbidden characters in a filename.
-toFileName :: Char -> String
-toFileName '/' = "."
-toFileName '?' = "."
-toFileName x = [x]
--- }}}
+describeType :: Feed -> String
+describeType (AtomFeed _) = "Atom"
+describeType (RSSFeed _)  = "RSS 2.x"
+describeType (RSS1Feed _) = "RSS 1.x"
+describeType (XMLFeed _)  = "XML"
+
+describe :: Feed -> String
+describe feed = unlines [
+    "Type:   " ++ describeType feed,
+    "Title:  " ++ getFeedTitle feed,
+    "Author: " ++ fromMaybe "No author" (getFeedAuthor feed),
+    "Home:   " ++ fromMaybe "No home"   (getFeedHome feed)]
+
+describeItem :: Item -> String
+describeItem item = unlines [
+    "   Item author: " ++ fromMaybe "<empty>" (getItemAuthor item),
+    "   Item title:  " ++ fromMaybe "<empty>" (getItemTitle item),
+    "   Item URI:    " ++ fromMaybe "<empty>" (getItemLink  item),
+    -- "   Item Body:   " ++ (Imm.Mail.getItemContent  item),
+    "   Item date:   " ++ fromMaybe "<empty>" (getItemDate item)]
 
 -- | Monad-agnostic version of 'Text.Feed.Import.parseFeedString'
 parse :: MonadError ImmError m => String -> m Feed
 parse x = maybe (throwError $ ParseFeedError x) return $ parseFeedString x
 
--- | 
-printStatus :: (MonadReader Settings m, MonadIO m) => URI -> m ()
-printStatus uri = do
-    lastCheck <- getLastCheck uri
-    let prefix = (lastCheck == posixSecondsToUTCTime 0) ? "[NEW] " ?? ("[Last update: "++ show lastCheck ++ "]")
-    io . putStrLn $ prefix ++ " " ++ show uri
-
--- | Read the last check time in the state file.
-getLastCheck :: (MonadReader Settings m, MonadIO m) => URI -> m UTCTime
-getLastCheck feedUri = do
-    directory <- asks mStateDirectory
-    result    <- runErrorT $ do
-        content <- try $ readFile =<< (directory >/> fileName)
-        parseTime content
-        
-    either (const $ return timeZero) return result
-  where
-    fileName = getStateFile feedUri
-    timeZero = posixSecondsToUTCTime 0 
-
--- | Write the last check time in the state file.
-storeLastCheck :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => URI -> UTCTime -> m ()
-storeLastCheck feedUri date = do
-    directory <- asks mStateDirectory
-    
-    (file, stream) <- try $ (`openTempFile` fileName) =<< directory
-    io $ hPutStrLn stream (formatTime defaultTimeLocale "%c" date)
-    io $ hClose stream
-    try $ renameFile file =<< (directory >/> fileName)
-  where
-    fileName = getStateFile feedUri
 
 -- | Retrieve, decode and parse the given resource as a feed.
-download :: (MonadIO m, MonadError ImmError m, MonadReader Settings m) => URI -> m ImmFeed
+download :: (MonadBase IO m, OptionsReader m, ConfigReader m, MonadError ImmError m) => URI -> m ImmFeed
 download uri = do
-    decoder <- asks mDecoder
-    feed <- parse . T.unpack =<< decoder =<< HTTP.getRaw uri
+    logV $ "Downloading " ++ show uri
+    d <- getDecoder
+    feed <- parse . TL.unpack . decodeWith d =<< HTTP.getRaw uri
     return (uri, feed)
+  where
+    decodeWith d = TL.fromChunks . (: []) . toUnicode d . B.concat . BL.toChunks
 
--- | 
-check :: (MonadReader Settings m, MonadIO m, MonadError ImmError m) => ImmFeed -> m ()
+-- |
+check :: (ConfigReader m, OptionsReader m, MonadBase IO m, MonadError ImmError m) => ImmFeed -> m ()
 check (uri, feed) = do
-    lastCheck <- getLastCheck uri
-    dates     <- return . rights =<< forM (feedItems feed) (runErrorT . getDate)
+    lastCheck       <- getLastCheck uri
+    (errors, dates) <- partitionEithers <$> forM (feedItems feed) getDate
+    logE . unlines $ map show errors
     let newItems = filter (> lastCheck) dates
     io . putStrLn $ "==> " ++ show (length newItems) ++ " new item(s) "
 
--- | Write mails for each new item, and update the last check time in state file.
-update :: (Applicative m, MonadReader Settings m, MonadIO m, MonadError ImmError m) => ImmFeed -> m ()
-update (uri, feed) = do
---    checkStateDirectory
-    Maildir.init =<< asks mMaildir
-
-    logVerbose $ unlines [
-        "Title:  " ++ getFeedTitle feed,
-        "Author: " ++ fromMaybe "No author" (getFeedAuthor feed),
-        "Home:   " ++ fromMaybe "No home"   (getFeedHome feed)]
-    
-    lastCheck <- getLastCheck uri
-    results <- forM (feedItems feed) $ \item -> 
-      do
-        date <- getDate item
-        (date > lastCheck) ? (updateItem (item, feed) >> return 1) ?? return 0
-      `catchError` (\e -> (io . print) e >> return 0 )
-    io . putStrLn $ "==> " ++ show (sum results) ++ " new item(s)"
-    markAsRead uri
-
-
-updateItem :: (Applicative m, MonadReader Settings m, MonadIO m, MonadError ImmError m) => (Item, Feed) -> m ()
-updateItem (item, feed) = do
-    date <- getDate item
-    logVerbose $ unlines [
-            "   Item author: " ++ fromMaybe "<empty>" (getItemAuthor item),
-            "   Item title:  " ++ fromMaybe "<empty>" (getItemTitle item),
-            "   Item URI:    " ++ fromMaybe "<empty>" (getItemLink  item),
-            -- "   Item Body:   " ++ (Imm.Mail.getItemContent  item),
-            "   Item date:   " ++ show date]
-    
-    timeZone <- io getCurrentTimeZone
-    dir      <- asks mMaildir
-    Maildir.add dir =<< Mail.build timeZone (item, feed)
 
 -- | Simply set the last check time to now.
-markAsRead :: forall (m :: * -> *) . (MonadIO m, MonadError ImmError m, MonadReader Settings m) => URI -> m ()
-markAsRead uri = io getCurrentTime >>= storeLastCheck uri >> (logVerbose $ "Feed " ++ show uri ++ " marked as read.")
+markAsRead :: forall (m :: * -> *) . (MonadBase IO m, MonadError ImmError m, OptionsReader  m) => URI -> m ()
+markAsRead uri = io getCurrentTime >>= storeLastCheck uri >> (logV $ "Feed " ++ show uri ++ " marked as read.")
 
 -- | Simply remove the state file.
-markAsUnread :: forall (m :: * -> *) . (MonadIO m, MonadError ImmError m, MonadReader Settings m) => URI -> m ()
+markAsUnread :: forall (m :: * -> *) . (MonadBase IO m, MonadError ImmError m, OptionsReader  m) => URI -> m ()
 markAsUnread uri = do
-    directory <- asks mStateDirectory
-    try $ removeFile =<< directory >/> getStateFile uri
-    logVerbose $ "Feed " ++ show uri ++ " marked as unread."
-    
+    forget uri
+    logV $ "Feed " ++ show uri ++ " marked as unread."
+
+
+-- | Return a 'String' describing the last update for a given feed.
+showStatus :: (OptionsReader m, MonadBase IO m) => URI -> m String
+showStatus uri = let nullTime = posixSecondsToUTCTime 0 in do
+    lastCheck <- getLastCheck uri
+    return $ ((lastCheck == nullTime) ? "[NEW] " ?? ("[Last update: "++ show lastCheck ++ "]")) ++ " " ++ show uri
+
 
 -- {{{ Item utilities
-getItemLinkNM :: Item -> String 
-getItemLinkNM item = maybe "No link found" paragraphy $ getItemLink item
+-- | This function is missing from 'Text.Feed.Query', probably because it is difficult to define where the content is located in a generic way for Atom/RSS 1.x/RSS 2.x feeds.
+getItemContent :: Item -> String
+getItemContent (AtomItem i) = length theContent < length theSummary ? theSummary ?? theContent
+  where
+    theContent = maybe "" extractHtml $ Atom.entryContent i
+    theSummary = maybe "No content" Atom.txtToString $ Atom.entrySummary i
+getItemContent (RSSItem  i) = length theContent < length theDescription ? theDescription ?? theContent
+  where
+    theContent     = dropWhile isSpace . concat . map concat . map (map cdData . onlyText) . map elContent . RSS.rssItemOther $ i
+    theDescription = fromMaybe "No description." $ RSS.rssItemDescription i
+getItemContent (RSS1Item i) = concat . catMaybes . map (RSS1.contentValue) . RSS1.itemContent $ i
+getItemContent item         = fromMaybe "No content." . getItemDescription $ item
 
 
-getItemContent :: Item -> T.Text
-getItemContent (AtomItem i) = T.pack . maybe "No content" extractHtml . Atom.entryContent $ i
-getItemContent (RSSItem  i) = T.pack . concat . map concat . map (map cdData . onlyText) . map elContent . RSS.rssItemOther $ i
-getItemContent (RSS1Item i) = T.pack . concat . catMaybes . map (RSS1.contentValue) . RSS1.itemContent $ i
-getItemContent item = T.pack . fromMaybe "Empty" . getItemDescription $ item
+getDate :: (ConfigReader m, Monad m) => Item -> m (Either ImmError UTCTime)
+getDate x = do
+    parsers <- readConfig dateParsers
+    return $ maybe (Left $ ParseItemDateError x) Right $ parseDateWith parsers =<< F.getItemDate x
 
-getDate :: MonadError ImmError m => Item -> m UTCTime
-getDate x = maybe (throwError $ ParseItemDateError x) return $ parseDate =<< F.getItemDate x
+parseDateWith :: [String -> Maybe UTCTime] -> String -> Maybe UTCTime
+parseDateWith parsers date = listToMaybe . {-map T.zonedTimeToUTC .-} catMaybes . flip map parsers $ \f -> f . TL.unpack . TL.strip . TL.pack $ date
 -- }}}
 
 
@@ -169,8 +134,3 @@ extractHtml (Atom.XHTMLContent c) = strContent c
 extractHtml (Atom.TextContent t) = t
 extractHtml (Atom.MixedContent a b) = show a ++ show b
 extractHtml (Atom.ExternalContent mediaType uri) = show mediaType ++ show uri
-
-
-paragraphy :: String -> String
-paragraphy s = "<p>"++s++"</p>"
-

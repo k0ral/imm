@@ -1,80 +1,67 @@
-module Imm.Boot where
+{-# LANGUAGE TupleSections #-}
+module Imm.Boot (imm, ConfigFeed) where
 
 -- {{{ Imports
 import qualified Imm.Core as Core
-import Imm.Types
+import Imm.Config
+import Imm.Dyre as Dyre
+import Imm.Options (CliOptions)
+import qualified Imm.Options as Options
+import Imm.Util
 
-import qualified Config.Dyre as D
-import Config.Dyre.Paths
+import Control.Conditional
+import Control.Lens hiding ((??))
 
-import System.Console.CmdArgs
-import System.Console.CmdArgs.Explicit
-import System.IO
+import Data.Default
+import Data.Either
+import Data.Maybe
+
+import Network.URI as N
+
+import System.Directory
+import System.Exit
 -- }}}
 
--- | Available commandline options.
-cliOptions :: Mode (CmdArgs CliOptions)
-cliOptions = cmdArgsMode $ baseOptions
-    &= verbosityArgs [explicit, name "verbose", name "v"] []
-    &= versionArg [ignore]
-    &= help "Convert items from RSS/Atom feeds to maildir entries."
-    &= helpArg [explicit, name "help", name "h"]
-    &= program "imm"
-  where
-    baseOptions = CliOptions {
-            mCheck         = def &= explicit &= name "c" &= name "check" &= help "Check availability and validity of all feed sources currently configured, without writing any mail.",
-            mFeedURI       = def &= explicit &= name "f" &= name "feed"   &= help "Only process given feed." &= typ "URI",
-            mImportOPML    = def &= explicit &= name "i" &= name "import" &= help "Import feeds list from an OPML descriptor (read from stdin).",
-            mList          = def &= explicit &= name "l" &= name "list"  &= help "List all feed sources currently configured, along with their status.",
-            mMarkAsRead    = def &= explicit &= name "R" &= name "mark-read" &= help "Mark every item of processed feeds as read, ie set last update as now without writing any mail.",
-            mMarkAsUnread  = def &= explicit &= name "U" &= name "mark-unread" &= help "Mark every item of processed feeds as unread, ie delete corresponding state files.",
-            mUpdate        = def &= explicit &= name "u" &= name "update" &= help "Update list of feeds (mostly used option)."}
-
--- {{{ Dynamic reconfiguration
--- | Print various paths used for dynamic reconfiguration.
-printDyrePaths :: IO ()
-printDyrePaths = do
-    (a, b, c, d, e) <- getPaths dyreParameters
-    putStrLn . unlines $ [
-        "Current binary:  " ++ a,
-        "Custom binary:   " ++ b,
-        "Config file:     " ++ c,
-        "Cache directory: " ++ d,
-        "Lib directory:   " ++ e, []]
-
--- | Dynamic reconfiguration settings.
-dyreParameters :: D.Params (Either String FeedList)
-dyreParameters = D.defaultParams {
-  D.projectName  = "imm",
-  D.showError    = \_ -> Left,
-  D.realMain     = realMain,
-  D.ghcOpts      = ["-threaded"],
-  D.statusOut    = hPutStrLn stderr
-}
--- }}}
+type ConfigFeed = (Config -> Config, String)
 
 -- | Main function to call in the configuration file.
-imm :: FeedList -> IO ()
-imm = D.wrapMain dyreParameters . Right
+imm :: [ConfigFeed] -> IO ()
+imm feedsFromConfig = do
+    options <- Options.get
 
--- | Internal dispatcher, decides which function to execute depending on commandline options.
-realMain :: Either String FeedList -> IO ()
-realMain (Left e) = putStrLn e
-realMain (Right feeds) = do
-    whenLoud printDyrePaths
-    options <- cmdArgsRun cliOptions
+    when (view Options.help options) $ putStrLn Options.usage >> exitSuccess
 
-    let feeds' = case mFeedURI options of
-          Just uri -> filter (\(_, u) -> u == uri) feeds
-          _        -> feeds
+    Dyre.wrap realMain options (options, feedsFromConfig)
 
-    realMain' (feeds', options)
+
+validateFeeds :: [ConfigFeed] -> [URI] -> ([String], Core.FeedList)
+validateFeeds feedsFromConfig feedsFromOptions = (errors ++ errors', null feedsFromOptions ? feedsOK ?? feedsOK')
   where
-    realMain' (f, options)
-      | mCheck        options = Core.check f
-      | mImportOPML   options = Core.importOPML
-      | mList         options = Core.list f
-      | mMarkAsRead   options = Core.markAsRead f
-      | mMarkAsUnread options = Core.markAsUnread f
-      | mUpdate       options = Core.update f
-      | otherwise             = print $ helpText [] HelpFormatDefault cliOptions
+    validateFromConfig (x, u) = maybe (Left ("Invalid feed URI: " ++ u)) (Right . (x,)) $ N.parseURI u
+    validateFromOptions uri   = maybe (Left ("URI from commandline option has no configuration entry: " ++ show uri)) Right . listToMaybe . (filter ((== uri) . snd)) $ feedsOK
+    (errors,  feedsOK)        = partitionEithers $ map validateFromConfig  feedsFromConfig
+    (errors', feedsOK')       = partitionEithers $ map validateFromOptions feedsFromOptions
+
+
+realMain :: (CliOptions, [ConfigFeed]) -> IO ()
+realMain (options, feedsFromConfig) = do
+    let (errors, feedsOK) = validateFeeds feedsFromConfig (view Options.feedList options)
+    when (not $ null errors) . putStrLn $ unlines errors
+
+    when (null feedsOK) $ putStrLn "Nothing to process. Exiting..." >> exitFailure
+    -- when (view Options.verbose options) . putStrLn . unlines $ map (show . snd) feedsOK
+
+    home <- getHomeDirectory >/> "feeds"
+    let config = set maildir home def
+    dispatch feedsOK config options
+
+
+dispatch :: Core.FeedList -> Config -> CliOptions -> IO ()
+dispatch feeds config options
+    | options^.Options.check               = Core.check options feeds
+    | options^.Options.list                = Core.list options feeds
+    | options^.Options.markAsRead          = Core.markAsRead options feeds
+    | options^.Options.markAsUnread        = Core.markAsUnread options feeds
+    | options^.Options.update              = Core.update options feeds
+    | isJust (options^.Options.importOPML) = Core.importOPML
+    | otherwise                            = putStrLn Options.usage

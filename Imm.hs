@@ -6,7 +6,6 @@ module Imm (
     module Imm.Mail,
     module Imm.Maildir,
     module Imm.OPML,
-    module Imm.Types,
     module Imm.Util
 ) where
 
@@ -17,5 +16,4 @@ import Imm.HTTP
 import Imm.Mail
 import Imm.Maildir
 import Imm.OPML
-import Imm.Types
 import Imm.Util

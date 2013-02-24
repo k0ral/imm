@@ -1,54 +1,64 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Imm.Mail where
 
 -- {{{ Imports
---import Imm.Feed
-import Imm.Types
-import Imm.Util
+import Imm.Config
+import Imm.Feed
 
 import Control.Applicative
-import Control.Monad
-import Control.Monad.Reader
+import Control.Lens hiding(from)
 
 import Data.Default
-import qualified Data.Text.Lazy as T
 import Data.Time
 import Data.Time.RFC2822
 
-import Text.Feed.Query as F
 import Text.Feed.Types
 -- }}}
 
 
+data Mail = Mail {
+    _returnPath         :: String,
+    _date               :: Maybe ZonedTime,
+    _from               :: String,
+    _subject            :: String,
+    _mime               :: String,
+    _charset            :: String,
+    _contentDisposition :: String,
+    _body               :: String
+}
+
+makeLenses ''Mail
+
+
 instance Default Mail where
     def = Mail {
-        mCharset            = "utf-8",
-        mBody               = T.pack "",
-        mContentDisposition = "inline",
-        mDate               = Nothing,
-        mFrom               = "imm",
-        mMIME               = "text/html",
-        mSubject            = T.pack "Untitled",
-        mReturnPath         = "<imm@noreply>"}
+        _charset            = "utf-8",
+        _body               = empty,
+        _contentDisposition = "inline",
+        _date               = Nothing,
+        _from               = "imm",
+        _mime               = "text/html",
+        _subject            = "Untitled",
+        _returnPath         = "<imm@noreply>"}
 
 
-toText :: Mail -> T.Text
-toText mail = T.unlines [
-    T.pack $ "Return-Path: " ++ mReturnPath mail,
-    T.pack $ maybe "" (("Date: " ++) . showRFC2822) . mDate $ mail,
-    T.pack $ "From: " ++ mFrom mail,
-    T.concat [T.pack "Subject: ", mSubject mail],
-    T.pack $ "Content-Type: " ++ mMIME mail ++ "; charset=" ++ mCharset mail,
-    T.pack $ "Content-Disposition: " ++ mContentDisposition mail,
-    T.pack "",
-    mBody mail]
- 
+instance Show Mail where
+    show mail = unlines [
+        "Return-Path: " ++ view returnPath mail,
+        maybe "" (("Date: " ++) . showRFC2822) . view date $ mail,
+        "From: " ++ view from mail,
+        "Subject: " ++ view subject mail,
+        "Content-Type: " ++ view mime mail ++ "; charset=" ++ view charset mail,
+        "Content-Disposition: " ++ view contentDisposition mail,
+        "",
+        view body mail]
+
+
 -- | Build mail from a given feed, using builders functions from 'Settings'.
-build :: (Applicative m, MonadReader Settings m) => TimeZone -> (Item, Feed) -> m Mail
+build :: (Applicative m, ConfigReader m, Monad m) => TimeZone -> (Item, Feed) -> m Mail
 build timeZone (item, feed) = do
-    from    <- asks mFromBuilder    <*> return (item, feed)
-    subject <- asks mSubjectBuilder <*> return (item, feed)
-    body    <- asks mBodyBuilder    <*> return (item, feed)
-    return def {mDate = date, mFrom = from, mSubject = subject, mBody = body}
-  where
-    date = maybe Nothing (Just . utcToZonedTime timeZone) . parseDate <=< F.getItemDate $ item
+    from'    <- readConfig formatFrom    <*> return (item, feed)
+    subject' <- readConfig formatSubject <*> return (item, feed)
+    body'    <- readConfig formatBody    <*> return (item, feed)
+    date'    <- either (const Nothing) (Just . utcToZonedTime timeZone) <$> getDate item
+    return . set date date' . set from from' . set subject subject' . set body body' $ def
