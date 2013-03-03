@@ -140,7 +140,10 @@ instance Default Config where
             T.parseTime defaultTimeLocale "%a, %e %b %Y %T %Z"],
         _formatFrom    = \(item, feed) -> fromMaybe (getFeedTitle feed) $ getItemAuthor item,
         _formatSubject = \(item, _feed) -> fromMaybe "Untitled" $ getItemTitle item,
-        _formatBody    = defaultBody,
+        _formatParts   = \(item, feed) -> [set contentHeaders (_partHeader def) . set content (defaultBody (item, feed)) $ (def MultiPart)],
+        _partHeader    = ["Content-Type: text/html; charset=utf-8","Content-Disposition: inline"],
+        _partsSeparator= "gc0pJq0M:08jU534c0p", -- rfc offered example
+        _multiPartsHeader = \bnd -> "Content-Type: multipart/mixed; boundary=\"" ++ bnd ++ "\"",
         _decoder       = "UTF-8"
     }
 
