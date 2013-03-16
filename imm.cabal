@@ -1,5 +1,5 @@
 Name:                imm
-Version:             0.5.0.0
+Version:             0.5.0.1
 Synopsis:            Retrieve RSS/Atom feeds and write one mail per new item in a maildir.
 Description:         Cf README
 --Homepage:
