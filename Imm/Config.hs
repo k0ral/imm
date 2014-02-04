@@ -9,6 +9,7 @@ import Control.Monad.Base
 import Control.Monad.Reader hiding(forM_)
 
 import Data.Char
+import Data.Default
 import Data.Foldable hiding(concat)
 import Data.Text.ICU.Convert
 import Data.Time
@@ -18,13 +19,28 @@ import Text.Feed.Types as F
 
 -- {{{ Types
 type Format = (Item, Feed) -> String
+data MultiPart = MultiPart {
+  _contentHeaders :: [String],
+  _content        :: String
+}
+
+instance Default MultiPart where
+  def = MultiPart {
+    _contentHeaders = [],
+    _content        = ""
+  }
+
+makeLenses ''MultiPart
 
 data Config = Config {
     _maildir        :: FilePath,   -- ^ Where mails will be written
     _dateParsers    :: [String -> Maybe UTCTime],  -- ^ List of date parsing functions, will be tried sequentially until one succeeds
     _formatFrom     :: Format,     -- ^ Called to write the From: header of feed mails
     _formatSubject  :: Format,     -- ^ Called to write the Subject: header of feed mails
-    _formatBody     :: Format,     -- ^ Called to write the body of feed mails (sic!)
+    _formatParts    :: (Item, Feed) -> [MultiPart], -- ^ Called to write the body of feed mails
+    _multiPartsHeader :: String -> String, -- ^ Called to write the header preceding all email body
+    _partsSeparator :: String,     -- ^ Separator used between parts of the email
+    _partHeader     :: [String],   -- ^ Header of each part of the email
     _decoder        :: String      -- ^ 'Converter' name used to decode the HTTP response from a feed URI
     -- _decoder        :: BL.ByteString -> Maybe TL.Text   -- ^ Called to decode the HTTP response from a feed URI
 }
