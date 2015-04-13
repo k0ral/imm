@@ -31,11 +31,11 @@ Library
         Imm.HTTP,
         Imm.Mail,
         Imm.Maildir,
-        Imm.OPML,
-        Imm.Options,
         Imm.Util
     Other-modules:
         Imm.Dyre,
+        Imm.OPML,
+        Imm.Options,
         Paths_imm
     Build-depends:
         async,

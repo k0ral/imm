@@ -12,7 +12,6 @@ module Imm.Config (
     formatSubject,
     formatBody,
     decoder,
-    ConfigReader(..),
     withConfig,
 -- * Misc
     addFeeds,
@@ -126,21 +125,10 @@ instance (MonadBase IO m, MonadError ImmError m) => MaildirWriter (ReaderT Confi
         theMaildir <- asks $ view maildir
         lift $ runReaderT (write mail) theMaildir
 
-
 instance (Monad m) => Mail.MailFormatter (ReaderT Config m) where
     formatFrom    = asks $ unFromFormat    . view formatFrom
     formatSubject = asks $ unSubjectFormat . view formatSubject
     formatBody    = asks $ unBodyFormat    . view formatBody
-
-
--- | 'MonadReader' for 'Config'
-class ConfigReader m where
-    readConfig  :: Simple Lens Config a -> m a
-    localConfig :: (Config -> Config) -> m a -> m a
-
-instance (Monad m) => ConfigReader (ReaderT Config m) where
-    readConfig l = return . view l =<< ask
-    localConfig  = local
 
 
 withConfig :: (MonadBase IO m) => (Config -> Config) -> ReaderT Config m a -> m a
@@ -163,7 +151,7 @@ addFeeds feeds = do
         "":
         "maildirRoot = \"/home/<user>/feeds\"   -- TODO: fill <user>":
         "":
-        ("myFeeds = concat [" ++ intercalate ", " (map (map toLower . concat . words . fst) feeds) ++ "]"):
+        ("myFeeds = concat $ " ++ intercalate ":" (map (map toLower . concat . words . fst) feeds) ++ ":[]"):
         []
 
     forM_ feeds addFeedsGroup

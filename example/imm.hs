@@ -1,8 +1,6 @@
 module Main where
 
--- {{{ Imports
 import Imm
--- }}}
 
 -- The 'main' function must call 'imm' with a feed list
 main :: IO ()

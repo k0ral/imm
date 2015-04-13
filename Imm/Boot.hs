@@ -56,15 +56,6 @@ handleSpecialActions Import       = io getContents >>= Core.importOPML >> mzero
 handleSpecialActions (Run action) = return action
 
 
-validateFeeds :: [ConfigFeed] -> [URI] -> ([String], Core.FeedList)
-validateFeeds feedsFromConfig feedsFromOptions = (errors ++ errors', null feedsFromOptions ? feedsOK ?? feedsOK')
-  where
-    validateFromConfig (x, u) = maybe (Left ("Invalid feed URI: " ++ u)) (Right . (x,)) $ N.parseURI u
-    validateFromOptions uri   = maybe (Left ("URI from commandline option has no configuration entry: " ++ show uri)) Right . listToMaybe . filter ((== uri) . snd) $ feedsOK
-    (errors,  feedsOK)        = partitionEithers $ map validateFromConfig  feedsFromConfig
-    (errors', feedsOK')       = partitionEithers $ map validateFromOptions feedsFromOptions
-
-
 realMain :: (Feed.Action, Maybe FilePath, [URI], [ConfigFeed]) -> IO ()
 realMain (action, dataDir, feedsFromOptions, feedsFromConfig) = do
     unless (null errors)  . errorM   "imm.boot" $ unlines errors
@@ -75,3 +66,12 @@ realMain (action, dataDir, feedsFromOptions, feedsFromConfig) = do
   where
     (errors, feedsOK) = validateFeeds feedsFromConfig feedsFromOptions
     baseConfig        = maybe id (set (fileDatabase . directory)) dataDir
+
+
+validateFeeds :: [ConfigFeed] -> [URI] -> ([String], Core.FeedList)
+validateFeeds feedsFromConfig feedsFromOptions = (errors ++ errors', null feedsFromOptions ? feedsOK ?? feedsOK')
+  where
+    validateFromConfig (x, u) = maybe (Left ("Invalid feed URI: " ++ u)) (Right . (x,)) $ N.parseURI u
+    validateFromOptions uri   = maybe (Left ("URI from commandline option has no configuration entry: " ++ show uri)) Right . listToMaybe . filter ((== uri) . snd) $ feedsOK
+    (errors,  feedsOK)        = partitionEithers $ map validateFromConfig  feedsFromConfig
+    (errors', feedsOK')       = partitionEithers $ map validateFromOptions feedsFromOptions

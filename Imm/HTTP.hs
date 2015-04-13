@@ -41,7 +41,7 @@ getRaw uri = do
 
 -- | Same as 'getRaw' with additional decoding
 get :: (Decoder m, MonadBase IO m, MonadError ImmError m) => URI -> m TL.Text
-get uri = decode =<< getRaw uri
+get uri = getRaw uri >>= decode
 
 -- | Monad-agnostic version of 'withManager'
 withManager' :: (MonadError ImmError m, MonadBase IO m) => (Manager -> ResourceT IO b) -> m b

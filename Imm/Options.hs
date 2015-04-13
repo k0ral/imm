@@ -1,5 +1,4 @@
 {-# LANGUAGE TemplateHaskell #-}
--- | Commandline options tools. Designed to be imported as @qualified@.
 module Imm.Options (
     CliOptions,
     action,
@@ -47,8 +46,7 @@ data CliOptions = CliOptions {
     _dyreMode       :: Dyre.Mode,
     _dataDirectory  :: Maybe FilePath,
     _feedsList      :: [URI],
-    _logLevel       :: Log.Priority,
-    _dyreDebug      :: Bool}
+    _logLevel       :: Log.Priority}
     deriving(Eq)
 
 makeLenses ''CliOptions
@@ -59,8 +57,7 @@ instance Show CliOptions where
         return . ("RECONFIGURATION_MODE=" ++) . show $ view dyreMode opts,
         null (view feedsList opts) ? Nothing ?? Just ("FEED_URI=[" ++ (unwords . map show $ view feedsList opts) ++ "]"),
         return . ("DATA_DIR=" ++) =<< view dataDirectory opts,
-        return . ("LOG_LEVEL=" ++) . show $ view logLevel opts,
-        view dyreDebug opts ? Just "DYRE_DEBUG" ?? Nothing]
+        return $ "LOG_LEVEL=" ++ show (view logLevel opts)]
 
 instance Default CliOptions where
     def = CliOptions {
@@ -68,8 +65,7 @@ instance Default CliOptions where
         _dyreMode      = def,
         _logLevel      = Log.INFO,
         _dataDirectory = Nothing,
-        _feedsList     = [],
-        _dyreDebug     = False}
+        _feedsList     = []}
 -- }}}
 
 description :: [OptDescr (CliOptions -> CliOptions)]
@@ -97,7 +93,11 @@ description = [
 
 -- | Usage text (printed when using 'Help' action)
 usage :: String
-usage = usageInfo "Usage: imm [OPTIONS] [URI]\n\nConvert items from RSS/Atom feeds to maildir entries. If one or more URI(s) are given, they will be processed instead of the feeds list from configuration\n" description
+usage = flip usageInfo description . unlines $
+    "Usage: imm [OPTIONS] [URI]":
+    "":
+    "Convert items from RSS/Atom feeds to maildir entries.":
+    "If one or more URI(s) are given, they will be processed instead of the feeds list from configuration.":[]
 
 -- | Get and parse commandline options
 get :: (MonadBase IO m) => m CliOptions
@@ -105,7 +105,9 @@ get = io $ do
     parsedArgs <- getOpt' Permute description <$> getArgs
     case parsedArgs of
         (opts, input, _, []) -> do
-            let (errors, valids) = partitionEithers $ map (\uri -> maybe (Left $ "Invalid URI given in commandline: " ++ uri) Right $ N.parseURI uri) input
+            let (errors, valids) = partitionEithers $ map parseURI' input
             unless (null errors) $ io . putStrLn $ unlines errors
             return $ set feedsList valids  (foldl (flip id) def opts)
         (_, _, _, _)         -> return def
+  where
+    parseURI' uri = maybe (Left $ "Invalid URI given in commandline: " ++ uri) Right $ N.parseURI uri

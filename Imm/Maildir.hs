@@ -32,10 +32,11 @@ instance (MonadBase IO m, MonadError ImmError m) => MaildirWriter (ReaderT Maild
     init = do
         theMaildir <- ask
         io . debugM "imm.maildir" $ "Creating maildir [" ++ theMaildir ++ "]"
-        try $ createDirectoryIfMissing True theMaildir
-        try $ createDirectoryIfMissing True (theMaildir </> "cur")
-        try $ createDirectoryIfMissing True (theMaildir </> "new")
-        try $ createDirectoryIfMissing True (theMaildir </> "tmp")
+        try . mapM_ (createDirectoryIfMissing True) $
+            theMaildir:
+            (theMaildir </> "cur"):
+            (theMaildir </> "new"):
+            (theMaildir </> "tmp"):[]
     write mail = do
         fileName   <- io getUniqueName
         theMaildir <- ask
@@ -49,4 +50,4 @@ getUniqueName = io $ do
     hostname <- getHostName
     rand     <- show <$> (getStdRandom $ randomR (1,100000) :: IO Int)
 
-    return . concat $ [time, ".", rand, ".", hostname]
+    return . concat $ time:".":rand:".":hostname:[]

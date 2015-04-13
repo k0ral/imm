@@ -34,12 +34,12 @@ nullMain = const $ return ()
 showPaths :: MonadBase IO m => m String
 showPaths = io $ do
     (a, b, c, d, e) <- getPaths $ parameters nullMain
-    return . unlines $ [
-        "Current binary:  " ++ a,
-        "Custom binary:   " ++ b,
-        "Config file:     " ++ c,
-        "Cache directory: " ++ d,
-        "Lib directory:   " ++ e, []]
+    return . unlines $
+        ("Current binary:  " ++ a):
+        ("Custom binary:   " ++ b):
+        ("Config file:     " ++ c):
+        ("Cache directory: " ++ d):
+        ("Lib directory:   " ++ e):[]
 
 -- | Dynamic reconfiguration settings
 parameters :: (a -> IO ()) -> Params (Either String a)

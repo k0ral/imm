@@ -43,15 +43,15 @@ instance Default Mail where
         _returnPath         = "<imm@noreply>"}
 
 instance Show Mail where
-    show mail = unlines [
-        "Return-Path: " ++ view returnPath mail,
-        maybe "" (("Date: " ++) . showRFC2822) . view date $ mail,
-        "From: " ++ view from mail,
-        "Subject: " ++ view subject mail,
-        "Content-Type: " ++ view mime mail ++ "; charset=" ++ view charset mail,
-        "Content-Disposition: " ++ view contentDisposition mail,
-        "",
-        view body mail]
+    show mail = unlines $
+        ("Return-Path: " ++ view returnPath mail):
+        (maybe "" (("Date: " ++) . showRFC2822) $ view date mail):
+        ("From: " ++ view from mail):
+        ("Subject: " ++ view subject mail):
+        ("Content-Type: " ++ view mime mail ++ "; charset=" ++ view charset mail):
+        ("Content-Disposition: " ++ view contentDisposition mail):
+        "":
+        (view body mail):[]
 
 
 type Format = (Item, Feed) -> String
@@ -68,5 +68,7 @@ build timeZone (item, feed) = do
     from'    <- formatFrom    <*> return (item, feed)
     subject' <- formatSubject <*> return (item, feed)
     body'    <- formatBody    <*> return (item, feed)
-    date'    <- return . either (const Nothing) (Just . utcToZonedTime timeZone) =<< runErrorT (getDate item)
+    date'    <- runErrorT' (utcToZonedTime timeZone <$> getDate item)
     return . set date date' . set from from' . set subject subject' . set body body' $ def
+  where
+    runErrorT' = (return . either (const Nothing) Just) <=< runErrorT

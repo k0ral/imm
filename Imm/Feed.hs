@@ -76,19 +76,21 @@ download uri = do
     feed <- parse . TL.unpack =<< HTTP.get uri
     return (uri, feed)
 
--- |
+-- | Count the list of unread items for given feed.
 check :: (FeedParser m, DatabaseReader m, MonadBase IO m, MonadError ImmError m) => ImmFeed -> m ()
 check (feedID, feed) = do
     lastCheck       <- getLastCheck feedID
-    (errors, dates) <- partitionEithers <$> forM (feedItems feed) (\item -> (return . Right =<< getDate item) `catchError` (return . Left))
-    unless (null errors) . io . errorM "imm.feed" . unlines $ map show errors
-    let newItems = filter (> lastCheck) dates
-    io . noticeM "imm.feed" $ show (length newItems) ++ " new item(s) for <" ++ show feedID ++ ">"
+    (errors, dates) <- partitionEithers <$> mapM (runErrorT . getDate) (feedItems feed)
+    let newItems     = filter (> lastCheck) dates
 
+    unless (null errors) . io . errorM "imm.feed" . unlines $ map show errors
+    io . noticeM "imm.feed" $ show (length newItems) ++ " new item(s) for <" ++ show feedID ++ ">"
 
 -- | Simply set the last check time to now.
 markAsRead :: (MonadBase IO m, MonadError ImmError m, DatabaseWriter m) => URI -> m ()
-markAsRead uri = io getCurrentTime >>= storeLastCheck uri >> (io . noticeM "imm.feed" $ "Feed <" ++ show uri ++ "> marked as read.")
+markAsRead uri = do
+    io getCurrentTime >>= storeLastCheck uri
+    io . noticeM "imm.feed" $ "Feed <" ++ show uri ++ "> marked as read."
 
 -- | Simply remove the state file.
 markAsUnread ::  (MonadBase IO m, MonadError ImmError m, DatabaseState m) => URI -> m ()
@@ -108,8 +110,8 @@ showStatus uri = let nullTime = posixSecondsToUTCTime 0 in do
 getItemContent :: Item -> String
 getItemContent (AtomItem i) = length theContent < length theSummary ? theSummary ?? theContent
   where
-    theContent = maybe "" extractHtml $ Atom.entryContent i
-    theSummary = maybe "No content" Atom.txtToString $ Atom.entrySummary i
+    theContent = fromMaybe "" $ (extractHtml <$> Atom.entryContent i)
+    theSummary = fromMaybe "No content" $ (Atom.txtToString <$> Atom.entrySummary i)
 getItemContent (RSSItem  i) = length theContent < length theDescription ? theDescription ?? theContent
   where
     theContent     = dropWhile isSpace . concatMap concat . map (map cdData . onlyText . elContent) . RSS.rssItemOther $ i
