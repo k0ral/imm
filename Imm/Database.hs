@@ -75,11 +75,12 @@ instance (MonadBase IO m) => DatabaseReader (ReaderT FileDatabase m) where
         dataFileGetter <- asks (view getDataFile)
 
         let dataFile = dataDirectory </> dataFileGetter feedUri
+        io . debugM "imm.database" $ "Reading last check time from: " ++ dataFile
 
         result <- runErrorT $ do
             content <- try $ readFile dataFile
             parseTime content
-        either (const $ io (warningM "imm.database" "Unable to read last update time.") >> return timeZero) return result
+        either (const $ io (debugM "imm.database" "Unable to read last update time.") >> return timeZero) return result
       where
         timeZero = posixSecondsToUTCTime 0
 

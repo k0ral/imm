@@ -1,4 +1,5 @@
 module Imm.Dyre (
+    Mode(..),
     wrap,
     recompile,
 ) where
@@ -16,6 +17,14 @@ import Control.Monad.Trans.Control
 import System.IO
 import System.Log.Logger
 -- }}}
+
+-- | How dynamic reconfiguration process should behave.
+-- Default is 'Normal', that is: use custom configuration file and recompile if change detected.
+data Mode = Normal | Vanilla | ForceReconfiguration | IgnoreReconfiguration
+    deriving(Eq, Show)
+
+instance Default Mode where
+    def = Normal
 
 
 nullMain :: a -> IO ()
@@ -47,8 +56,8 @@ parameters main = defaultParams {
         debugM "imm.dyre" =<< showPaths
         main x
 
-wrap :: (MonadBaseControl IO m) => Bool -> (a -> m ()) -> a -> m ()
-wrap vanilla main args = liftBaseWith $ \runInIO -> wrapMain ((parameters (void . runInIO . main)) { configCheck = not vanilla }) $ Right args
+wrap :: (MonadBaseControl IO m) => Mode -> (a -> m ()) -> a -> m ()
+wrap mode main args = liftBaseWith $ \runInIO -> wrapMain ((parameters (void . runInIO . main)) { configCheck = (mode /= Vanilla) }) $ Right args
 
 -- | Launch a recompilation of the configuration file
 recompile :: IO (Maybe String)

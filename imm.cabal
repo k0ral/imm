@@ -38,6 +38,7 @@ Library
         Imm.Dyre,
         Paths_imm
     Build-depends:
+        async,
         base == 4.*,
         bytestring,
         case-insensitive,

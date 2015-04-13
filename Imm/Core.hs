@@ -1,11 +1,22 @@
-{-# LANGUAGE ScopedTypeVariables, TypeFamilies #-}
-module Imm.Core where
+{-# LANGUAGE ScopedTypeVariables, TemplateHaskell, TypeFamilies #-}
+module Imm.Core (
+-- * Types
+    FeedConfig,
+    FeedList,
+-- * Actions
+    importOPML,
+    check,
+    showStatus,
+    markAsRead,
+    markAsUnread,
+    update,
+) where
 
 -- {{{ Imports
 import Imm.Config
 import Imm.Database
 import Imm.Error
-import Imm.Feed (ImmFeed, FeedParser(..))
+import Imm.Feed (FeedParser(..))
 import qualified Imm.Feed as Feed
 import qualified Imm.HTTP as HTTP
 import qualified Imm.Maildir as Maildir
@@ -14,13 +25,13 @@ import qualified Imm.Mail as Mail
 import Imm.OPML as OPML
 import Imm.Util
 
--- import Control.Lens hiding((??))
+import Control.Concurrent.Async
 import Control.Monad hiding(forM_, mapM_)
 import Control.Monad.Error hiding(forM_, mapM_)
 -- import Control.Monad.Reader hiding(forM_, mapM_)
--- import Control.Monad.Trans.Control
+import Control.Monad.Trans.Control
 
-import Data.Foldable
+import Data.Foldable hiding(foldr)
 import Data.Time as T
 
 import Prelude hiding(log, mapM_, sum)
@@ -37,18 +48,19 @@ type FeedList   = [FeedConfig]
 -- }}}
 
 
-check :: (MonadBase IO m, FeedParser m, ConfigReader m, DatabaseReader m, HTTP.Decoder m, MonadError ImmError m) => FeedConfig -> m ()
-check (f, feedID) = localConfig f . localError "imm.core" $ do
-    io . noticeM "imm.core" $ "Checking: " ++ show feedID
-    Feed.download feedID >>= Feed.check
-
-
 importOPML :: (MonadBase IO m, MonadPlus m) => String -> m ()
 importOPML = mapM_ addFeeds . OPML.read
 
 
-list :: (MonadBase IO m, ConfigReader m, DatabaseReader m, MonadError ImmError m) => FeedConfig -> m ()
-list (f, feedID) = localConfig f . localError "imm.core" $ (io . noticeM "imm.core" =<< Feed.showStatus feedID)
+check :: (MonadBaseControl IO m, FeedParser m, ConfigReader m, DatabaseReader m, HTTP.Decoder m, MonadError ImmError m) => FeedList -> m ()
+check feeds = void . liftBaseWith $ \runInIO -> mapConcurrently (runInIO . checkFeed) feeds
+
+checkFeed :: (MonadBase IO m, FeedParser m, ConfigReader m, DatabaseReader m, HTTP.Decoder m, MonadError ImmError m) => FeedConfig -> m ()
+checkFeed (f, feedID) = localConfig f . localError "imm.core" $ Feed.download feedID >>= Feed.check
+
+
+showStatus :: (MonadBase IO m, ConfigReader m, DatabaseReader m, MonadError ImmError m) => FeedConfig -> m ()
+showStatus (f, feedID) = localConfig f . localError "imm.core" $ (io . noticeM "imm.core" =<< Feed.showStatus feedID)
 
 
 markAsRead :: (MonadBase IO m, ConfigReader m, DatabaseState m, MonadError ImmError m) => FeedConfig -> m ()
@@ -59,14 +71,16 @@ markAsUnread :: (MonadBase IO m, ConfigReader m, DatabaseState m, MonadError Imm
 markAsUnread (f, feedID) = localConfig f . localError "imm.core" $ Feed.markAsUnread feedID
 
 
-update :: (MonadBase IO m, ConfigReader m, DatabaseState m, MonadError ImmError m, FeedParser m, MailFormatter m, HTTP.Decoder m) => FeedConfig -> m ()
-update (f, feedID) = localConfig f . localError "imm.core" $ do
-    io . noticeM "imm.core" $ "Updating: " ++ show feedID
-    Feed.download feedID >>= updateFeed
+update :: (MonadBaseControl IO m, ConfigReader m, DatabaseState m, MonadError ImmError m, FeedParser m, MailFormatter m, HTTP.Decoder m) => FeedList -> m ()
+update feeds = void . liftBaseWith $ \runInIO -> mapConcurrently (runInIO . updateFeed) feeds
+
 
 -- | Write mails for each new item, and update the last check time in state file.
-updateFeed :: (Applicative m, ConfigReader m, DatabaseState m, FeedParser m, MailFormatter m, MonadBase IO m, MonadError ImmError m) => ImmFeed -> m ()
-updateFeed (uri, feed) = do
+updateFeed :: (Applicative m, ConfigReader m, DatabaseState m, FeedParser m, MailFormatter m, MonadBase IO m, HTTP.Decoder m, MonadError ImmError m) => FeedConfig -> m ()
+updateFeed (f, feedID) = localConfig f . localError "imm.core" $ do
+    -- io . noticeM "imm.core" $ "Updating: " ++ show feedID
+    (uri, feed) <- Feed.download feedID
+
     Maildir.create =<< readConfig maildir
 
     io . debugM "imm.core" $ Feed.describe feed
@@ -75,7 +89,7 @@ updateFeed (uri, feed) = do
     (results :: [Integer]) <- forM (feedItems feed) $ \item -> do
         date <- Feed.getDate item
         (date > lastCheck) ? (updateItem (item, feed) >> return 1) ?? return 0
-    io . noticeM "imm.core" $ "==> " ++ show (sum results) ++ " new item(s)"
+    io . noticeM "imm.core" $ "==> " ++ show (sum results) ++ " new item(s) for <" ++ show feedID ++ ">"
     Feed.markAsRead uri
 
 

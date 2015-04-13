@@ -3,17 +3,18 @@
 module Imm.Options (
     CliOptions,
     action,
-    configuration,
+    dyreMode,
     feedsList,
     dataDirectory,
     OptionsReader(..),
     Action(..),
-    Configuration(..),
     run,
     usage,
 ) where
 
 -- {{{ Imports
+import Imm.Dyre as Dyre
+import qualified Imm.Feed as Feed
 import Imm.Util
 
 import Control.Lens as L  hiding(Action, (??))
@@ -35,26 +36,17 @@ import System.Log.Logger
 -- {{{ Types
 -- | Mutually exclusive actions.
 -- Default is 'PrintHelp'.
-data Action = Help | ShowVersion | Recompile | CheckFeeds | ImportFeeds | ListFeeds | MarkAsRead | MarkAsUnread | UpdateFeeds
+data Action = Help | ShowVersion | Recompile | Import | Run Feed.Action
     deriving(Eq, Show)
 
 instance Default Action where
     def = Help
 
--- | How dynamic reconfiguration process should behave.
--- Default is 'Normal', that is: use custom configuration file and recompile if change detected.
-data Configuration = Normal | Vanilla | ForceReconfiguration | IgnoreReconfiguration
-    deriving(Eq, Show)
-
-instance Default Configuration where
-    def = Normal
-
-
 -- | Available commandline options
 data CliOptions = CliOptions {
     _action         :: Action,
-    _configuration  :: Configuration,
-    _dataDirectory :: Maybe FilePath,
+    _dyreMode       :: Dyre.Mode,
+    _dataDirectory  :: Maybe FilePath,
     _feedsList      :: [URI],
     _logLevel       :: Log.Priority,
     _dyreDebug      :: Bool}
@@ -65,7 +57,7 @@ makeLenses ''CliOptions
 instance Show CliOptions where
     show opts = unwords $ catMaybes [
         return . ("ACTION=" ++) . show $ view action opts,
-        return . ("CONFIGURATION=" ++) . show $ view configuration opts,
+        return . ("RECONFIGURATION_MODE=" ++) . show $ view dyreMode opts,
         null (view feedsList opts) ? Nothing ?? Just ("FEED_URI=[" ++ (unwords . map show $ view feedsList opts) ++ "]"),
         return . ("DATA_DIR=" ++) =<< view dataDirectory opts,
         return . ("LOG_LEVEL=" ++) . show $ view logLevel opts,
@@ -73,12 +65,12 @@ instance Show CliOptions where
 
 instance Default CliOptions where
     def = CliOptions {
-        _action         = def,
-        _configuration  = def,
-        _logLevel       = Log.INFO,
+        _action        = def,
+        _dyreMode      = def,
+        _logLevel      = Log.INFO,
         _dataDirectory = Nothing,
-        _feedsList      = [],
-        _dyreDebug      = False}
+        _feedsList     = [],
+        _dyreDebug     = False}
 
 -- | 'MonadReader' for 'CliOptions'
 class OptionsReader m where
@@ -102,20 +94,20 @@ run f = do
 description :: [OptDescr (CliOptions -> CliOptions)]
 description = [
 -- Action
-    Option "c"     ["check"]              (NoArg (set action CheckFeeds))                   "Check availability and validity of all feed sources currently configured, without writing any mail",
-    Option "l"     ["list"]               (NoArg (set action ListFeeds))                    "List all feed sources currently configured, along with their status",
-    Option "R"     ["mark-read"]          (NoArg (set action MarkAsRead))                   "Mark every item of processed feeds as read, ie set last update as now without writing any mail",
-    Option "U"     ["mark-unread"]        (NoArg (set action MarkAsUnread))                 "Mark every item of processed feeds as unread, ie delete corresponding state files",
-    Option "u"     ["update"]             (NoArg (set action UpdateFeeds))                  "Update list of feeds (mostly used option)",
-    Option "i"     ["import"]             (NoArg (set action ImportFeeds))                  "Import feeds list from an OPML descriptor (read from stdin)",
+    Option "c"     ["check"]              (NoArg (set action $ Run Feed.Check))             "Check availability and validity of all feed sources currently configured, without writing any mail",
+    Option "l"     ["list"]               (NoArg (set action $ Run Feed.ShowStatus))        "List all feed sources currently configured, along with their status",
+    Option "R"     ["mark-read"]          (NoArg (set action $ Run Feed.MarkAsRead))        "Mark every item of processed feeds as read, ie set last update as now without writing any mail",
+    Option "U"     ["mark-unread"]        (NoArg (set action $ Run Feed.MarkAsUnread))      "Mark every item of processed feeds as unread, ie delete corresponding state files",
+    Option "u"     ["update"]             (NoArg (set action $ Run Feed.Update))            "Update list of feeds (mostly used option)",
+    Option "i"     ["import"]             (NoArg (set action Import))                       "Import feeds list from an OPML descriptor (read from stdin)",
     Option "h"     ["help"]               (NoArg (set action Help))                         "Print this help",
     Option "V"     ["version"]            (NoArg (set action ShowVersion))                  "Print version",
     Option "r"     ["recompile"]          (NoArg (set action Recompile))                    "Only recompile configuration",
 -- Dynamic configuration
-    Option "1"     ["vanilla"]            (NoArg (set configuration Vanilla))               "Do not read custom configuration file",
-    Option []        ["force-reconf"]       (NoArg (set configuration ForceReconfiguration))  "Recompile configuration before starting the program",
-    Option []        ["deny-reconf"]        (NoArg (set configuration IgnoreReconfiguration)) "Do not recompile configuration even if it has changed",
-    Option []        ["dyre-debug"]         (NoArg id)                                        "Use './cache/' as the cache directory and ./ as the configuration directory. Useful to debug the program",
+    Option "1"     ["vanilla"]            (NoArg (set dyreMode Vanilla))                    "Do not read custom configuration file",
+    Option []      ["force-reconf"]       (NoArg (set dyreMode ForceReconfiguration))       "Recompile configuration before starting the program",
+    Option []      ["deny-reconf"]        (NoArg (set dyreMode IgnoreReconfiguration))      "Do not recompile configuration even if it has changed",
+    Option []      ["dyre-debug"]         (NoArg id)                                        "Use './cache/' as the cache directory and ./ as the configuration directory. Useful to debug the program",
 -- Log level
     Option "q"     ["quiet"]              (NoArg (set logLevel Log.ERROR))                  "Do not print any log",
     Option "v"     ["verbose"]            (NoArg (set logLevel Log.DEBUG))                  "Print detailed logs",

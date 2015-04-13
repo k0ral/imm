@@ -29,6 +29,9 @@ import System.Log.Logger
 -- }}}
 
 -- {{{ Types
+data Action = Check | ShowStatus | MarkAsRead | MarkAsUnread | Update
+    deriving(Eq, Show)
+
 type ImmFeed = (FeedID, Feed)
 
 class FeedParser m where
@@ -75,12 +78,12 @@ download uri = do
 
 -- |
 check :: (FeedParser m, DatabaseReader m, MonadBase IO m, MonadError ImmError m) => ImmFeed -> m ()
-check (uri, feed) = do
-    lastCheck       <- getLastCheck uri
+check (feedID, feed) = do
+    lastCheck       <- getLastCheck feedID
     (errors, dates) <- partitionEithers <$> forM (feedItems feed) (\item -> (return . Right =<< getDate item) `catchError` (return . Left))
     unless (null errors) . io . errorM "imm.feed" . unlines $ map show errors
     let newItems = filter (> lastCheck) dates
-    io . noticeM "imm.feed" $ "==> " ++ show (length newItems) ++ " new item(s) "
+    io . noticeM "imm.feed" $ show (length newItems) ++ " new item(s) for <" ++ show feedID ++ ">"
 
 
 -- | Simply set the last check time to now.

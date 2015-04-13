@@ -7,7 +7,8 @@ import Imm.Config
 import Imm.Database
 import Imm.Dyre as Dyre
 import Imm.Error
-import Imm.Options (Action(..), Configuration(..), OptionsReader(..))
+import qualified Imm.Feed as Feed
+import Imm.Options (Action(..), OptionsReader(..))
 import qualified Imm.Options as Options
 import Imm.Util
 
@@ -30,17 +31,28 @@ type ConfigFeed = (Config -> Config, String)
 
 -- | Main function to call in the configuration file.
 imm :: [ConfigFeed] -> IO ()
-imm feedsFromConfig = Options.run $ do
-    action           <- readOptions Options.action
-    configuration    <- readOptions Options.configuration
+imm feedsFromConfig = Options.run $ readOptions Options.action >>= dispatch1 feedsFromConfig
+
+
+dispatch1 :: [ConfigFeed] -> Options.Action -> ReaderT Options.CliOptions IO ()
+dispatch1 _ Help        = io $ putStrLn Options.usage >> exitSuccess
+dispatch1 _ ShowVersion = io $ putStrLn (showVersion version) >> exitSuccess
+dispatch1 _ Recompile   = io $ Dyre.recompile >>= maybe exitSuccess (\e -> putStrLn e >> exitFailure)
+dispatch1 _ Import      = io getContents >>= Core.importOPML >> io exitSuccess
+dispatch1 feedsFromConfig (Run action) = do
+    dyreMode         <- readOptions Options.dyreMode
     feedsFromOptions <- readOptions Options.feedsList
     dataDir          <- readOptions Options.dataDirectory
 
-    when (action == Help)        . io $ putStrLn Options.usage >> exitSuccess
-    when (action == ShowVersion) . io $ putStrLn (showVersion version) >> exitSuccess
-    when (action == Recompile)   . io $ Dyre.recompile >>= maybe exitSuccess (\e -> putStrLn e >> exitFailure)
+    io $ Dyre.wrap dyreMode realMain (action, dataDir, feedsFromOptions, feedsFromConfig)
 
-    io $ Dyre.wrap (configuration == Vanilla) realMain (action, dataDir, feedsFromOptions, feedsFromConfig)
+
+dispatch2 :: Feed.Action -> Core.FeedList -> ReaderT Config (ErrorT ImmError IO) ()
+dispatch2 Feed.Check        feeds = Core.check feeds
+dispatch2 Feed.ShowStatus   feeds = mapM_ Core.showStatus feeds
+dispatch2 Feed.MarkAsRead   feeds = mapM_ Core.markAsRead feeds
+dispatch2 Feed.MarkAsUnread feeds = mapM_ Core.markAsUnread feeds
+dispatch2 Feed.Update       feeds = Core.update feeds
 
 
 validateFeeds :: [ConfigFeed] -> [URI] -> ([String], Core.FeedList)
@@ -52,22 +64,11 @@ validateFeeds feedsFromConfig feedsFromOptions = (errors ++ errors', null feedsF
     (errors', feedsOK')       = partitionEithers $ map validateFromOptions feedsFromOptions
 
 
-realMain :: (Action, Maybe FilePath, [URI], [ConfigFeed]) -> IO ()
+realMain :: (Feed.Action, Maybe FilePath, [URI], [ConfigFeed]) -> IO ()
 realMain (action, dataDir, feedsFromOptions, feedsFromConfig) = do
     let (errors, feedsOK) = validateFeeds feedsFromConfig feedsFromOptions
-    unless (null errors) . errorM "imm.boot" $ unlines errors
-
-    when (null feedsOK) $ warningM "imm.boot" "Nothing to process. Exiting..." >> exitFailure
+    unless (null errors)  . errorM   "imm.boot" $ unlines errors
+    when   (null feedsOK) $ warningM "imm.boot"   "Nothing to process. Exiting..." >> exitFailure
     -- io . debugM "imm.boot" . unlines $ "Feeds to be processed:":(map (show . snd) feedsOK)
 
-    withError . withConfig (maybe id (set (fileDatabase . directory)) dataDir) $ dispatch action feedsOK
-
-
-dispatch :: Action -> Core.FeedList -> ReaderT Config (ErrorT ImmError IO) ()
-dispatch CheckFeeds   feeds = mapM_ Core.check feeds
-dispatch ListFeeds    feeds = mapM_ Core.list feeds
-dispatch MarkAsRead   feeds = mapM_ Core.markAsRead feeds
-dispatch MarkAsUnread feeds = mapM_ Core.markAsUnread feeds
-dispatch UpdateFeeds  feeds = mapM_ Core.update feeds
-dispatch ImportFeeds  _     = Core.importOPML =<< io getContents
-dispatch _            _     = io $ putStrLn Options.usage
+    withError . withConfig (maybe id (set (fileDatabase . directory)) dataDir) $ dispatch2 action feedsOK
