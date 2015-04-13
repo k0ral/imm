@@ -1,26 +1,16 @@
 module Imm.Feed where
 
 -- {{{ Imports
-import Imm.Config
 import Imm.Database
 import Imm.Error
 import qualified Imm.HTTP as HTTP
-import Imm.Options hiding(markAsRead)
-import Imm.Util
+import Imm.Util hiding(when)
 
--- import Control.Applicative
-import Control.Conditional hiding(when)
-import Control.Monad.Base
 import Control.Monad.Error
 
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as BL
-import Data.Char
-import Data.Either
-import Data.Functor
-import Data.Maybe
+-- import qualified Data.ByteString as B
+-- import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text.Lazy as TL
-import Data.Text.ICU.Convert
 import Data.Time as T hiding(parseTime)
 import Data.Time.Clock.POSIX
 
@@ -34,20 +24,31 @@ import Text.Feed.Query as F
 import Text.Feed.Types as F
 import Text.XML.Light.Proc
 import Text.XML.Light.Types
+
+import System.Log.Logger
 -- }}}
 
-type FeedID    = URI
-type ImmFeed   = (FeedID, Feed)
+-- {{{ Types
+type ImmFeed = (FeedID, Feed)
 
-describeType :: Feed -> String
-describeType (AtomFeed _) = "Atom"
-describeType (RSSFeed _)  = "RSS 2.x"
-describeType (RSS1Feed _) = "RSS 1.x"
-describeType (XMLFeed _)  = "XML"
+class FeedParser m where
+    parseDate :: String -> m (Maybe UTCTime)
+
+instance (Monad m, Error e, FeedParser m) => FeedParser (ErrorT e m) where
+    parseDate = lift . parseDate
+-- }}}
+
+
+-- | Provide a 'String' representation of the feed type.
+showType :: Feed -> String
+showType (AtomFeed _) = "Atom"
+showType (RSSFeed _)  = "RSS 2.x"
+showType (RSS1Feed _) = "RSS 1.x"
+showType (XMLFeed _)  = "XML"
 
 describe :: Feed -> String
 describe feed = unlines [
-    "Type:   " ++ describeType feed,
+    "Type:   " ++ showType feed,
     "Title:  " ++ getFeedTitle feed,
     "Author: " ++ fromMaybe "No author" (getFeedAuthor feed),
     "Home:   " ++ fromMaybe "No home"   (getFeedHome feed)]
@@ -66,38 +67,34 @@ parse x = maybe (throwError $ ParseFeedError x) return $ parseFeedString x
 
 
 -- | Retrieve, decode and parse the given resource as a feed.
-download :: (MonadBase IO m, OptionsReader m, ConfigReader m, MonadError ImmError m) => URI -> m ImmFeed
+download :: (HTTP.Decoder m, MonadBase IO m, MonadError ImmError m) => URI -> m ImmFeed
 download uri = do
-    logV $ "Downloading " ++ show uri
-    d <- getDecoder
-    feed <- parse . TL.unpack . decodeWith d =<< HTTP.getRaw uri
+    io . debugM "imm.feed" $ "Downloading " ++ show uri
+    feed <- parse . TL.unpack =<< HTTP.get uri
     return (uri, feed)
-  where
-    decodeWith d = TL.fromChunks . (: []) . toUnicode d . B.concat . BL.toChunks
 
 -- |
-check :: (ConfigReader m, OptionsReader m, MonadBase IO m, MonadError ImmError m) => ImmFeed -> m ()
+check :: (FeedParser m, DatabaseReader m, MonadBase IO m, MonadError ImmError m) => ImmFeed -> m ()
 check (uri, feed) = do
     lastCheck       <- getLastCheck uri
-    (errors, dates) <- partitionEithers <$> forM (feedItems feed) getDate
-    logE . unlines $ map show errors
+    (errors, dates) <- partitionEithers <$> forM (feedItems feed) (\item -> (return . Right =<< getDate item) `catchError` (return . Left))
+    unless (null errors) . io . errorM "imm.feed" . unlines $ map show errors
     let newItems = filter (> lastCheck) dates
-    io . putStrLn $ "==> " ++ show (length newItems) ++ " new item(s) "
+    io . noticeM "imm.feed" $ "==> " ++ show (length newItems) ++ " new item(s) "
 
 
 -- | Simply set the last check time to now.
-markAsRead :: forall (m :: * -> *) . (MonadBase IO m, MonadError ImmError m, OptionsReader  m) => URI -> m ()
-markAsRead uri = io getCurrentTime >>= storeLastCheck uri >> (logV $ "Feed " ++ show uri ++ " marked as read.")
+markAsRead :: (MonadBase IO m, MonadError ImmError m, DatabaseState m) => URI -> m ()
+markAsRead uri = io getCurrentTime >>= storeLastCheck uri >> (io . debugM "imm.feed" $ "Feed " ++ show uri ++ " marked as read.")
 
 -- | Simply remove the state file.
-markAsUnread :: forall (m :: * -> *) . (MonadBase IO m, MonadError ImmError m, OptionsReader  m) => URI -> m ()
+markAsUnread ::  (MonadBase IO m, MonadError ImmError m, DatabaseState m) => URI -> m ()
 markAsUnread uri = do
     forget uri
-    logV $ "Feed " ++ show uri ++ " marked as unread."
-
+    io . noticeM "imm.feed" $ "Feed " ++ show uri ++ " marked as unread."
 
 -- | Return a 'String' describing the last update for a given feed.
-showStatus :: (OptionsReader m, MonadBase IO m) => URI -> m String
+showStatus :: (DatabaseReader m, MonadBase IO m) => URI -> m String
 showStatus uri = let nullTime = posixSecondsToUTCTime 0 in do
     lastCheck <- getLastCheck uri
     return $ ((lastCheck == nullTime) ? "[NEW] " ?? ("[Last update: "++ show lastCheck ++ "]")) ++ " " ++ show uri
@@ -112,19 +109,13 @@ getItemContent (AtomItem i) = length theContent < length theSummary ? theSummary
     theSummary = maybe "No content" Atom.txtToString $ Atom.entrySummary i
 getItemContent (RSSItem  i) = length theContent < length theDescription ? theDescription ?? theContent
   where
-    theContent     = dropWhile isSpace . concat . map concat . map (map cdData . onlyText) . map elContent . RSS.rssItemOther $ i
+    theContent     = dropWhile isSpace . concatMap concat . map (map cdData . onlyText . elContent) . RSS.rssItemOther $ i
     theDescription = fromMaybe "No description." $ RSS.rssItemDescription i
-getItemContent (RSS1Item i) = concat . catMaybes . map (RSS1.contentValue) . RSS1.itemContent $ i
+getItemContent (RSS1Item i) = concat . mapMaybe RSS1.contentValue . RSS1.itemContent $ i
 getItemContent item         = fromMaybe "No content." . getItemDescription $ item
 
-
-getDate :: (ConfigReader m, Monad m) => Item -> m (Either ImmError UTCTime)
-getDate x = do
-    parsers <- readConfig dateParsers
-    return $ maybe (Left $ ParseItemDateError x) Right $ parseDateWith parsers =<< F.getItemDate x
-
-parseDateWith :: [String -> Maybe UTCTime] -> String -> Maybe UTCTime
-parseDateWith parsers date = listToMaybe . {-map T.zonedTimeToUTC .-} catMaybes . flip map parsers $ \f -> f . TL.unpack . TL.strip . TL.pack $ date
+getDate :: (FeedParser m, Monad m, MonadError ImmError m) => Item -> m UTCTime
+getDate item = maybe (throwError $ ParseItemDateError item) return =<< maybe (return Nothing) parseDate =<< return (getItemDate item)
 -- }}}
 
 

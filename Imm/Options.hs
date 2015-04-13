@@ -1,93 +1,83 @@
-{-# LANGUAGE FlexibleInstances, TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell #-}
 -- | Commandline options tools. Designed to be imported as @qualified@.
-module Imm.Options where
+module Imm.Options (
+    CliOptions,
+    action,
+    configuration,
+    feedsList,
+    dataDirectory,
+    OptionsReader(..),
+    Action(..),
+    Configuration(..),
+    run,
+    usage,
+) where
 
 -- {{{ Imports
 import Imm.Util
 
-import Control.Conditional
-import Control.Lens as L  hiding((??))
-import Control.Monad.Base
-import Control.Monad.Reader hiding(when)
+import Control.Lens as L  hiding(Action, (??))
+import Control.Monad.Reader hiding(mapM_, when)
 
-import Data.Default
-import Data.Either
-import Data.Functor
-import Data.List
-import Data.Maybe
+import Data.Foldable
 
 import Network.URI as N
 
-import Prelude hiding(log)
+import Prelude hiding(foldl, log, mapM_)
 
 import System.Console.GetOpt
 import System.Environment
-import System.Environment.XDG.BaseDir
-import System.IO
+-- import System.Environment.XDG.BaseDir
+import System.Log as Log
+import System.Log.Logger
 -- }}}
 
 -- {{{ Types
--- | Available commandline options (cf @imm -h@)
+-- | Mutually exclusive actions.
+-- Default is 'PrintHelp'.
+data Action = Help | ShowVersion | Recompile | CheckFeeds | ImportFeeds | ListFeeds | MarkAsRead | MarkAsUnread | UpdateFeeds
+    deriving(Eq, Show)
+
+instance Default Action where
+    def = Help
+
+-- | How dynamic reconfiguration process should behave.
+-- Default is 'Normal', that is: use custom configuration file and recompile if change detected.
+data Configuration = Normal | Vanilla | ForceReconfiguration | IgnoreReconfiguration
+    deriving(Eq, Show)
+
+instance Default Configuration where
+    def = Normal
+
+
+-- | Available commandline options
 data CliOptions = CliOptions {
-    _stateDirectory :: Maybe FilePath,
-    _check          :: Bool,
-    _feedList       :: [URI],
-    _importOPML     :: Maybe FilePath,
-    _list           :: Bool,
-    _markAsRead     :: Bool,
-    _markAsUnread   :: Bool,
-    _update         :: Bool,
-    _help           :: Bool,
-    _quiet          :: Bool,
-    _verbose        :: Bool,
-    _version        :: Bool,
-    _vanilla        :: Bool,
-    _recompile      :: Bool,
-    _denyReconf     :: Bool,
-    _forceReconf    :: Bool,
+    _action         :: Action,
+    _configuration  :: Configuration,
+    _dataDirectory :: Maybe FilePath,
+    _feedsList      :: [URI],
+    _logLevel       :: Log.Priority,
     _dyreDebug      :: Bool}
     deriving(Eq)
 
 makeLenses ''CliOptions
 
 instance Show CliOptions where
-    show opts = intercalate " " $ catMaybes [
-        null (view feedList opts) ? Nothing ?? Just ("FEED_URI=[" ++ (intercalate " " . map show $ view feedList opts) ++ "]"),
-        return . ("IMPORT_OPML=" ++) =<< view importOPML opts,
-        return . ("STATE_DIR=" ++) =<< view stateDirectory opts,
-        view check        opts ? Just "CHECK"                 ?? Nothing,
-        view list         opts ? Just "LIST"                  ?? Nothing,
-        view markAsRead   opts ? Just "MARK_READ"             ?? Nothing,
-        view markAsUnread opts ? Just "MARK_UNREAD"           ?? Nothing,
-        view update       opts ? Just "UPDATE"                ?? Nothing,
-        view help         opts ? Just "HELP"                  ?? Nothing,
-        view quiet        opts ? Just "QUIET"                 ?? Nothing,
-        view verbose      opts ? Just "VERBOSE"               ?? Nothing,
-        view version      opts ? Just "VERSION"               ?? Nothing,
-        view vanilla      opts ? Just "VANILLA"               ?? Nothing,
-        view recompile    opts ? Just "RECOMPILE"             ?? Nothing,
-        view denyReconf   opts ? Just "DENY_RECONFIGURATION"  ?? Nothing,
-        view forceReconf  opts ? Just "FORCE_RECONFIGURATION" ?? Nothing,
-        view dyreDebug    opts ? Just "DYRE_DEBUG"            ?? Nothing]
+    show opts = unwords $ catMaybes [
+        return . ("ACTION=" ++) . show $ view action opts,
+        return . ("CONFIGURATION=" ++) . show $ view configuration opts,
+        null (view feedsList opts) ? Nothing ?? Just ("FEED_URI=[" ++ (unwords . map show $ view feedsList opts) ++ "]"),
+        return . ("DATA_DIR=" ++) =<< view dataDirectory opts,
+        return . ("LOG_LEVEL=" ++) . show $ view logLevel opts,
+        view dyreDebug opts ? Just "DYRE_DEBUG" ?? Nothing]
 
 instance Default CliOptions where
     def = CliOptions {
-        _stateDirectory = Nothing,
-        _check          = False,
-        _feedList       = [],
-        _importOPML     = Nothing,
-        _list           = False,
-        _markAsRead     = False,
-        _markAsUnread   = False,
-        _update         = False,
-        _help           = False,
-        _quiet          = False,
-        _verbose        = False,
-        _version        = False,
-        _vanilla        = False,
-        _recompile      = False,
-        _denyReconf     = False,
-        _forceReconf    = False,
+        _action         = def,
+        _configuration  = def,
+        _logLevel       = Log.INFO,
+        _dataDirectory = Nothing,
+        _feedsList      = [],
         _dyreDebug      = False}
 
 -- | 'MonadReader' for 'CliOptions'
@@ -99,28 +89,40 @@ instance (Monad m) => OptionsReader (ReaderT CliOptions m) where
 
 instance OptionsReader ((->) CliOptions) where
     readOptions l = view l
+
+-- | Parse commandline options, set the corresponding log level.
+run :: (MonadBase IO m) => ReaderT CliOptions m a -> m a
+run f = do
+    opts <- get
+    io . updateGlobalLogger rootLoggerName . setLevel $ view logLevel opts
+    io . debugM "imm.options" $ "Commandline options: " ++ show opts
+    runReaderT f opts
 -- }}}
 
 description :: [OptDescr (CliOptions -> CliOptions)]
 description = [
-    Option ['s']     ["state"]              (ReqArg (\v -> set stateDirectory (Just v)) "PATH") "Where feeds' state (last update time) will be stored",
-    Option ['c']     ["check"]              (NoArg (set check True))                        "Check availability and validity of all feed sources currently configured, without writing any mail",
-    Option ['l']     ["list"]               (NoArg (set list True))                         "List all feed sources currently configured, along with their status",
-    Option ['R']     ["mark-read"]          (NoArg (set markAsRead True))                   "Mark every item of processed feeds as read, ie set last update as now without writing any mail",
-    Option ['U']     ["mark-unread"]        (NoArg (set markAsUnread True))                 "Mark every item of processed feeds as unread, ie delete corresponding state files",
-    Option ['u']     ["update"]             (NoArg (set update True))                       "Update list of feeds (mostly used option)",
-    Option ['i']     ["import"]             (ReqArg (\v -> set importOPML (Just v)) "PATH") "Import feeds list from an OPML descriptor (read from stdin)",
-    Option ['h']     ["help"]               (NoArg (set help True))                         "Print this help",
-    Option ['q']     ["quiet"]              (NoArg (set quiet True))                        "Do not print any log",
-    Option ['v']     ["verbose"]            (NoArg (set verbose True))                      "Print detailed logs",
-    Option ['V']     ["version"]            (NoArg (set version True))                      "Print version",
-    Option ['1']     ["vanilla"]            (NoArg (set vanilla True))                      "Do not read custom configuration file",
-    Option ['r']     ["recompile"]          (NoArg (set recompile True))                    "Only recompile configuration",
-    Option []        ["force-reconf"]       (NoArg id)                                      "Recompile configuration before starting the program",
-    Option []        ["deny-reconf"]        (NoArg id)                                      "Do not recompile configuration even if it has changed",
-    Option []        ["dyre-debug"]         (NoArg id)                                      "Use './cache/' as the cache directory and ./ as the configuration directory. Useful to debug the program"]
+-- Action
+    Option "c"     ["check"]              (NoArg (set action CheckFeeds))                   "Check availability and validity of all feed sources currently configured, without writing any mail",
+    Option "l"     ["list"]               (NoArg (set action ListFeeds))                    "List all feed sources currently configured, along with their status",
+    Option "R"     ["mark-read"]          (NoArg (set action MarkAsRead))                   "Mark every item of processed feeds as read, ie set last update as now without writing any mail",
+    Option "U"     ["mark-unread"]        (NoArg (set action MarkAsUnread))                 "Mark every item of processed feeds as unread, ie delete corresponding state files",
+    Option "u"     ["update"]             (NoArg (set action UpdateFeeds))                  "Update list of feeds (mostly used option)",
+    Option "i"     ["import"]             (NoArg (set action ImportFeeds))                  "Import feeds list from an OPML descriptor (read from stdin)",
+    Option "h"     ["help"]               (NoArg (set action Help))                         "Print this help",
+    Option "V"     ["version"]            (NoArg (set action ShowVersion))                  "Print version",
+    Option "r"     ["recompile"]          (NoArg (set action Recompile))                    "Only recompile configuration",
+-- Dynamic configuration
+    Option "1"     ["vanilla"]            (NoArg (set configuration Vanilla))               "Do not read custom configuration file",
+    Option []        ["force-reconf"]       (NoArg (set configuration ForceReconfiguration))  "Recompile configuration before starting the program",
+    Option []        ["deny-reconf"]        (NoArg (set configuration IgnoreReconfiguration)) "Do not recompile configuration even if it has changed",
+    Option []        ["dyre-debug"]         (NoArg id)                                        "Use './cache/' as the cache directory and ./ as the configuration directory. Useful to debug the program",
+-- Log level
+    Option "q"     ["quiet"]              (NoArg (set logLevel Log.ERROR))                  "Do not print any log",
+    Option "v"     ["verbose"]            (NoArg (set logLevel Log.DEBUG))                  "Print detailed logs",
+-- Misc
+    Option "d"     ["database"]           (ReqArg (set dataDirectory . Just) "PATH")        "Where feeds' state (last update time) will be stored"]
 
--- | Usage text (cf @imm -h@)
+-- | Usage text (printed when using 'Help' action)
 usage :: String
 usage = usageInfo "Usage: imm [OPTIONS] [URI]\n\nConvert items from RSS/Atom feeds to maildir entries. If one or more URI(s) are given, they will be processed instead of the feeds list from configuration\n" description
 
@@ -131,20 +133,6 @@ get = io $ do
     case options of
         (opts, input, _, []) -> do
             let (errors, valids) = partitionEithers $ map (\uri -> maybe (Left $ "Invalid URI given in commandline: " ++ uri) Right $ N.parseURI uri) input
-            when (not $ null errors) $ io . putStrLn $ unlines errors
-            return $ set feedList valids (foldl (flip id) def opts)
+            unless (null errors) $ io . putStrLn $ unlines errors
+            return $ set feedsList valids  (foldl (flip id) def opts)
         (_, _, _, _)         -> return def
-
--- | Print logs with arbitrary importance
-log, logE, logV :: (MonadBase IO m, OptionsReader m) => String -> m ()
-log  = whenM (not <$> readOptions quiet) . io . putStrLn
-logE = whenM (not <$> readOptions quiet) . io . hPutStr stderr
-logV = whenM (readOptions verbose) . io . putStrLn
-
-
-getStateDirectory :: (OptionsReader m, MonadBase IO m) => m FilePath
-getStateDirectory = do
-    stateFromOptions <- readOptions stateDirectory
-    case stateFromOptions of
-        Just x -> return x
-        _      -> getUserConfigDir "imm" >/> "state"

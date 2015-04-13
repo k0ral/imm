@@ -4,64 +4,70 @@ module Imm.Boot (imm, ConfigFeed) where
 -- {{{ Imports
 import qualified Imm.Core as Core
 import Imm.Config
+import Imm.Database
 import Imm.Dyre as Dyre
-import Imm.Options (CliOptions)
+import Imm.Error
+import Imm.Options (Action(..), Configuration(..), OptionsReader(..))
 import qualified Imm.Options as Options
 import Imm.Util
 
-import Control.Conditional
-import Control.Lens hiding ((??))
+import Control.Lens hiding (Action, (??))
+import Control.Monad.Error hiding(when)
+import Control.Monad.Reader hiding(when)
 
-import Data.Default
-import Data.Either
-import Data.Maybe
+import Data.Version
 
 import Network.URI as N
 
-import System.Directory
+import Paths_imm
+
+import System.Log.Logger
 import System.Exit
 -- }}}
 
 type ConfigFeed = (Config -> Config, String)
 
+
 -- | Main function to call in the configuration file.
 imm :: [ConfigFeed] -> IO ()
-imm feedsFromConfig = do
-    options <- Options.get
+imm feedsFromConfig = Options.run $ do
+    action           <- readOptions Options.action
+    configuration    <- readOptions Options.configuration
+    feedsFromOptions <- readOptions Options.feedsList
+    dataDir          <- readOptions Options.dataDirectory
 
-    when (view Options.help options) $ putStrLn Options.usage >> exitSuccess
+    when (action == Help)        . io $ putStrLn Options.usage >> exitSuccess
+    when (action == ShowVersion) . io $ putStrLn (showVersion version) >> exitSuccess
+    when (action == Recompile)   . io $ Dyre.recompile >>= maybe exitSuccess (\e -> putStrLn e >> exitFailure)
 
-    Dyre.wrap realMain options (options, feedsFromConfig)
+    io $ Dyre.wrap (configuration == Vanilla) realMain (action, dataDir, feedsFromOptions, feedsFromConfig)
 
 
 validateFeeds :: [ConfigFeed] -> [URI] -> ([String], Core.FeedList)
 validateFeeds feedsFromConfig feedsFromOptions = (errors ++ errors', null feedsFromOptions ? feedsOK ?? feedsOK')
   where
     validateFromConfig (x, u) = maybe (Left ("Invalid feed URI: " ++ u)) (Right . (x,)) $ N.parseURI u
-    validateFromOptions uri   = maybe (Left ("URI from commandline option has no configuration entry: " ++ show uri)) Right . listToMaybe . (filter ((== uri) . snd)) $ feedsOK
+    validateFromOptions uri   = maybe (Left ("URI from commandline option has no configuration entry: " ++ show uri)) Right . listToMaybe . filter ((== uri) . snd) $ feedsOK
     (errors,  feedsOK)        = partitionEithers $ map validateFromConfig  feedsFromConfig
     (errors', feedsOK')       = partitionEithers $ map validateFromOptions feedsFromOptions
 
 
-realMain :: (CliOptions, [ConfigFeed]) -> IO ()
-realMain (options, feedsFromConfig) = do
-    let (errors, feedsOK) = validateFeeds feedsFromConfig (view Options.feedList options)
-    when (not $ null errors) . putStrLn $ unlines errors
+realMain :: (Action, Maybe FilePath, [URI], [ConfigFeed]) -> IO ()
+realMain (action, dataDir, feedsFromOptions, feedsFromConfig) = do
+    let (errors, feedsOK) = validateFeeds feedsFromConfig feedsFromOptions
+    unless (null errors) . errorM "imm.boot" $ unlines errors
 
-    when (null feedsOK) $ putStrLn "Nothing to process. Exiting..." >> exitFailure
-    -- when (view Options.verbose options) . putStrLn . unlines $ map (show . snd) feedsOK
+    when (null feedsOK) $ warningM "imm.boot" "Nothing to process. Exiting..." >> exitFailure
+    -- io . debugM "imm.boot" . unlines $ "Feeds to be processed:":(map (show . snd) feedsOK)
 
-    home <- getHomeDirectory >/> "feeds"
-    let config = set maildir home def
-    dispatch feedsOK config options
+    withError . withConfig (maybe id (set (fileDatabase . directory)) dataDir) $ dispatch action feedsOK
 
 
-dispatch :: Core.FeedList -> Config -> CliOptions -> IO ()
-dispatch feeds config options
-    | options^.Options.check               = Core.check options feeds
-    | options^.Options.list                = Core.list options feeds
-    | options^.Options.markAsRead          = Core.markAsRead options feeds
-    | options^.Options.markAsUnread        = Core.markAsUnread options feeds
-    | options^.Options.update              = Core.update options feeds
-    | isJust (options^.Options.importOPML) = Core.importOPML
-    | otherwise                            = putStrLn Options.usage
+dispatch :: Action -> Core.FeedList -> ReaderT Config (ErrorT ImmError IO) ()
+dispatch CheckFeeds   feeds = mapM_ Core.check feeds
+dispatch ListFeeds    feeds = mapM_ Core.list feeds
+dispatch MarkAsRead   feeds = mapM_ Core.markAsRead feeds
+dispatch MarkAsUnread feeds = mapM_ Core.markAsUnread feeds
+dispatch UpdateFeeds  feeds = mapM_ Core.update feeds
+dispatch ImportFeeds  _     = Core.importOPML =<< io getContents
+dispatch _            _     = io $ putStrLn Options.usage

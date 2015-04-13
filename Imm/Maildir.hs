@@ -5,10 +5,8 @@ import Imm.Error
 import Imm.Mail
 import Imm.Util
 
-import Control.Monad.Base
 import Control.Monad.Error
 
-import Data.Functor
 import qualified Data.Text.Lazy.IO as T
 import qualified Data.Text.Lazy as TL
 import Data.Time.Clock.POSIX

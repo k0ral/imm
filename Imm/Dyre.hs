@@ -1,25 +1,31 @@
-module Imm.Dyre where
+module Imm.Dyre (
+    wrap,
+    recompile,
+) where
 
 -- {{{ Imports
-import Imm.Options
 import Imm.Util
 
 import Config.Dyre
+import Config.Dyre.Compile
 import Config.Dyre.Paths
 
-import Control.Lens
 import Control.Monad
-import Control.Monad.Base
+import Control.Monad.Trans.Control
 
 import System.IO
+import System.Log.Logger
 -- }}}
 
 
--- | Print various paths used for dynamic reconfiguration
-printPaths :: MonadBase IO m => m ()
-printPaths = io $ do
-    (a, b, c, d, e) <- getPaths (parameters $ const $ return ())
-    putStrLn . unlines $ [
+nullMain :: a -> IO ()
+nullMain = const $ return ()
+
+-- Print various paths used for dynamic reconfiguration
+showPaths :: MonadBase IO m => m String
+showPaths = io $ do
+    (a, b, c, d, e) <- getPaths $ parameters nullMain
+    return . unlines $ [
         "Current binary:  " ++ a,
         "Custom binary:   " ++ b,
         "Config file:     " ++ c,
@@ -37,9 +43,15 @@ parameters main = defaultParams {
     includeCurrentDirectory = False}
   where
     main' (Left e)  = putStrLn e
-    main' (Right x) = main x
+    main' (Right x) = do
+        debugM "imm.dyre" =<< showPaths
+        main x
 
-wrap :: (a -> IO ()) -> CliOptions -> a -> IO ()
-wrap main opts args = do
-    when (opts^.verbose) printPaths
-    wrapMain ((parameters main) { configCheck = not $ opts^.vanilla }) $ Right args
+wrap :: (MonadBaseControl IO m) => Bool -> (a -> m ()) -> a -> m ()
+wrap vanilla main args = liftBaseWith $ \runInIO -> wrapMain ((parameters (void . runInIO . main)) { configCheck = not vanilla }) $ Right args
+
+-- | Launch a recompilation of the configuration file
+recompile :: IO (Maybe String)
+recompile = do
+    customCompile  $ parameters nullMain
+    getErrorString $ parameters nullMain

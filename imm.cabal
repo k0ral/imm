@@ -1,5 +1,5 @@
 Name:                imm
-Version:             0.5.0.1
+Version:             0.5.1.0
 Synopsis:            Retrieve RSS/Atom feeds and write one mail per new item in a maildir.
 Description:         Cf README
 --Homepage:
@@ -16,8 +16,8 @@ Build-type:          Simple
 Extra-source-files:  README
 
 Source-repository head
-    Type:     git
-    Location: git@github.com:k0ral/imm.git
+    Type:     mercurial
+    Location: https://bitbucket.org/k0ral/imm
 
 Library
     Exposed-modules:
@@ -26,7 +26,6 @@ Library
         Imm.Config,
         Imm.Core,
         Imm.Database,
-        Imm.Dyre,
         Imm.Error,
         Imm.Feed,
         Imm.HTTP,
@@ -35,6 +34,9 @@ Library
         Imm.OPML,
         Imm.Options,
         Imm.Util
+    Other-modules:
+        Imm.Dyre,
+        Paths_imm
     Build-depends:
         base == 4.*,
         bytestring,
@@ -45,6 +47,7 @@ Library
         dyre,
         feed,
         filepath,
+        hslogger,
         http-conduit >= 1.9.0,
         http-types,
         lens,
@@ -52,6 +55,7 @@ Library
         monad-control,
         mtl,
         network,
+        resourcet,
         old-locale,
         opml,
         random,
@@ -68,12 +72,12 @@ Library
         ConstraintKinds,
         KindSignatures,
         FlexibleContexts,
+        FlexibleInstances,
         FunctionalDependencies,
         GeneralizedNewtypeDeriving,
         MultiParamTypeClasses,
         RankNTypes
 
-    -- Other-modules:
     -- Build-tools:
     Ghc-options: -Wall
 

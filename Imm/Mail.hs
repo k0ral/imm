@@ -2,20 +2,22 @@
 module Imm.Mail where
 
 -- {{{ Imports
-import Imm.Config
-import Imm.Feed
+import Imm.Feed as F
+import Imm.Util
 
-import Control.Applicative
-import Control.Lens hiding(from)
+import Control.Lens hiding(from, (??))
+import Control.Monad.Error
 
-import Data.Default
 import Data.Time
 import Data.Time.RFC2822
 
+-- import Text.Feed.Query as F
 import Text.Feed.Types
+
+-- import System.Log.Logger
 -- }}}
 
-
+-- {{{ Types
 data Mail = Mail {
     _returnPath         :: String,
     _date               :: Maybe ZonedTime,
@@ -29,7 +31,6 @@ data Mail = Mail {
 
 makeLenses ''Mail
 
-
 instance Default Mail where
     def = Mail {
         _charset            = "utf-8",
@@ -40,7 +41,6 @@ instance Default Mail where
         _mime               = "text/html",
         _subject            = "Untitled",
         _returnPath         = "<imm@noreply>"}
-
 
 instance Show Mail where
     show mail = unlines [
@@ -54,11 +54,19 @@ instance Show Mail where
         view body mail]
 
 
+type Format = (Item, Feed) -> String
+
+class MailFormatter m where
+    formatFrom    :: m Format
+    formatSubject :: m Format
+    formatBody    :: m Format
+-- }}}
+
 -- | Build mail from a given feed, using builders functions from 'Settings'.
-build :: (Applicative m, ConfigReader m, Monad m) => TimeZone -> (Item, Feed) -> m Mail
+build :: (Applicative m, MailFormatter m, FeedParser m, Monad m) => TimeZone -> (Item, Feed) -> m Mail
 build timeZone (item, feed) = do
-    from'    <- readConfig formatFrom    <*> return (item, feed)
-    subject' <- readConfig formatSubject <*> return (item, feed)
-    body'    <- readConfig formatBody    <*> return (item, feed)
-    date'    <- either (const Nothing) (Just . utcToZonedTime timeZone) <$> getDate item
+    from'    <- formatFrom    <*> return (item, feed)
+    subject' <- formatSubject <*> return (item, feed)
+    body'    <- formatBody    <*> return (item, feed)
+    date'    <- return . either (const Nothing) (Just . utcToZonedTime timeZone) =<< runErrorT (getDate item)
     return . set date date' . set from from' . set subject subject' . set body body' $ def
