@@ -43,15 +43,15 @@ instance Default Mail where
         _returnPath         = "<imm@noreply>"}
 
 instance Show Mail where
-    show mail = unlines $
-        ("Return-Path: " ++ view returnPath mail):
-        (maybe "" (("Date: " ++) . showRFC2822) $ view date mail):
-        ("From: " ++ view from mail):
-        ("Subject: " ++ view subject mail):
-        ("Content-Type: " ++ view mime mail ++ "; charset=" ++ view charset mail):
-        ("Content-Disposition: " ++ view contentDisposition mail):
-        "":
-        (view body mail):[]
+    show mail = unlines [
+        "Return-Path: " ++ view returnPath mail,
+        maybe "" (("Date: " ++) . showRFC2822) $ view date mail,
+        "From: " ++ view from mail,
+        "Subject: " ++ view subject mail,
+        "Content-Type: " ++ view mime mail ++ "; charset=" ++ view charset mail,
+        "Content-Disposition: " ++ view contentDisposition mail,
+        "",
+        view body mail]
 
 
 type Format = (Item, Feed) -> String

@@ -40,7 +40,7 @@ imm feedsFromConfig = void . runMaybeT $ do
         feedsFromOptions = view Options.feedsList     options
         logLevel         = view Options.logLevel      options
 
-    action <- handleSpecialActions $ view Options.action        options
+    action <- handleSpecialActions $ view Options.action options
 
     io . updateGlobalLogger rootLoggerName $ setLevel logLevel
     io . debugM "imm.options" $ "Commandline options: " ++ show options
@@ -49,7 +49,7 @@ imm feedsFromConfig = void . runMaybeT $ do
 
 
 handleSpecialActions :: Options.Action -> MaybeT IO Feed.Action
-handleSpecialActions Help         = (io $ putStrLn Options.usage) >> mzero
+handleSpecialActions Help         = io (putStrLn Options.usage) >> mzero
 handleSpecialActions ShowVersion  = (io . putStrLn $ showVersion version) >> mzero
 handleSpecialActions Recompile    = (io $ Dyre.recompile >>= mapM_ putStrLn) >> mzero
 handleSpecialActions Import       = io getContents >>= Core.importOPML >> mzero

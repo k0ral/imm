@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE ScopedTypeVariables, TypeFamilies #-}
 module Imm.Core (
 -- * Types
     FeedConfig,
@@ -65,7 +65,7 @@ check baseConfig (f, feedID) = withError "imm.core". withConfig (f . baseConfig)
 
 
 showStatus :: (Config -> Config) -> FeedConfig -> IO ()
-showStatus baseConfig (f, feedID) = withConfig (f . baseConfig) $ (io . noticeM "imm.core" =<< Feed.showStatus feedID)
+showStatus baseConfig (f, feedID) = withConfig (f . baseConfig) (io . noticeM "imm.core" =<< Feed.showStatus feedID)
 
 
 markAsRead :: (Config -> Config) -> FeedConfig -> IO ()
