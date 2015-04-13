@@ -65,8 +65,8 @@ instance Error ImmError where
     strMsg = OtherError
 
 
-withError :: (Error e, Show e, MonadBase IO m) => ErrorT e m () -> m ()
-withError = runErrorT >=> either (io . print) return
+withError :: (Error e, Show e, MonadBase IO m) => String -> ErrorT e m () -> m ()
+withError category = runErrorT >=> either (io . errorM category . show) return
 
 localError :: (MonadBase IO m, MonadError ImmError m) => String -> m () -> m ()
 localError category f = f `catchError` (io . errorM category . show)

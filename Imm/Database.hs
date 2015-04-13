@@ -40,8 +40,7 @@ class DatabaseReader m where
 instance (Error e, DatabaseReader m) => DatabaseReader (ErrorT e m) where
     getLastCheck = getLastCheck
 
-
-class (MonadError ImmError m) => DatabaseWriter m where
+class DatabaseWriter m where
     -- | Write the last update time in the data file.
     storeLastCheck :: FeedID -> UTCTime -> m ()
     -- | Remove state file as if no update was ever done.

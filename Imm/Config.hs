@@ -23,6 +23,7 @@ import Imm.Database
 import Imm.Error
 import Imm.Feed (FeedParser)
 import qualified Imm.Feed as F
+import Imm.Maildir (Maildir, MaildirWriter(..))
 import Imm.HTTP (Decoder(..))
 import qualified Imm.Mail as Mail
 import Imm.Util
@@ -37,6 +38,8 @@ import qualified Data.Text.Lazy as TL
 import Data.Time as T
 import Data.Time.RFC2822
 import Data.Time.RFC3339
+
+import Prelude hiding(init)
 
 import Text.Feed.Query as F
 -- import Text.Feed.Types as F
@@ -67,13 +70,13 @@ instance Default BodyFormat where
 
 -- | The only exported constructor is through 'Default' class.
 data Config = Config {
-    _maildir        :: FilePath,       -- ^ Where mails will be written
-    _fileDatabase   :: FileDatabase,   -- ^ Database configuration, used to store resilient information (basically: last update time)
+    _maildir        :: Maildir,                    -- ^ Where mails will be written
+    _fileDatabase   :: FileDatabase,               -- ^ Database configuration, used to store resilient information (basically: last update time)
     _dateParsers    :: [String -> Maybe UTCTime],  -- ^ List of date parsing functions, will be tried sequentially until one succeeds
-    _formatFrom     :: FromFormat,     -- ^ Called to write the From: header of feed mails
-    _formatSubject  :: SubjectFormat,  -- ^ Called to write the Subject: header of feed mails
-    _formatBody     :: BodyFormat,     -- ^ Called to write the body of feed mails (sic!)
-    _decoder        :: String          -- ^ 'Converter' name used to decode the HTTP response from a feed URI
+    _formatFrom     :: FromFormat,                 -- ^ Called to write the From: header of feed mails
+    _formatSubject  :: SubjectFormat,              -- ^ Called to write the Subject: header of feed mails
+    _formatBody     :: BodyFormat,                 -- ^ Called to write the body of feed mails (sic!)
+    _decoder        :: String                      -- ^ 'Converter' name used to decode the HTTP response from a feed URI
 }
 
 makeLenses ''Config
@@ -111,9 +114,18 @@ instance (Applicative m, MonadBase IO m) => Decoder (ReaderT Config m) where
 instance (MonadBase IO m) => DatabaseReader (ReaderT Config m) where
     getLastCheck = withReaderT (view fileDatabase) . getLastCheck
 
-instance (MonadBase IO m) => DatabaseWriter (ReaderT Config (ErrorT ImmError m)) where
+instance (MonadError ImmError m, MonadBase IO m) => DatabaseWriter (ReaderT Config m) where
     storeLastCheck uri = withReaderT (view fileDatabase) . storeLastCheck uri
     forget             = withReaderT (view fileDatabase) . forget
+
+instance (MonadBase IO m, MonadError ImmError m) => MaildirWriter (ReaderT Config m) where
+    init       = do
+        theMaildir <- asks $ view maildir
+        lift $ runReaderT init theMaildir
+    write mail = do
+        theMaildir <- asks $ view maildir
+        lift $ runReaderT (write mail) theMaildir
+
 
 instance (Monad m) => Mail.MailFormatter (ReaderT Config m) where
     formatFrom    = asks $ unFromFormat    . view formatFrom
@@ -145,8 +157,8 @@ addFeeds feeds = forM_ feeds addFeedsGroup
 addFeedsGroup :: (MonadBase IO m) => (String, [String]) -> m ()
 addFeedsGroup (groupTitle, uris) = io $ do
     -- guard (not $ null uris)
-    putStrLn $ "-- Group " ++ groupTitle
-    putStrLn $ map toLower (concat . words $ groupTitle) ++ " = ["
-    putStrLn . ("    " ++) . intercalate ",\n    " $ map show uris
-    putStrLn "]"
-    putStrLn ""
+    putStrLn . unlines $ [
+        "-- Group " ++ groupTitle,
+        map toLower (concat . words $ groupTitle) ++ " = [",
+        ("    " ++) . intercalate ",\n    " $ map show uris,
+       "]"]

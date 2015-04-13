@@ -87,14 +87,14 @@ check (feedID, feed) = do
 
 
 -- | Simply set the last check time to now.
-markAsRead :: (MonadBase IO m, MonadError ImmError m, DatabaseState m) => URI -> m ()
-markAsRead uri = io getCurrentTime >>= storeLastCheck uri >> (io . debugM "imm.feed" $ "Feed " ++ show uri ++ " marked as read.")
+markAsRead :: (MonadBase IO m, MonadError ImmError m, DatabaseWriter m) => URI -> m ()
+markAsRead uri = io getCurrentTime >>= storeLastCheck uri >> (io . noticeM "imm.feed" $ "Feed <" ++ show uri ++ "> marked as read.")
 
 -- | Simply remove the state file.
 markAsUnread ::  (MonadBase IO m, MonadError ImmError m, DatabaseState m) => URI -> m ()
 markAsUnread uri = do
     forget uri
-    io . noticeM "imm.feed" $ "Feed " ++ show uri ++ " marked as unread."
+    io . noticeM "imm.feed" $ "Feed <" ++ show uri ++ "> marked as unread."
 
 -- | Return a 'String' describing the last update for a given feed.
 showStatus :: (DatabaseReader m, MonadBase IO m) => URI -> m String

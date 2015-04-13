@@ -13,7 +13,7 @@ import Data.Char as X
 import Data.Default as X
 import Data.Either as X
 import Data.Functor as X
-import Data.List as X hiding(foldl, sum)
+import Data.List as X hiding(foldl, init, sum)
 import Data.Maybe as X
 
 import System.FilePath

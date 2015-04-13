@@ -6,12 +6,12 @@ import qualified Imm.Core as Core
 import Imm.Config
 import Imm.Database
 import Imm.Dyre as Dyre
-import Imm.Error
 import qualified Imm.Feed as Feed
 import Imm.Options (Action(..), OptionsReader(..))
 import qualified Imm.Options as Options
 import Imm.Util
 
+import Control.Concurrent.Async
 import Control.Lens hiding (Action, (??))
 import Control.Monad.Error hiding(when)
 import Control.Monad.Reader hiding(when)
@@ -47,12 +47,12 @@ dispatch1 feedsFromConfig (Run action) = do
     io $ Dyre.wrap dyreMode realMain (action, dataDir, feedsFromOptions, feedsFromConfig)
 
 
-dispatch2 :: Feed.Action -> Core.FeedList -> ReaderT Config (ErrorT ImmError IO) ()
-dispatch2 Feed.Check        feeds = Core.check feeds
-dispatch2 Feed.ShowStatus   feeds = mapM_ Core.showStatus feeds
-dispatch2 Feed.MarkAsRead   feeds = mapM_ Core.markAsRead feeds
-dispatch2 Feed.MarkAsUnread feeds = mapM_ Core.markAsUnread feeds
-dispatch2 Feed.Update       feeds = Core.update feeds
+dispatch2 :: (Config -> Config) -> Feed.Action -> Core.FeedList -> IO ()
+dispatch2 baseConfig Feed.Check        feeds = void $ mapConcurrently (Core.check baseConfig) feeds
+dispatch2 baseConfig Feed.ShowStatus   feeds = mapM_ (Core.showStatus baseConfig) feeds
+dispatch2 baseConfig Feed.MarkAsRead   feeds = mapM_ (Core.markAsRead baseConfig) feeds
+dispatch2 baseConfig Feed.MarkAsUnread feeds = mapM_ (Core.markAsUnread baseConfig) feeds
+dispatch2 baseConfig Feed.Update       feeds = void $ mapConcurrently (Core.update baseConfig) feeds
 
 
 validateFeeds :: [ConfigFeed] -> [URI] -> ([String], Core.FeedList)
@@ -66,9 +66,11 @@ validateFeeds feedsFromConfig feedsFromOptions = (errors ++ errors', null feedsF
 
 realMain :: (Feed.Action, Maybe FilePath, [URI], [ConfigFeed]) -> IO ()
 realMain (action, dataDir, feedsFromOptions, feedsFromConfig) = do
-    let (errors, feedsOK) = validateFeeds feedsFromConfig feedsFromOptions
     unless (null errors)  . errorM   "imm.boot" $ unlines errors
     when   (null feedsOK) $ warningM "imm.boot"   "Nothing to process. Exiting..." >> exitFailure
     -- io . debugM "imm.boot" . unlines $ "Feeds to be processed:":(map (show . snd) feedsOK)
 
-    withError . withConfig (maybe id (set (fileDatabase . directory)) dataDir) $ dispatch2 action feedsOK
+    dispatch2 baseConfig action feedsOK
+  where
+    (errors, feedsOK) = validateFeeds feedsFromConfig feedsFromOptions
+    baseConfig        = maybe id (set (fileDatabase . directory)) dataDir

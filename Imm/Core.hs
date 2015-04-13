@@ -18,18 +18,16 @@ import Imm.Database
 import Imm.Error
 import Imm.Feed (FeedParser(..))
 import qualified Imm.Feed as Feed
-import qualified Imm.HTTP as HTTP
+import Imm.Maildir (MaildirWriter(..))
 import qualified Imm.Maildir as Maildir
 import Imm.Mail (MailFormatter(..))
 import qualified Imm.Mail as Mail
 import Imm.OPML as OPML
 import Imm.Util
 
-import Control.Concurrent.Async
 import Control.Monad hiding(forM_, mapM_)
 import Control.Monad.Error hiding(forM_, mapM_)
 -- import Control.Monad.Reader hiding(forM_, mapM_)
-import Control.Monad.Trans.Control
 
 import Data.Foldable hiding(foldr)
 import Data.Time as T
@@ -52,36 +50,29 @@ importOPML :: (MonadBase IO m, MonadPlus m) => String -> m ()
 importOPML = mapM_ addFeeds . OPML.read
 
 
-check :: (MonadBaseControl IO m, FeedParser m, ConfigReader m, DatabaseReader m, HTTP.Decoder m, MonadError ImmError m) => FeedList -> m ()
-check feeds = void . liftBaseWith $ \runInIO -> mapConcurrently (runInIO . checkFeed) feeds
-
-checkFeed :: (MonadBase IO m, FeedParser m, ConfigReader m, DatabaseReader m, HTTP.Decoder m, MonadError ImmError m) => FeedConfig -> m ()
-checkFeed (f, feedID) = localConfig f . localError "imm.core" $ Feed.download feedID >>= Feed.check
+check :: (Config -> Config) -> FeedConfig -> IO ()
+check baseConfig (f, feedID) = withError "imm.core". withConfig (f . baseConfig) $ Feed.download feedID >>= Feed.check
 
 
-showStatus :: (MonadBase IO m, ConfigReader m, DatabaseReader m, MonadError ImmError m) => FeedConfig -> m ()
-showStatus (f, feedID) = localConfig f . localError "imm.core" $ (io . noticeM "imm.core" =<< Feed.showStatus feedID)
+showStatus :: (Config -> Config) -> FeedConfig -> IO ()
+showStatus baseConfig (f, feedID) = withConfig (f . baseConfig) $ (io . noticeM "imm.core" =<< Feed.showStatus feedID)
 
 
-markAsRead :: (MonadBase IO m, ConfigReader m, DatabaseState m, MonadError ImmError m) => FeedConfig -> m ()
-markAsRead (f, feedID) = localConfig f . localError "imm.core" $ Feed.markAsRead feedID
+markAsRead :: (Config -> Config) -> FeedConfig -> IO ()
+markAsRead baseConfig (f, feedID) = withError "imm.core" . withConfig (f . baseConfig) $ Feed.markAsRead feedID
 
 
-markAsUnread :: (MonadBase IO m, ConfigReader m, DatabaseState m, MonadError ImmError m) => FeedConfig -> m ()
-markAsUnread (f, feedID) = localConfig f . localError "imm.core" $ Feed.markAsUnread feedID
-
-
-update :: (MonadBaseControl IO m, ConfigReader m, DatabaseState m, MonadError ImmError m, FeedParser m, MailFormatter m, HTTP.Decoder m) => FeedList -> m ()
-update feeds = void . liftBaseWith $ \runInIO -> mapConcurrently (runInIO . updateFeed) feeds
+markAsUnread :: (Config -> Config) -> FeedConfig -> IO ()
+markAsUnread baseConfig (f, feedID) = withError "imm.core" . withConfig (f . baseConfig) $ Feed.markAsUnread feedID
 
 
 -- | Write mails for each new item, and update the last check time in state file.
-updateFeed :: (Applicative m, ConfigReader m, DatabaseState m, FeedParser m, MailFormatter m, MonadBase IO m, HTTP.Decoder m, MonadError ImmError m) => FeedConfig -> m ()
-updateFeed (f, feedID) = localConfig f . localError "imm.core" $ do
+update :: (Config -> Config) -> FeedConfig -> IO ()
+update baseConfig (f, feedID) = withError "imm.core" . withConfig (f . baseConfig) $ do
     -- io . noticeM "imm.core" $ "Updating: " ++ show feedID
     (uri, feed) <- Feed.download feedID
 
-    Maildir.create =<< readConfig maildir
+    Maildir.init
 
     io . debugM "imm.core" $ Feed.describe feed
 
@@ -93,10 +84,7 @@ updateFeed (f, feedID) = localConfig f . localError "imm.core" $ do
     Feed.markAsRead uri
 
 
-updateItem :: (Applicative m, ConfigReader m, FeedParser m, MailFormatter m, MonadBase IO m, MonadError ImmError m) => (Item, Feed) -> m ()
+updateItem :: (Applicative m, FeedParser m, MaildirWriter m, MailFormatter m, MonadBase IO m, MonadError ImmError m) => (Item, Feed) -> m ()
 updateItem (item, feed) = do
     timeZone <- io getCurrentTimeZone
-    dir <- readConfig maildir
-
-    io . debugM "imm.core" $ "Adding following item to maildir [" ++ dir ++ "]:\n" ++ Feed.describeItem item
-    Maildir.add dir =<< Mail.build timeZone (item, feed)
+    Maildir.write =<< Mail.build timeZone (item, feed)

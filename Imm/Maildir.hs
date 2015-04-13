@@ -6,6 +6,7 @@ import Imm.Mail
 import Imm.Util
 
 import Control.Monad.Error
+import Control.Monad.Reader
 
 import qualified Data.Text.Lazy.IO as T
 import qualified Data.Text.Lazy as TL
@@ -15,22 +16,31 @@ import Network.BSD
 
 import System.Directory
 import System.FilePath
+import System.Log.Logger
 import System.Random
 -- }}}
 
--- | Build a maildir with subdirectories cur, new and tmp.
-create :: (MonadBase IO m, MonadError ImmError m) => FilePath -> m ()
-create directory = do
-    try $ createDirectoryIfMissing True directory
-    try $ createDirectoryIfMissing True (directory </> "cur")
-    try $ createDirectoryIfMissing True (directory </> "new")
-    try $ createDirectoryIfMissing True (directory </> "tmp")
+type Maildir = FilePath
 
--- | Add a mail to the maildir
-add :: (MonadBase IO m, MonadError ImmError m) => FilePath -> Mail -> m ()
-add directory mail = do
-    fileName <- io getUniqueName
-    try $ T.writeFile (directory </> "new" </> fileName) (TL.pack $ show mail)
+class MaildirWriter m where
+    -- | Build a maildir with subdirectories cur, new and tmp.
+    init :: m ()
+    -- | Add a mail to the maildir
+    write  :: Mail -> m ()
+
+instance (MonadBase IO m, MonadError ImmError m) => MaildirWriter (ReaderT Maildir m) where
+    init = do
+        theMaildir <- ask
+        io . debugM "imm.maildir" $ "Creating maildir [" ++ theMaildir ++ "]"
+        try $ createDirectoryIfMissing True theMaildir
+        try $ createDirectoryIfMissing True (theMaildir </> "cur")
+        try $ createDirectoryIfMissing True (theMaildir </> "new")
+        try $ createDirectoryIfMissing True (theMaildir </> "tmp")
+    write mail = do
+        fileName   <- io getUniqueName
+        theMaildir <- ask
+        io . debugM "imm.maildir" $ "Writing new mail in maildir [" ++ theMaildir ++ "]"
+        try $ T.writeFile (theMaildir </> "new" </> fileName) (TL.pack $ show mail)
 
 -- | Return an allegedly unique filename; useful to add new mail files in a maildir.
 getUniqueName :: MonadBase IO m => m String
