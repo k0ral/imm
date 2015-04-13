@@ -32,7 +32,7 @@ data ImmError =
 
 instance Show ImmError where
     show (OtherError e)            = e
-    show (HTTPError (StatusCodeException status _headers)) =
+    show (HTTPError (StatusCodeException status _headers _cookieJar)) =
         "/!\\ HTTP error: " ++ show (statusCode status) ++ " " ++ (T.unpack . decodeUtf8) (statusMessage status)
     show (HTTPError e)             = "/!\\ HTTP error: " ++ show e
     show (TLSError (HandshakeFailed e)) = "/!\\ TLS error: " ++ show e

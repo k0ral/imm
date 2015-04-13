@@ -45,7 +45,7 @@ Library
         dyre,
         feed,
         filepath,
-        http-conduit,
+        http-conduit >= 1.9.0,
         http-types,
         lens,
         mime-mail,
