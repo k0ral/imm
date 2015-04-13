@@ -1,5 +1,5 @@
 Name:                imm
-Version:             0.6.0.1
+Version:             0.6.0.3
 Synopsis:            Retrieve RSS/Atom feeds and write one mail per new item in a maildir.
 Description:         Cf README
 --Homepage:
@@ -18,6 +18,10 @@ Extra-source-files:  README
 Source-repository head
     Type:     mercurial
     Location: https://bitbucket.org/k0ral/imm
+
+flag network-uri
+   description: Get Network.URI from the network-uri package
+   default: True
 
 Library
     Exposed-modules:
@@ -55,7 +59,6 @@ Library
         mime-mail,
         monad-control,
         mtl,
-        network,
         resourcet,
         old-locale,
         opml,
@@ -70,6 +73,10 @@ Library
         utf8-string,
         xdg-basedir,
         xml
+    if flag(network-uri)
+        build-depends: network-uri >= 2.6, network >= 2.6
+    else
+        build-depends: network-uri < 2.6, network < 2.6
     Extensions:
         ConstraintKinds,
         KindSignatures,
