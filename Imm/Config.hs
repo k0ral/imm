@@ -150,15 +150,34 @@ withConfig f g = do
 -- }}}
 
 
--- | Return the Haskell code to write in the configuration file to add a feed.
+-- | Return the Haskell code to write in the configuration file to add feeds.
 addFeeds :: (MonadBase IO m) => [(String, [String])] -> m ()
-addFeeds feeds = forM_ feeds addFeedsGroup
+addFeeds feeds = do
+    io . putStrLn . unlines $
+        "import Imm":
+        "import Control.Lens":
+        "import System.FilePath":
+        "":
+        "main :: IO ()":
+        "main = imm myFeeds":
+        "":
+        "maildirRoot = \"/home/<user>/feeds\"   -- TODO: fill <user>":
+        "":
+        ("myFeeds = concat [" ++ intercalate ", " (map (map toLower . concat . words . fst) feeds) ++ "]"):
+        []
+
+    forM_ feeds addFeedsGroup
 
 addFeedsGroup :: (MonadBase IO m) => (String, [String]) -> m ()
 addFeedsGroup (groupTitle, uris) = io $ do
     -- guard (not $ null uris)
-    putStrLn . unlines $ [
-        "-- Group " ++ groupTitle,
-        map toLower (concat . words $ groupTitle) ++ " = [",
-        ("    " ++) . intercalate ",\n    " $ map show uris,
-       "]"]
+    putStr . unlines $
+        ("-- Group " ++ groupTitle):
+        (groupID ++ "Config = set maildir (maildirRoot </> \"" ++ groupID ++ "\")"):
+        (groupID ++ "       = zip (repeat " ++ groupID ++ "Config) $"):
+        []
+    putStr . unlines $ map (\u -> "    " ++ show u ++ ":") uris
+    putStrLn "    []"
+    putStrLn ""
+  where
+    groupID = map toLower . concat . words $ groupTitle
