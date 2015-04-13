@@ -4,6 +4,7 @@ module Imm.Core (
     FeedConfig,
     FeedList,
 -- * Actions
+    dispatch,
     importOPML,
     check,
     showStatus,
@@ -25,6 +26,7 @@ import qualified Imm.Mail as Mail
 import Imm.OPML as OPML
 import Imm.Util
 
+import Control.Concurrent.Async
 import Control.Monad hiding(forM_, mapM_)
 import Control.Monad.Error hiding(forM_, mapM_)
 -- import Control.Monad.Reader hiding(forM_, mapM_)
@@ -44,6 +46,14 @@ import Text.Feed.Types as F
 type FeedConfig = (Config -> Config, FeedID)
 type FeedList   = [FeedConfig]
 -- }}}
+
+
+dispatch :: (Config -> Config) -> Feed.Action -> FeedList -> IO ()
+dispatch baseConfig Feed.Check        feeds = void $ mapConcurrently (check baseConfig) feeds
+dispatch baseConfig Feed.ShowStatus   feeds = mapM_ (showStatus baseConfig) feeds
+dispatch baseConfig Feed.MarkAsRead   feeds = mapM_ (markAsRead baseConfig) feeds
+dispatch baseConfig Feed.MarkAsUnread feeds = mapM_ (markAsUnread baseConfig) feeds
+dispatch baseConfig Feed.Update       feeds = void $ mapConcurrently (update baseConfig) feeds
 
 
 importOPML :: (MonadBase IO m, MonadPlus m) => String -> m ()
