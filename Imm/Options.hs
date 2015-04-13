@@ -6,9 +6,9 @@ module Imm.Options (
     dyreMode,
     feedsList,
     dataDirectory,
-    OptionsReader(..),
+    logLevel,
     Action(..),
-    run,
+    get,
     usage,
 ) where
 
@@ -30,7 +30,6 @@ import System.Console.GetOpt
 import System.Environment
 -- import System.Environment.XDG.BaseDir
 import System.Log as Log
-import System.Log.Logger
 -- }}}
 
 -- {{{ Types
@@ -71,24 +70,6 @@ instance Default CliOptions where
         _dataDirectory = Nothing,
         _feedsList     = [],
         _dyreDebug     = False}
-
--- | 'MonadReader' for 'CliOptions'
-class OptionsReader m where
-    readOptions :: Simple Lens CliOptions a -> m a
-
-instance (Monad m) => OptionsReader (ReaderT CliOptions m) where
-    readOptions l = return . view l =<< ask
-
-instance OptionsReader ((->) CliOptions) where
-    readOptions l = view l
-
--- | Parse commandline options, set the corresponding log level.
-run :: (MonadBase IO m) => ReaderT CliOptions m a -> m a
-run f = do
-    opts <- get
-    io . updateGlobalLogger rootLoggerName . setLevel $ view logLevel opts
-    io . debugM "imm.options" $ "Commandline options: " ++ show opts
-    runReaderT f opts
 -- }}}
 
 description :: [OptDescr (CliOptions -> CliOptions)]
@@ -121,8 +102,8 @@ usage = usageInfo "Usage: imm [OPTIONS] [URI]\n\nConvert items from RSS/Atom fee
 -- | Get and parse commandline options
 get :: (MonadBase IO m) => m CliOptions
 get = io $ do
-    options <- getOpt' Permute description <$> getArgs
-    case options of
+    parsedArgs <- getOpt' Permute description <$> getArgs
+    case parsedArgs of
         (opts, input, _, []) -> do
             let (errors, valids) = partitionEithers $ map (\uri -> maybe (Left $ "Invalid URI given in commandline: " ++ uri) Right $ N.parseURI uri) input
             unless (null errors) $ io . putStrLn $ unlines errors

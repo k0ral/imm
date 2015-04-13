@@ -63,6 +63,7 @@ Library
         text,
         text-icu,
         transformers-base,
+        transformers,
         time,
         timerep >= 1.0.3,
         tls,

@@ -7,19 +7,22 @@ import Imm.Config
 import Imm.Database
 import Imm.Dyre as Dyre
 import qualified Imm.Feed as Feed
-import Imm.Options (Action(..), OptionsReader(..))
+import Imm.Options (Action(..))
 import qualified Imm.Options as Options
 import Imm.Util
 
 import Control.Lens hiding (Action, (??))
-import Control.Monad.Error hiding(when)
-import Control.Monad.Reader hiding(when)
+import Control.Monad.Error hiding(mapM_, when)
+-- import Control.Monad.Reader hiding(mapM_, when)
+import Control.Monad.Trans.Maybe
 
+import Data.Foldable
 import Data.Version
 
 import Network.URI as N
 
 import Paths_imm
+import Prelude hiding (mapM_)
 
 import System.Log.Logger
 import System.Exit
@@ -30,20 +33,28 @@ type ConfigFeed = (Config -> Config, String)
 
 -- | Main function to call in the configuration file.
 imm :: [ConfigFeed] -> IO ()
-imm feedsFromConfig = Options.run $ readOptions Options.action >>= dispatch feedsFromConfig
+imm feedsFromConfig = void . runMaybeT $ do
+    options <- Options.get
+    let dataDir          = view Options.dataDirectory options
+        dyreMode         = view Options.dyreMode      options
+        feedsFromOptions = view Options.feedsList     options
+        logLevel         = view Options.logLevel      options
 
+    action <- handleSpecialActions $ view Options.action        options
 
-dispatch :: [ConfigFeed] -> Options.Action -> ReaderT Options.CliOptions IO ()
-dispatch _ Help        = io $ putStrLn Options.usage >> exitSuccess
-dispatch _ ShowVersion = io $ putStrLn (showVersion version) >> exitSuccess
-dispatch _ Recompile   = io $ Dyre.recompile >>= maybe exitSuccess (\e -> putStrLn e >> exitFailure)
-dispatch _ Import      = io getContents >>= Core.importOPML >> io exitSuccess
-dispatch feedsFromConfig (Run action) = do
-    dyreMode         <- readOptions Options.dyreMode
-    feedsFromOptions <- readOptions Options.feedsList
-    dataDir          <- readOptions Options.dataDirectory
+    io . updateGlobalLogger rootLoggerName $ setLevel logLevel
+    io . debugM "imm.options" $ "Commandline options: " ++ show options
 
     io $ Dyre.wrap dyreMode realMain (action, dataDir, feedsFromOptions, feedsFromConfig)
+
+
+handleSpecialActions :: Options.Action -> MaybeT IO Feed.Action
+handleSpecialActions Help         = (io $ putStrLn Options.usage) >> mzero
+handleSpecialActions ShowVersion  = (io . putStrLn $ showVersion version) >> mzero
+handleSpecialActions Recompile    = (io $ Dyre.recompile >>= mapM_ putStrLn) >> mzero
+handleSpecialActions Import       = io getContents >>= Core.importOPML >> mzero
+handleSpecialActions (Run action) = return action
+
 
 validateFeeds :: [ConfigFeed] -> [URI] -> ([String], Core.FeedList)
 validateFeeds feedsFromConfig feedsFromOptions = (errors ++ errors', null feedsFromOptions ? feedsOK ?? feedsOK')
