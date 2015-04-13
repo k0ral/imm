@@ -41,7 +41,7 @@ import qualified System.Timeout as S
 data ImmError =
     OtherError         String
   | HTTPError          HttpException
-  | TLSError           HandshakeFailed
+  | TLSError           TLSException
   | UnicodeError       UnicodeException
   | ParseUriError      String
   | ParseTimeError     String
@@ -63,7 +63,7 @@ instance Show ImmError where
         "/!\\ Cannot parse date from item: ",
         "    title: "       ++ (show $ getItemTitle item),
         "    link:"         ++ (show $ getItemLink item),
-        "    publish date:" ++ (show $ getItemPublishDate item),
+        "    publish date:" ++ (show (getItemPublishDate item :: Maybe (Maybe UTCTime))),
         "    date:"         ++ (show $ getItemDate item)]
     show (ParseTimeError raw)      = "/!\\ Cannot parse time: " ++ raw
     show (ParseFeedError raw)      = "/!\\ Cannot parse feed: " ++ raw
