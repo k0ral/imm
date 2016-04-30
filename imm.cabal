@@ -42,7 +42,7 @@ library
   build-depends: aeson, atom-conduit, base == 4.*, bytestring, case-insensitive, chunked-data, comonad, compdata, conduit, conduit-combinators, conduit-parse, connection, containers, directory >= 1.2.3.0, dyre, exceptions, fast-logger, filepath, free, hashable, HaskellNet, HaskellNet-SSL >= 0.3.3.0, http-client, http-client-tls, http-types, mime-mail, monoid-subclasses, mono-traversable, network, opml-conduit, optparse-applicative, rainbow, rainbox, rss-conduit, text, transformers, time, timerep >= 2.0.0.0, tls, uri-bytestring, xml, xml-conduit, ansi-wl-pprint
   -- Build-tools:
   hs-source-dirs: src/lib
-  ghc-options: -Wall -fno-warn-unused-do-bind -threaded
+  ghc-options: -Wall -fno-warn-unused-do-bind
 
 executable imm
   build-depends: imm, base == 4.*, free
