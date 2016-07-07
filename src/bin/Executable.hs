@@ -5,8 +5,6 @@
 -- {{{ Imports
 import           Imm
 import           Imm.Database.JsonFile
-import           Imm.Feed
-import           Imm.Hooks
 import           Imm.HTTP.Simple
 import           Imm.Logger.Simple
 import           Imm.Prelude
