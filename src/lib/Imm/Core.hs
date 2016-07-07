@@ -74,7 +74,7 @@ showFeed :: (MonadIO m, LoggerF :<: f, MonadThrow m, Functor f, MonadFree f m, D
          => [FeedID] -> m ()
 showFeed feedIDs = do
   feeds <- Database.fetchList FeedTable feedIDs
-  if onull feeds then logWarning "No subscription" else putBox $ entryTableToBox feeds
+  if null feeds then logWarning "No subscription" else putBox $ entryTableToBox feeds
 
 -- | Register the given feed URI in database
 subscribe :: (MonadIO m, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, MonadCatch m)
@@ -134,7 +134,7 @@ run feedIDs = forM_ feedIDs $ \feedID@(FeedID uri) -> do
 isRead :: (Functor f, MonadCatch m, DatabaseF' :<: f, MonadFree f m) => FeedID -> FeedElement -> m Bool
 isRead feedID element = do
   DatabaseEntry _ _ readHashes lastCheck <- Database.fetch FeedTable feedID
-  let matchHash = not $ onull $ (setFromList (getHashes element) :: Set Int) `intersection` readHashes
+  let matchHash = not $ null $ (setFromList (getHashes element) :: Set Int) `intersection` readHashes
       matchDate = case (lastCheck, getDate element) of
         (Nothing, _) -> False
         (_, Nothing) -> False
@@ -157,7 +157,7 @@ importOPML' _ _ = return ()
 -- * Boxes
 
 putBox :: (Orientation a, MonadIO m) => Box a -> m ()
-putBox = void . io . mapM ByteString.putStr . chunksToByteStrings toByteStringsColors256 . otoList . render
+putBox = io . mapM_ ByteString.putStr . chunksToByteStrings toByteStringsColors256 . toList . render
 
 cell :: Text -> Cell
 cell a = Cell (singleton $ singleton $ chunk a) top left mempty

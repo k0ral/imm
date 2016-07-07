@@ -13,55 +13,61 @@
 module Imm.Prelude (module Imm.Prelude, module X) where
 
 -- {{{ Imports
-import           Control.Applicative          as X
+import           Control.Applicative             as X
 import           Control.Comonad
 import           Control.Comonad.Cofree
-import           Control.Monad                as X hiding (filterM, replicateM)
-import           Control.Monad.Catch          as X
-import           Control.Monad.IO.Class       as X
-import           Control.Monad.Trans.Free     (FreeF (..), FreeT (..))
+import           Control.Monad                   as X (MonadPlus (..), unless,
+                                                       void, when)
+import           Control.Monad.Catch             as X
+import           Control.Monad.IO.Class          as X
+import           Control.Monad.Trans.Free        (FreeF (..), FreeT (..))
 
-import           Data.Bifunctor               as X
-import qualified Data.ByteString              as B (ByteString ())
-import qualified Data.ByteString.Lazy         as LB (ByteString ())
-import           Data.Comp.Ops                as X
-import           Data.Containers              as X
+import           Data.Bifunctor                  as X
+import qualified Data.ByteString                 as B (ByteString ())
+import qualified Data.ByteString.Lazy            as LB (ByteString ())
+import           Data.Comp.Ops                   as X
+import           Data.Containers                 as X
+import           Data.Foldable                   as X (forM_)
 import           Data.Functor.Identity
-import           Data.IOData                  as X
-import           Data.Map                     as X (Map)
-import           Data.Maybe                   as X hiding (catMaybes)
-import           Data.Monoid                  as X
-import           Data.Monoid.Textual          as X (TextualMonoid (), fromText)
-import           Data.MonoTraversable         as X
-import           Data.Ord                     as X
--- import           Data.Semigroup               as X hiding (option)
-import           Data.Sequences               as X
-import           Data.Sequences.Lazy          as X
-import           Data.String                  as X (IsString (..))
-import qualified Data.Text                    as T (Text ())
-import qualified Data.Text.Lazy               as LT (Text ())
-import           Data.Textual.Encoding        as X
-import           Data.Typeable                as X
+import           Data.IOData                     as X
+import           Data.Map                        as X (Map)
+import           Data.Maybe                      as X hiding (catMaybes)
+import           Data.Monoid                     as X
+import           Data.Monoid.Textual             as X (TextualMonoid (),
+                                                       fromText)
+import           Data.MonoTraversable.Unprefixed as X hiding (forM_, mapM_)
+import           Data.Ord                        as X
+import           Data.Sequences                  as X
+import           Data.String                     as X (IsString (..))
+import qualified Data.Text                       as T (Text ())
+import qualified Data.Text.Lazy                  as LT (Text ())
+import           Data.Traversable                as X (forM)
+import           Data.Typeable                   as X
 
-import qualified GHC.Show                     as Show
+import qualified GHC.Show                        as Show
 
-import           Prelude                      as X hiding (break, drop,
-                                                    dropWhile, elem, filter,
-                                                    getLine, lines, log, lookup,
-                                                    notElem, readFile,
-                                                    replicate, reverse, show,
-                                                    span, splitAt, take,
-                                                    takeWhile, unlines, unwords,
-                                                    words, writeFile)
+import           Prelude                         as X hiding (all, and, any,
+                                                       break, concat, concatMap,
+                                                       drop, dropWhile, elem,
+                                                       filter, foldMap, foldr,
+                                                       getLine, length, lines,
+                                                       log, lookup, notElem,
+                                                       null, or, product,
+                                                       readFile, replicate,
+                                                       reverse, sequence_, show,
+                                                       span, splitAt, sum, take,
+                                                       takeWhile, unlines,
+                                                       unwords, words,
+                                                       writeFile)
 
-import           System.IO                    as X (stderr, stdout)
+import           System.IO                       as X (stderr, stdout)
 
-import           Text.PrettyPrint.ANSI.Leijen as X (Doc, Pretty (..), angles,
-                                                    brackets, equals, hsep,
-                                                    indent, space, text, vsep,
-                                                    (<+>))
+import           Text.PrettyPrint.ANSI.Leijen    as X (Doc, Pretty (..), angles,
+                                                       brackets, equals, hsep,
+                                                       indent, space, text,
+                                                       vsep, (<+>))
 
-import           Text.PrettyPrint.ANSI.Leijen (line)
+import           Text.PrettyPrint.ANSI.Leijen    (line)
 -- }}}
 
 -- * Free monad utilities

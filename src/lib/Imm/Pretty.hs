@@ -55,7 +55,7 @@ prettyTime = text . formatTime defaultTimeLocale rfc822DateFormat
 
 prettyPerson :: AtomPerson -> Doc
 prettyPerson p = text (fromText $ toNullable $ personName p) <> email where
-  email = if onull $ personEmail p
+  email = if null $ personEmail p
     then mempty
     else space <> angles (text $ fromText $ personEmail p)
 
