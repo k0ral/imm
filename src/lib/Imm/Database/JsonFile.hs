@@ -84,7 +84,7 @@ loadInCache t@(JsonFileDatabase file _ status) = case status of
     return $ JsonFileDatabase file cache Clean
   _ -> return t
   where fromEmpty x "" = x
-        fromEmpty _ y = y
+        fromEmpty _ y  = y
 
 
 insert :: (Table t, MonadIO m, MonadCatch m, FromJSON (Key t), FromJSON (Entry t))
@@ -118,7 +118,7 @@ purge t = purgeInCache <$> loadInCache t
 purgeInCache :: Table t => JsonFileDatabase t -> JsonFileDatabase t
 purgeInCache (JsonFileDatabase file _ _) = JsonFileDatabase file mempty Dirty
 
-commit :: (Table t, MonadIO m, ToJSON (Key t), ToJSON (Entry t))
+commit :: (MonadIO m, ToJSON (Key t), ToJSON (Entry t))
        => JsonFileDatabase t -> m (JsonFileDatabase t)
 commit t@(JsonFileDatabase file cache status) = case status of
   Dirty -> do

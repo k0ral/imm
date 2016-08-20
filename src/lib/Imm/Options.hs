@@ -9,7 +9,7 @@ import           Imm.Dyre                    as Dyre (Mode (..))
 import qualified Imm.Dyre                    as Dyre
 import           Imm.Feed
 import           Imm.Logger                  as Logger
-import           Imm.Prelude                 hiding ((<>))
+import           Imm.Prelude
 import           Imm.Pretty
 
 import           Options.Applicative.Builder
