@@ -39,13 +39,13 @@ httpGet manager uri = do
     -- codec'   <- reader $ view (config.codec)
     -- return $ response $=+ decode codec'
 
-parseUrl' :: (MonadThrow m) => URI -> m Request
-parseUrl' = parseUrl . show . prettyURI
+parseRequest' :: (MonadThrow m) => URI -> m Request
+parseRequest' = parseRequest . show . prettyURI
 
 -- | Build an HTTP request for given URI
 makeRequest :: (MonadIO m, MonadThrow m) => URI -> m Request
 makeRequest uri = do
-  req <- parseUrl' uri
+  req <- parseRequest' uri
   return $ req { requestHeaders = [
     (mk "User-Agent", "Mozilla/4.0"),
     (mk "Accept", "*/*")]}
