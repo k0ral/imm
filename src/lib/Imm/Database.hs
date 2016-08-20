@@ -110,51 +110,51 @@ fetch t k = do
   result <- lookup k <$> liftE results
   maybe (throwM $ NotFound t [k]) return result
 
-fetchList :: (Functor f, MonadFree f m, DatabaseF t :<: f, Table t, MonadThrow m)
+fetchList :: (Functor f, MonadFree f m, DatabaseF t :<: f, MonadThrow m)
           => t -> [Key t] -> m (Map (Key t) (Entry t))
 fetchList t k = do
   result <- liftF . inj $ FetchList t k id
   liftE result
 
-fetchAll :: (MonadThrow m, Functor f, MonadFree f m, DatabaseF t :<: f, Table t) => t -> m (Map (Key t) (Entry t))
+fetchAll :: (MonadThrow m, Functor f, MonadFree f m, DatabaseF t :<: f) => t -> m (Map (Key t) (Entry t))
 fetchAll t = do
   result <- liftF . inj $ FetchAll t id
   liftE result
 
-update :: (Functor f, MonadFree f m, DatabaseF t :<: f, Table t, MonadThrow m)
+update :: (Functor f, MonadFree f m, DatabaseF t :<: f, MonadThrow m)
        => t -> Key t -> (Entry t -> Entry t) -> m ()
 update t k f = do
   result <- liftF . inj $ Update t k f id
   liftE result
 
-insert :: (MonadThrow m, Functor f, MonadFree f m, LoggerF :<: f, DatabaseF t :<: f, Table t)
+insert :: (MonadThrow m, Functor f, MonadFree f m, LoggerF :<: f, DatabaseF t :<: f)
        => t -> Key t -> Entry t -> m ()
 insert t k v = insertList t [(k, v)]
 
-insertList :: (MonadThrow m, Functor f, MonadFree f m, LoggerF :<: f, DatabaseF t :<: f, Table t)
+insertList :: (MonadThrow m, Functor f, MonadFree f m, LoggerF :<: f, DatabaseF t :<: f)
            => t -> [(Key t, Entry t)] -> m ()
 insertList t i = do
   logInfo $ "Inserting " <> show (length i) <> " entrie(s)..."
   result <- liftF . inj $ InsertList t i id
   liftE result
 
-delete :: (MonadThrow m, Functor f, MonadFree f m, LoggerF :<: f, DatabaseF t :<: f, Table t) => t -> Key t -> m ()
+delete :: (MonadThrow m, Functor f, MonadFree f m, LoggerF :<: f, DatabaseF t :<: f) => t -> Key t -> m ()
 delete t k = deleteList t [k]
 
-deleteList :: (MonadThrow m, Functor f, MonadFree f m, LoggerF :<: f, DatabaseF t :<: f, Table t)
+deleteList :: (MonadThrow m, Functor f, MonadFree f m, LoggerF :<: f, DatabaseF t :<: f)
            => t -> [Key t] -> m ()
 deleteList t k = do
   logInfo $ "Deleting " <> show (length k) <> " entrie(s)..."
   result <- liftF . inj $ DeleteList t k id
   liftE result
 
-purge :: (MonadThrow m, Functor f, MonadFree f m, DatabaseF t :<: f, LoggerF :<: f, Table t) => t -> m ()
+purge :: (MonadThrow m, Functor f, MonadFree f m, DatabaseF t :<: f, LoggerF :<: f) => t -> m ()
 purge t = do
   logInfo "Purging database..."
   result <- liftF . inj $ Purge t id
   liftE result
 
-commit :: (MonadThrow m, Functor f, MonadFree f m, DatabaseF t :<: f, LoggerF :<: f, Table t) => t -> m ()
+commit :: (MonadThrow m, Functor f, MonadFree f m, DatabaseF t :<: f, LoggerF :<: f) => t -> m ()
 commit t = do
   logDebug "Committing database transaction..."
   result <- liftF . inj $ Commit t id

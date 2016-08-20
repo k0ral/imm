@@ -77,7 +77,7 @@ showFeed feedIDs = do
   if null feeds then logWarning "No subscription" else putBox $ entryTableToBox feeds
 
 -- | Register the given feed URI in database
-subscribe :: (MonadIO m, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, MonadCatch m)
+subscribe :: (LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, MonadCatch m)
           => URI -> Maybe Text -> m ()
 subscribe uri category = Database.register (FeedID uri) $ fromMaybe "default" category
 

@@ -124,7 +124,7 @@ promptConfirm s = do
   when (x /= ("" :: Text) && x /= ("Y" :: Text)) $ throwM InterruptedException
 
 
-resolveTarget :: (MonadIO m, MonadThrow m, Functor f, MonadFree f m, DatabaseF' :<: f, LoggerF :<: f)
+resolveTarget :: (MonadIO m, MonadThrow m, Functor f, MonadFree f m, DatabaseF' :<: f)
               => SafeGuard -> Maybe Core.FeedRef -> m [FeedID]
 resolveTarget s Nothing = do
   result <- keys <$> Database.fetchAll FeedTable
