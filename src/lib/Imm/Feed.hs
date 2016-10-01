@@ -36,15 +36,15 @@ data FeedElement = RssElement RssItem | AtomElement AtomEntry
 -- * Generic getters
 
 getElements :: Feed -> [FeedElement]
-getElements (Rss doc) = map RssElement $ channelItems doc
+getElements (Rss doc)   = map RssElement $ channelItems doc
 getElements (Atom feed) = map AtomElement $ feedEntries feed
 
 getDate :: FeedElement -> Maybe UTCTime
-getDate (RssElement item) = itemPubDate item
+getDate (RssElement item)   = itemPubDate item
 getDate (AtomElement entry) = Just $ entryUpdated entry
 
 getTitle :: FeedElement -> Text
-getTitle (RssElement item) = itemTitle item
+getTitle (RssElement item)   = itemTitle item
 getTitle (AtomElement entry) = show $ prettyAtomText $ entryTitle entry
 
 getHashes :: FeedElement -> [Int]

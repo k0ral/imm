@@ -48,7 +48,6 @@ parameters mode main = baseParameters
   where
     main' (Left e)  = hPutStrLn stderr e
     main' (Right x) = main x
-        -- logDebugN . ("Dynamic reconfiguration paths:\n" ++) =<< describePaths
 
 baseParameters :: Params (Either Text a)
 baseParameters = defaultParams

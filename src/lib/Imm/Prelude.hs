@@ -105,7 +105,7 @@ interpret p eval program = do
   let a = extract eval
   b <- runFreeT program
   case b of
-    Pure x -> p a x
+    Pure x  -> p a x
     Free gs -> pairM (interpret p) (unwrap eval) gs
 
 -- * Shortcuts

@@ -64,32 +64,32 @@ prettyLink l = withAtomURI prettyURI $ linkHref l
 
 prettyAtomText :: AtomText -> Doc
 prettyAtomText (AtomPlainText _ t) = text $ fromText t
-prettyAtomText (AtomXHTMLText t) = text $ fromText t
+prettyAtomText (AtomXHTMLText t)   = text $ fromText t
 
 prettyEntry :: AtomEntry -> Doc
-prettyEntry e = text "Entry:" <+> prettyAtomText (entryTitle e) <++> indent 4
-  (          text "By" <+> equals <+> list (prettyPerson <$> entryAuthors e)
-  <++> text "Updated" <+> equals <+> prettyTime (entryUpdated e)
-  <++> text "Links" <+> equals <+> list (prettyLink <$> entryLinks e)
+prettyEntry e = "Entry:" <+> prettyAtomText (entryTitle e) <++> indent 4
+  (         "By" <+> equals <+> list (prettyPerson <$> entryAuthors e)
+  <++> "Updated" <+> equals <+> prettyTime (entryUpdated e)
+  <++> "Links"   <+> equals <+> list (prettyLink <$> entryLinks e)
   -- , "   Item Body:   " ++ (Imm.Mail.getItemContent item),
   )
 
 prettyItem :: RssItem -> Doc
-prettyItem i = text "Item:" <+> text (fromText $ itemTitle i) <++> indent 4
-  (          text "By" <+> equals <+> text (fromText $ itemAuthor i)
-  <++> text "Updated" <+> equals <+> fromMaybe (text "<empty>") (prettyTime <$> itemPubDate i)
-  <++> text "Link" <+> equals <+> fromMaybe (text "<empty>") (withRssURI prettyURI <$> itemLink i)
+prettyItem i = "Item:" <+> text (fromText $ itemTitle i) <++> indent 4
+  (         "By" <+> equals <+> text (fromText $ itemAuthor i)
+  <++> "Updated" <+> equals <+> fromMaybe "<empty>" (prettyTime <$> itemPubDate i)
+  <++> "Link"    <+> equals <+> fromMaybe "<empty>" (withRssURI prettyURI <$> itemLink i)
   )
 
 prettyURI :: URIRef a -> Doc
 prettyURI uri = text $ fromText $ decodeUtf8 $ serializeURIRef' uri
 
 prettyGuid :: RssGuid -> Doc
-prettyGuid (GuidText t) = text $ fromText t
+prettyGuid (GuidText t)         = text $ fromText t
 prettyGuid (GuidUri (RssURI u)) = prettyURI u
 
 prettyAtomContent :: AtomContent -> Doc
-prettyAtomContent (AtomContentInlineText _ t) = text $ fromText t
-prettyAtomContent (AtomContentInlineXHTML t) = text $ fromText t
+prettyAtomContent (AtomContentInlineText _ t)  = text $ fromText t
+prettyAtomContent (AtomContentInlineXHTML t)   = text $ fromText t
 prettyAtomContent (AtomContentInlineOther _ t) = text $ fromText t
-prettyAtomContent (AtomContentOutOfLine _ u) = withAtomURI prettyURI u
+prettyAtomContent (AtomContentOutOfLine _ u)   = withAtomURI prettyURI u

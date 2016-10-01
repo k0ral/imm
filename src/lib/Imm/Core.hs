@@ -110,7 +110,7 @@ checkOne feedID@(FeedID uri) = do
   logDebug . show . vsep $ either (map prettyEntry . feedEntries) (map prettyItem . channelItems) feed
   status <- Database.getStatus feedID
 
-  return . length $ filter (unread status) dates
+  return $ length $ filter (unread status) dates
   where unread (LastUpdate t1) t2 = t2 > t1
         unread _ _                = True
 

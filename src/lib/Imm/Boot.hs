@@ -121,7 +121,7 @@ promptConfirm s = do
   hPut stdout $ s <> " Confirm [Y/n] "
   io $ hFlush stdout
   x <- getLine
-  when (x /= ("" :: Text) && x /= ("Y" :: Text)) $ throwM InterruptedException
+  unless (null x || x == ("Y" :: Text)) $ throwM InterruptedException
 
 
 resolveTarget :: (MonadIO m, MonadThrow m, Functor f, MonadFree f m, DatabaseF' :<: f)

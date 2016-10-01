@@ -35,16 +35,16 @@ deriving instance Eq Command
 deriving instance Show Command
 
 instance Pretty Command where
-  pretty (Check f) = text "Check feed(s):" <+> pretty f
-  pretty Import = text "Import feeds"
-  pretty (Read f) = text "Mark feed(s) as read:" <+> pretty f
-  pretty Rebuild = text "Rebuild configuration"
-  pretty (Unread f) = text "Mark feed(s) as unread:" <+> pretty f
-  pretty (Run f) = text "Download new entries from feed(s):" <+> pretty f
-  pretty (Show f) = text "Show status for feed(s):" <+> pretty f
-  pretty ShowVersion = text "Show program version"
-  pretty (Subscribe f _) = text "Subscribe to feed:" <+> prettyURI f
-  pretty (Unsubscribe f) = text "Unsubscribe from feed(s):" <+> pretty f
+  pretty (Check f)       = "Check feed(s):" <+> pretty f
+  pretty Import          = "Import feeds"
+  pretty (Read f)        = "Mark feed(s) as read:" <+> pretty f
+  pretty Rebuild         = "Rebuild configuration"
+  pretty (Unread f)      = "Mark feed(s) as unread:" <+> pretty f
+  pretty (Run f)         = "Download new entries from feed(s):" <+> pretty f
+  pretty (Show f)        = "Show status for feed(s):" <+> pretty f
+  pretty ShowVersion     = "Show program version"
+  pretty (Subscribe f _) = "Subscribe to feed:" <+> prettyURI f
+  pretty (Unsubscribe f) = "Unsubscribe from feed(s):" <+> pretty f
 
 defaultCommand :: Command
 defaultCommand = Show Nothing
