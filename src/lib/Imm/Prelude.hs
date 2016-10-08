@@ -16,9 +16,9 @@ module Imm.Prelude (module Imm.Prelude, module X) where
 import           Control.Applicative             as X
 import           Control.Comonad
 import           Control.Comonad.Cofree
+import           Control.Exception.Safe          as X
 import           Control.Monad                   as X (MonadPlus (..), unless,
                                                        void, when)
-import           Control.Monad.Catch             as X
 import           Control.Monad.IO.Class          as X
 import           Control.Monad.Trans.Free        (FreeF (..), FreeT (..))
 
@@ -27,6 +27,7 @@ import qualified Data.ByteString                 as B (ByteString ())
 import qualified Data.ByteString.Lazy            as LB (ByteString ())
 import           Data.Comp.Ops                   as X
 import           Data.Containers                 as X
+import           Data.Either                     as X
 import           Data.Foldable                   as X (forM_)
 import           Data.Functor.Identity
 import           Data.IOData                     as X

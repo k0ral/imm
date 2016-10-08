@@ -83,7 +83,7 @@ realMain (command, logLevel, colorizeLogs, interpreter) = void $ interpret (\_ b
   logDebug $ "Executing: " <> pretty command
   logDebug . ("Using database:" <++>) . indent 2 =<< describeDatabase FeedTable
 
-  handleAll (logError . fromString . displayException) $ case command of
+  handleAny (logError . textual . displayException) $ case command of
     Check t        -> Core.check            =<< resolveTarget ByPassConfirmation t
     Import         -> Core.importOPML
     Read t         -> mapM_ Database.markAsRead   =<< resolveTarget AskConfirmation t

@@ -62,7 +62,7 @@ mkCoDatabase t = CoDatabaseF coDescribe coFetch coFetchAll coUpdate coInsert coD
     (cache, t') <- coFetchAll
     let result = fmap (Map.filterWithKey (\uri _ -> member uri $ Set.fromList keys)) cache
     return (result, t')
-  coFetchAll = handleAll (\e -> return (Left e, t)) $ do
+  coFetchAll = handleAny (\e -> return (Left e, t)) $ do
     t'@(JsonFileDatabase _ cache _) <- loadInCache t
     return (Right cache, t')
   coUpdate key f = exec (\a -> update a key f)
@@ -70,7 +70,7 @@ mkCoDatabase t = CoDatabaseF coDescribe coFetch coFetchAll coUpdate coInsert coD
   coDelete keys = exec (`delete` keys)
   coPurge = exec purge
   coCommit = exec commit
-  exec f = handleAll (\e -> return (Left e, t)) $ (Right (),) <$> f t
+  exec f = handleAny (\e -> return (Left e, t)) $ (Right (),) <$> f t
 
 
 -- * Low-level implementation

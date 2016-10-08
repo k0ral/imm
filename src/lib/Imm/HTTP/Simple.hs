@@ -21,7 +21,7 @@ import           URI.ByteString
 -- | Interpreter for 'HttpClientF'
 mkCoHttpClient :: (MonadIO m, MonadCatch m) => Manager -> CoHttpClientF m Manager
 mkCoHttpClient manager = CoHttpClientF coGet where
-  coGet uri = handleAll (\e -> return (Left e, manager)) $ do
+  coGet uri = handleAny (\e -> return (Left e, manager)) $ do
     result <- httpGet manager uri
     return (Right result, manager)
 
