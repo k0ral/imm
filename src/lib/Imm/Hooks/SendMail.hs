@@ -93,8 +93,7 @@ defaultFormatFrom _ _ = Address (Just "Unknown") ""
 
 -- | Fill mail subject with the element title
 defaultFormatSubject :: Feed -> FeedElement -> Text
-defaultFormatSubject _ (RssElement item) = itemTitle item
-defaultFormatSubject _ (AtomElement entry) = show . prettyAtomText $ entryTitle entry
+defaultFormatSubject _ element = getTitle element
 
 -- | Fill mail body with:
 --

@@ -113,9 +113,9 @@ mkCoImm (coHttpClient, a) (coDatabase, b) (coLogger, c) (coHooks, d) =
 -- * Util
 
 data SafeGuard = AskConfirmation | ByPassConfirmation
-  deriving(Eq, Show)
+  deriving(Eq, Read, Show)
 
-data InterruptedException = InterruptedException deriving(Eq, Show)
+data InterruptedException = InterruptedException deriving(Eq, Read, Show)
 instance Exception InterruptedException where
   displayException _ = "Process interrupted"
 

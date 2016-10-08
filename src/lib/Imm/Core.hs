@@ -192,7 +192,7 @@ entryTableToBox t = tableByColumns $ Rainbox.intersperse sep $ fromList [col1, c
   col2 = fromList $ cell "CATEGORY" : map (cell . entryCategory) result
   col3 = fromList $ cell "LAST CHECK" : map (cell . format . entryLastCheck) result
   col4 = fromList $ cell "FEED URI" : map (cell . show . prettyURI . entryURI) result
-  format = maybe "<never>" show
+  format = maybe "<never>" (fromString . formatTime defaultTimeLocale "%F %R")
   sep = fromList [separator mempty 1]
 
 

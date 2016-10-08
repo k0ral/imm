@@ -35,6 +35,10 @@ data FeedElement = RssElement RssItem | AtomElement AtomEntry
 
 -- * Generic getters
 
+getFeedTitle :: Feed -> Text
+getFeedTitle (Rss doc)   = channelTitle doc
+getFeedTitle (Atom feed) = show $ prettyAtomText $ feedTitle feed
+
 getElements :: Feed -> [FeedElement]
 getElements (Rss doc)   = map RssElement $ channelItems doc
 getElements (Atom feed) = map AtomElement $ feedEntries feed
