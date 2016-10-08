@@ -74,6 +74,7 @@ showFeed :: (MonadIO m, LoggerF :<: f, MonadThrow m, Functor f, MonadFree f m, D
          => [FeedID] -> m ()
 showFeed feedIDs = do
   feeds <- Database.fetchList FeedTable feedIDs
+  flushLogs
   if null feeds then logWarning "No subscription" else putBox $ entryTableToBox feeds
 
 -- | Register the given feed URI in database

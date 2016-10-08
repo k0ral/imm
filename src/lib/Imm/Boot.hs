@@ -96,8 +96,7 @@ realMain (command, logLevel, colorizeLogs, interpreter) = void $ interpret (\_ b
     _              -> return ()
 
   Database.commit FeedTable
-
-  return ()
+  flushLogs
 
 -- * DSL/interpreter model
 
