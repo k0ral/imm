@@ -98,19 +98,19 @@ type CoDatabaseF' = CoDatabaseF FeedTable
 register :: (MonadThrow m, LoggerF :<: f, DatabaseF' :<: f, Functor f, MonadFree f m)
           => FeedID -> Text -> m ()
 register feedID category = do
-  logInfo $ "Registering feed " <> show (brackets $ pretty feedID) <> "..."
+  logInfo $ "Registering feed " <> magenta (pretty feedID) <> "..."
   insert FeedTable feedID $ newDatabaseEntry feedID category
 
 getStatus :: (DatabaseF' :<: f, Functor f, MonadFree f m, MonadCatch m)
           => FeedID -> m FeedStatus
-getStatus feedID = handleAll (\_ -> return Unknown) $ do
-  result <- fmap Just (fetch FeedTable feedID) `catchAll` (\_ -> return Nothing)
+getStatus feedID = handleAny (\_ -> return Unknown) $ do
+  result <- fmap Just (fetch FeedTable feedID) `catchAny` (\_ -> return Nothing)
   return $ maybe New LastUpdate $ entryLastCheck =<< result
 
 addReadHash :: (DatabaseF' :<: f, Functor f, MonadFree f m, MonadThrow m, LoggerF :<: f)
                => FeedID -> Int -> m ()
 addReadHash feedID hash = do
-  logDebug $ "Adding read hash: " <> show hash <> "..."
+  logDebug $ "Adding read hash: " <> pretty hash <> "..."
   update FeedTable feedID f
   where f a = a { entryReadHashes = insertSet hash $ entryReadHashes a }
 
@@ -118,7 +118,7 @@ addReadHash feedID hash = do
 markAsRead :: (MonadIO m, DatabaseF' :<: f, Functor f, MonadFree f m, MonadThrow m, LoggerF :<: f)
            => FeedID -> m ()
 markAsRead feedID = do
-  logInfo $ "Marking feed as read: " <> show (pretty feedID) <> "..."
+  logDebug $ "Marking feed as read: " <> pretty feedID <> "..."
   currentTime <- io Time.getCurrentTime
   update FeedTable feedID (f currentTime)
   where f time a = a { entryLastCheck = Just time }

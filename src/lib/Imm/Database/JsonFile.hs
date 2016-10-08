@@ -56,7 +56,8 @@ instance Exception JsonException where
 -- | Interpreter for 'DatabaseF'
 mkCoDatabase :: (Table t, FromJSON (Key t), FromJSON (Entry t), ToJSON (Key t), ToJSON (Entry t), MonadIO m, MonadCatch m)
              => JsonFileDatabase t -> CoDatabaseF t m (JsonFileDatabase t)
-mkCoDatabase t = CoDatabaseF coFetch coFetchAll coUpdate coInsert coDelete coPurge coCommit where
+mkCoDatabase t = CoDatabaseF coDescribe coFetch coFetchAll coUpdate coInsert coDelete coPurge coCommit where
+  coDescribe = return (pretty t, t)
   coFetch keys = do
     (cache, t') <- coFetchAll
     let result = fmap (Map.filterWithKey (\uri _ -> member uri $ Set.fromList keys)) cache

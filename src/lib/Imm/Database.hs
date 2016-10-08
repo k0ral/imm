@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE StandaloneDeriving    #-}
@@ -17,6 +18,8 @@ import           Imm.Logger
 import           Imm.Prelude
 
 import           Control.Monad.Trans.Free
+
+import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>), (<>))
 -- }}}
 
 -- * DSL/interpreter
@@ -29,7 +32,8 @@ class (Ord (Key t), Show (Key t), Show (Entry t), Typeable t, Show t, Pretty t, 
 
 -- | Database DSL
 data DatabaseF t next
-  = FetchList t [Key t] (Either SomeException (Map (Key t) (Entry t)) -> next)
+  = Describe t (Doc -> next)
+  | FetchList t [Key t] (Either SomeException (Map (Key t) (Entry t)) -> next)
   | FetchAll t (Either SomeException (Map (Key t) (Entry t)) -> next)
   | Update t (Key t) (Entry t -> Entry t) (Either SomeException () -> next)
   | InsertList t [(Key t, Entry t)] (Either SomeException () -> next)
@@ -40,7 +44,8 @@ data DatabaseF t next
 
 -- | Database interpreter
 data CoDatabaseF t m a = CoDatabaseF
-  { fetchListH  :: [Key t] -> m (Either SomeException (Map (Key t) (Entry t)), a)
+  { describeH   :: m (Doc, a)
+  , fetchListH  :: [Key t] -> m (Either SomeException (Map (Key t) (Entry t)), a)
   , fetchAllH   :: m (Either SomeException (Map (Key t) (Entry t)), a)
   , updateH     :: Key t -> (Entry t -> Entry t) -> m (Either SomeException (), a)
   , insertListH :: [(Key t, Entry t)] -> m (Either SomeException (), a)
@@ -51,26 +56,29 @@ data CoDatabaseF t m a = CoDatabaseF
 
 instance Monad m => PairingM (CoDatabaseF t m) (DatabaseF t) m where
   -- pairM :: (a -> b -> m r) -> f a -> g b -> m r
-  pairM p (CoDatabaseF fl _ _ _ _ _ _) (FetchList _ key next) = do
-    (result, a) <- fl key
+  pairM p CoDatabaseF{describeH} (Describe _ next) = do
+    (result, a) <- describeH
     p a $ next result
-  pairM p (CoDatabaseF _ fa _ _ _ _ _) (FetchAll _ next) = do
-    (result, a) <- fa
+  pairM p CoDatabaseF{fetchListH} (FetchList _ key next) = do
+    (result, a) <- fetchListH key
     p a $ next result
-  pairM p (CoDatabaseF _ _ u _ _ _ _) (Update _ key f next) = do
-    (result, a) <- u key f
+  pairM p CoDatabaseF{fetchAllH} (FetchAll _ next) = do
+    (result, a) <- fetchAllH
     p a $ next result
-  pairM p (CoDatabaseF _ _ _ i _ _ _) (InsertList _ rows next) = do
-    (result, a) <- i rows
+  pairM p CoDatabaseF{updateH} (Update _ key f next) = do
+    (result, a) <- updateH key f
     p a $ next result
-  pairM p (CoDatabaseF _ _ _ _ d _ _) (DeleteList _ k next) = do
-    (result, a) <- d k
+  pairM p CoDatabaseF{insertListH} (InsertList _ rows next) = do
+    (result, a) <- insertListH rows
     p a $ next result
-  pairM p (CoDatabaseF _ _ _ _ _ p' _) (Purge _ next) = do
-    (result, a) <- p'
+  pairM p CoDatabaseF{deleteListH} (DeleteList _ k next) = do
+    (result, a) <- deleteListH k
     p a $ next result
-  pairM p (CoDatabaseF _ _ _ _ _ _ c) (Commit _ next) = do
-    (result, a) <- c
+  pairM p CoDatabaseF{purgeH} (Purge _ next) = do
+    (result, a) <- purgeH
+    p a $ next result
+  pairM p CoDatabaseF{commitH} (Commit _ next) = do
+    (result, a) <- commitH
     p a $ next result
 
 
@@ -103,6 +111,10 @@ instance (Pretty t, Pretty (Key t)) => Pretty (DatabaseException t) where
 
 -- * Primitives
 
+describeDatabase :: (Functor f, MonadFree f m, DatabaseF t :<: f)
+                 => t -> m Doc
+describeDatabase t = liftF . inj $ Describe t id
+
 fetch :: (Functor f, MonadFree f m, DatabaseF t :<: f, Table t, MonadThrow m)
       => t -> Key t -> m (Entry t)
 fetch t k = do
@@ -134,7 +146,7 @@ insert t k v = insertList t [(k, v)]
 insertList :: (MonadThrow m, Functor f, MonadFree f m, LoggerF :<: f, DatabaseF t :<: f)
            => t -> [(Key t, Entry t)] -> m ()
 insertList t i = do
-  logInfo $ "Inserting " <> show (length i) <> " entrie(s)..."
+  logInfo $ "Inserting " <> yellow (pretty $ length i) <> " entries..."
   result <- liftF . inj $ InsertList t i id
   liftE result
 
@@ -144,7 +156,7 @@ delete t k = deleteList t [k]
 deleteList :: (MonadThrow m, Functor f, MonadFree f m, LoggerF :<: f, DatabaseF t :<: f)
            => t -> [Key t] -> m ()
 deleteList t k = do
-  logInfo $ "Deleting " <> show (length k) <> " entrie(s)..."
+  logInfo $ "Deleting " <> yellow (pretty $ length k) <> " entries..."
   result <- liftF . inj $ DeleteList t k id
   liftE result
 

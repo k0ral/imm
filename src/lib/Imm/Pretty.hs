@@ -3,11 +3,12 @@
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PartialTypeSignatures #-}
-module Imm.Pretty where
+module Imm.Pretty (module Imm.Pretty, module X) where
 
 -- {{{ Imports
 import           Imm.Prelude
 
+import           Data.Monoid.Textual
 import           Data.NonNull
 import           Data.Time
 import           Data.Tree
@@ -15,11 +16,15 @@ import           Data.Tree
 import           Text.Atom.Types              as Atom
 -- import           Text.OPML.Types              as OPML hiding (text)
 -- import qualified Text.OPML.Types              as OPML
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>), (<>))
+import           Text.PrettyPrint.ANSI.Leijen as X hiding ((<$>), (</>), (<>))
 import           Text.RSS.Types               as RSS
 
 import           URI.ByteString
 -- }}}
+
+-- | Generalized 'text'
+textual :: TextualMonoid t => t -> Doc
+textual = text . toString (const "?")
 
 prettyTree :: (Pretty a) => Tree a -> Doc
 prettyTree (Node n s) = pretty n <++> indent 2 (vsep $ prettyTree <$> s)

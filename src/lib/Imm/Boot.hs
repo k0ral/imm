@@ -20,6 +20,7 @@ import Imm.Hooks
 import Imm.Logger as Logger
 import Imm.Options as Options hiding(logLevel)
 import Imm.Prelude
+import Imm.Pretty
 
 import Control.Comonad.Cofree
 import Control.Monad.Trans.Free
@@ -70,14 +71,17 @@ imm :: (a -> CoHttpClientF IO a, a)  -- ^ HTTP client interpreter (cf "Imm.HTTP"
     -> IO ()
 imm coHttpClient coDatabase coLogger coHooks = void $ do
   options <- parseOptions
-  Dyre.wrap (optionDyreMode options) realMain (optionCommand options, optionLogLevel options, coiter next start)
+  Dyre.wrap (optionDyreMode options) realMain (optionCommand options, optionLogLevel options, optionColorizeLogs options, coiter next start)
   where (next, start) = mkCoImm coHttpClient coDatabase coLogger coHooks
 
 realMain :: (MonadIO m, PairingM (CoImmF m) ImmF m, MonadCatch m)
-         => (Command, LogLevel, Cofree (CoImmF m) a) -> m ()
-realMain (command, logLevel, interpreter) = void $ interpret (\_ b -> return b) interpreter $ do
+         => (Command, LogLevel, Bool, Cofree (CoImmF m) a) -> m ()
+realMain (command, logLevel, colorizeLogs, interpreter) = void $ interpret (\_ b -> return b) interpreter $ do
+  setColorizeLogs colorizeLogs
   setLogLevel logLevel
-  logDebug $ "Executing: " <> show (pretty command)
+  logDebug . ("Dynamic reconfiguration settings:" <++>) . indent 2 =<< Dyre.describePaths
+  logDebug $ "Executing: " <> pretty command
+  logDebug . ("Using database:" <++>) . indent 2 =<< describeDatabase FeedTable
 
   handleAll (logError . fromString . displayException) $ case command of
     Check t        -> Core.check            =<< resolveTarget ByPassConfirmation t

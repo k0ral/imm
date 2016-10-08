@@ -43,6 +43,6 @@ instance Monad m => PairingM (CoHttpClientF m) HttpClientF m where
 get :: (MonadFree f m, Functor f, HttpClientF :<: f, LoggerF :<: f, MonadThrow m)
     => URI -> m LByteString
 get uri = do
-  logDebug $ "Fetching " <> show (prettyURI uri)
+  logDebug $ "Fetching " <> prettyURI uri
   result <- liftF . inj $ Get uri id
   liftE result

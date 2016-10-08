@@ -37,16 +37,16 @@ import Control.Monad.Free
 import qualified Data.ByteString              as ByteString
 import Data.Conduit
 import Data.Conduit.Combinators as Conduit (stdin)
-import Data.Conduit.Parser
 import qualified Data.Map as Map
 import Data.NonNull
 import Data.Set (Set)
+import Data.Time.Format
 import Data.Tree
 import           Data.Version
 
 import qualified Paths_imm                      as Package
 
-import Rainbow hiding((<>))
+import Rainbow (chunksToByteStrings, toByteStringsColors256, chunk)
 import Rainbox
 
 import           System.Info
@@ -85,12 +85,13 @@ subscribe uri category = Database.register (FeedID uri) $ fromMaybe "default" ca
 check :: (MonadIO m, MonadCatch m, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
       => [FeedID] -> m ()
 check feedIDs = do
-  results <- forM (zip ([1..] :: [Int]) feedIDs) $ \(i, f) -> do
-    logInfo $ "Checking entry " <> show i <> "/" <> show total <> "..."
-    try $ checkOne f
+  results <- forM (zip ([1..] :: [Int]) feedIDs) $ \(i, feedID) -> do
+    logInfo $ brackets (fill width (bold $ cyan $ pretty i) <+> "/" <+> pretty total) <+> "Checking" <+> magenta (pretty feedID) <> "..."
+    try $ checkOne feedID
 
   putBox $ statusTableToBox $ mapFromList $ zip feedIDs results
-  where total = length feedIDs
+  where width = length (show total :: String)
+        total = length feedIDs
 
 checkOne :: (MonadIO m, MonadCatch m, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
          => FeedID -> m Int
@@ -99,15 +100,15 @@ checkOne feedID@(FeedID uri) = do
   feed <- runConduit $ parseLBS def body =$= runConduitParser ((Left <$> atomFeed) <|> (Right <$> rssDocument))
 
   case feed of
-    Left _ -> logDebug $ "Parsed Atom feed: " <> show (pretty feedID)
-    Right _ -> logDebug $ "Parsed RSS feed: " <> show (pretty feedID)
+    Left _ -> logDebug $ "Parsed Atom feed: " <> pretty feedID
+    Right _ -> logDebug $ "Parsed RSS feed: " <> pretty feedID
 
   let dates = either
               (map entryUpdated . feedEntries)
               (mapMaybe itemPubDate . channelItems)
               feed
 
-  logDebug . show . vsep $ either (map prettyEntry . feedEntries) (map prettyItem . channelItems) feed
+  logDebug $ vsep $ either (map prettyEntry . feedEntries) (map prettyItem . channelItems) feed
   status <- Database.getStatus feedID
 
   return $ length $ filter (unread status) dates
@@ -117,12 +118,31 @@ checkOne feedID@(FeedID uri) = do
 
 run :: (MonadIO m, MonadCatch m, HooksF :<: f, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
     => [FeedID] -> m ()
-run feedIDs = forM_ feedIDs $ \feedID@(FeedID uri) -> do
+run feedIDs = do
+  results <- forM (zip ([1..] :: [Int]) feedIDs) $ \(i, feedID) -> do
+    logInfo $ brackets (fill width (bold $ cyan $ pretty i) <+> "/" <+> pretty total) <+> "Processing" <+> magenta (pretty feedID) <> "..."
+    result <- tryAny $ runOne feedID
+    return $ bimap (feedID,) (feedID,) result
+
+  flushLogs
+
+  let (failures, successes) = partitionEithers results
+
+  unless (null failures) $ logError $ bold (pretty $ length failures) <+> "feeds in error"
+  forM_ failures $ \(feedID, e) ->
+    logError $ indent 2 (pretty feedID <++> indent 2 (pretty $ displayException e))
+
+  where width = length (show total :: String)
+        total = length feedIDs
+
+runOne :: (MonadIO m, MonadCatch m, HooksF :<: f, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
+    => FeedID -> m ()
+runOne feedID@(FeedID uri) = do
   body <- HTTP.get uri
   feed <- runConduit $ parseLBS def body =$= runConduitParser ((Atom <$> atomFeed) <|> (Rss <$> rssDocument))
   unreadElements <- filterM (fmap not . isRead feedID) $ getElements feed
 
-  logInfo $ show (length unreadElements) <> " unread element(s) for " <> show (pretty feedID)
+  unless (null unreadElements) $ logInfo $ indent 2 $ green (pretty $ length unreadElements) <+> "unread element(s)"
 
   forM_ unreadElements $ \element -> do
     onNewElement feed element

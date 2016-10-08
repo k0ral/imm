@@ -12,6 +12,7 @@ module Imm.Hooks where
 import           Imm.Feed
 import           Imm.Logger
 import           Imm.Prelude
+import           Imm.Pretty
 
 import           Control.Monad.Free.Class
 -- }}}
@@ -38,5 +39,5 @@ instance Monad m => PairingM (CoHooksF m) HooksF m where
 
 onNewElement :: (Functor f, MonadFree f m, LoggerF :<: f, HooksF :<: f) => Feed -> FeedElement -> m ()
 onNewElement feed element = do
-  logDebug $ "Unread element: " <> getTitle element
+  logDebug $ "Unread element:" <+> textual (getTitle element)
   liftF . inj $ OnNewElement feed element ()

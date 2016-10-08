@@ -51,14 +51,15 @@ defaultCommand = Show Nothing
 
 -- | Available commandline options.
 data CliOptions = CliOptions
-  { optionCommand  :: Command
-  , optionDyreMode :: Dyre.Mode
-  , optionLogLevel :: LogLevel
+  { optionCommand      :: Command
+  , optionDyreMode     :: Dyre.Mode
+  , optionLogLevel     :: LogLevel
+  , optionColorizeLogs :: Bool
   }
 
 -- deriving instance Eq CliOptions
 defaultOptions :: CliOptions
-defaultOptions = CliOptions defaultCommand Dyre.defaultMode Info
+defaultOptions = CliOptions defaultCommand Dyre.defaultMode Info True
 
 -- instance Pretty CliOptions where
 --     pretty opts = text "ACTION" <> equals <>  $ opts^.command_
@@ -76,6 +77,7 @@ cliOptions = CliOptions
   <$> commands
   <*> (vanillaFlag <|> forceReconfFlag <|> denyReconfFlag <|> pure Dyre.defaultMode)
   <*> (verboseFlag <|> quietFlag <|> logLevel <|> pure Info)
+  <*> (colorizeLogs <|> pure True)
 
 
 commands :: Parser Command
@@ -106,11 +108,14 @@ dyreMasterBinary :: Parser String
 dyreMasterBinary = strOption $ long "dyre-master-binary" <> metavar "PATH" <> hidden <> internal <> help "Internal flag used for dynamic reconfiguration."
 -- }}}
 
--- {{{ Log level options
+-- {{{ Log options
 verboseFlag, quietFlag, logLevel :: Parser LogLevel
 verboseFlag = flag' Logger.Debug $ long "verbose" <> short 'v' <> help "Set log level to DEBUG."
 quietFlag   = flag' Logger.Error $ long "quiet" <> short 'q' <> help "Set log level to ERROR."
 logLevel    = option auto $ long "log-level" <> short 'l' <> metavar "LOG-LEVEL" <> value Info <> completeWith ["Debug", "Info", "Warning", "Error"] <> help "Set log level. Available values: Debug, Info, Warning, Error."
+
+colorizeLogs :: Parser Bool
+colorizeLogs = flag' False $ long "nocolor" <> help "Disable log colorisation."
 -- }}}
 
 -- {{{ Other options

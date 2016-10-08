@@ -6,6 +6,7 @@
 module Imm.Dyre
   ( Mode(..)
   , defaultMode
+  , describePaths
   , wrap
   , recompile
   ) where
@@ -16,6 +17,8 @@ import           Imm.Prelude
 import           Config.Dyre
 import           Config.Dyre.Compile
 import           Config.Dyre.Paths
+
+import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 -- }}}
 
 -- | How dynamic reconfiguration process should behave.
@@ -28,15 +31,15 @@ defaultMode = Normal
 
 
 -- | Describe the paths used for dynamic reconfiguration
-describePaths :: (IsString t, MonadIO m) => m t
+describePaths :: (MonadIO m) => m Doc
 describePaths = io $ do
   (a, b, c, d, e) <- getPaths baseParameters
-  return $ fromString $ unlines
-    [ "Current binary:  " <> a
-    , "Custom binary:   " <> b
-    , "Config file:     " <> c
-    , "Cache directory: " <> d
-    , "Lib directory:   " <> e
+  return $ vsep
+    [ "Current binary" <+> equals <+> magenta (fromString a)
+    , "Custom binary" <+> equals <+> magenta (fromString b)
+    , "Config file" <+> equals <+> magenta (fromString c)
+    , "Cache directory" <+> equals <+> magenta (fromString d)
+    , "Lib directory" <+> equals <+> magenta (fromString e)
     ]
 
 -- | Dynamic reconfiguration settings
