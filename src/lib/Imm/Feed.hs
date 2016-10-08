@@ -56,4 +56,4 @@ getHashes (RssElement item) = map (hash . (show :: Doc -> String) . prettyGuid) 
   <> map ((hash :: String -> Int) . show . withRssURI prettyURI) (maybeToList $ itemLink item)
   <> [hash $ itemTitle item]
   <> [hash $ itemDescription item]
-getHashes (AtomElement entry) = [hash $ toNullable $ entryId entry, (hash :: String -> Int) $ show $ prettyAtomText $ entryTitle entry]
+getHashes (AtomElement entry) = [hash $ entryId entry, (hash :: String -> Int) $ show $ prettyAtomText $ entryTitle entry]

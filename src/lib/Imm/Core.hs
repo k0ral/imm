@@ -98,7 +98,7 @@ checkOne :: (MonadIO m, MonadCatch m, LoggerF :<: f, Functor f, MonadFree f m, D
          => FeedID -> m Int
 checkOne feedID@(FeedID uri) = do
   body <- HTTP.get uri
-  feed <- runConduit $ parseLBS def body =$= runConduitParser ((Left <$> atomFeed) <|> (Right <$> rssDocument))
+  feed <- runConduit $ parseLBS def body =$= force "Invalid feed" ((fmap Left <$> atomFeed) `orE` (fmap Right <$> rssDocument))
 
   case feed of
     Left _ -> logDebug $ "Parsed Atom feed: " <> pretty feedID
@@ -140,7 +140,7 @@ runOne :: (MonadIO m, MonadCatch m, HooksF :<: f, LoggerF :<: f, Functor f, Mona
     => FeedID -> m ()
 runOne feedID@(FeedID uri) = do
   body <- HTTP.get uri
-  feed <- runConduit $ parseLBS def body =$= runConduitParser ((Atom <$> atomFeed) <|> (Rss <$> rssDocument))
+  feed <- runConduit $ parseLBS def body =$= force "Invalid feed" ((fmap Atom <$> atomFeed) `orE` (fmap Rss <$> rssDocument))
   unreadElements <- filterM (fmap not . isRead feedID) $ getElements feed
 
   unless (null unreadElements) $ logInfo $ indent 2 $ green (pretty $ length unreadElements) <+> "unread element(s)"
@@ -165,7 +165,7 @@ isRead feedID element = do
 -- | 'subscribe' to all feeds described by the OPML document provided in input (stdin)
 importOPML :: (MonadIO m, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, MonadCatch m) => m ()
 importOPML = do
-  opml <- runConduit $ Conduit.stdin =$= XML.parseBytes def =$= runConduitParser parseOpml
+  opml <- runConduit $ Conduit.stdin =$= XML.parseBytes def =$= force "Invalid OPML" parseOpml
   forM_ (opmlOutlines opml) $ importOPML' mempty
 
 importOPML' :: (MonadIO m, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, MonadCatch m)
