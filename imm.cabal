@@ -27,6 +27,7 @@ library
     Imm.Feed
     Imm.Hooks
     Imm.Hooks.SendMail
+    Imm.Hooks.WriteFile
     Imm.HTTP
     Imm.HTTP.Simple
     Imm.Logger
