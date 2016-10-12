@@ -132,7 +132,7 @@ uriReader :: ReadM URI
 uriReader = eitherReader $ first show . parseURI laxURIParserOptions . encodeUtf8 . fromString
 
 feedRefOption :: Parser FeedRef
-feedRefOption = fmap FeedRef $ (Left <$> argument auto (metavar "ID")) <|> (Right <$> argument uriReader (metavar "URI"))
+feedRefOption = argument ((ByUID <$> auto) <|> (ByURI <$> uriReader)) $ metavar "TARGET"
 
 uriArgument :: String -> Parser URI
 uriArgument helpText = argument uriReader $ metavar "URI" <> help helpText

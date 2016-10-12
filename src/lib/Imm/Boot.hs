@@ -133,8 +133,8 @@ resolveTarget s Nothing = do
   result <- keys <$> Database.fetchAll FeedTable
   when (s == AskConfirmation) . promptConfirm $ "This will affect " <> show (length result) <> " feeds."
   return result
-resolveTarget _ (Just (FeedRef (Left i))) = do
+resolveTarget _ (Just (ByUID i)) = do
   result <- fst . (!! i) . mapToList <$> Database.fetchAll FeedTable
   -- logInfo $ "Target(s): " <> show (pretty result)
   return $ singleton result
-resolveTarget _ (Just (FeedRef (Right uri))) = return [FeedID uri]
+resolveTarget _ (Just (ByURI uri)) = return [FeedID uri]

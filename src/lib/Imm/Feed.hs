@@ -19,12 +19,12 @@ import           URI.ByteString
 -- * Types
 
 -- | Feed reference: either its URI, or its UID from database
-newtype FeedRef = FeedRef (Either Int URI)
+data FeedRef = ByUID Int | ByURI URI
   deriving(Eq, Show)
 
 instance Pretty FeedRef where
-  pretty (FeedRef (Left n))  = text "feed" <+> text (show n)
-  pretty (FeedRef (Right u)) = prettyURI u
+  pretty (ByUID n) = text "feed" <+> text (show n)
+  pretty (ByURI u) = prettyURI u
 
 data Feed = Rss RssDocument | Atom AtomFeed
   deriving(Eq, Show)
