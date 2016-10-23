@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds        #-}
+{-# LANGUAGE EmptyDataDecls         #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -25,21 +26,23 @@ import           Control.Monad.Trans.Free        (FreeF (..), FreeT (..))
 import           Data.Bifunctor                  as X
 import qualified Data.ByteString                 as B (ByteString ())
 import qualified Data.ByteString.Lazy            as LB (ByteString ())
-import           Data.Comp.Ops                   as X
 import           Data.Containers                 as X
 import           Data.Either                     as X
 import           Data.Foldable                   as X (forM_)
 import           Data.Functor.Identity
+import           Data.Functor.Product
+import           Data.Functor.Sum
 import           Data.IOData                     as X
 import           Data.Map                        as X (Map)
 import           Data.Maybe                      as X hiding (catMaybes)
-import           Data.Monoid                     as X
+import           Data.Monoid                     as X hiding (Product, Sum)
 import           Data.Monoid.Textual             as X (TextualMonoid (),
                                                        fromText)
 import           Data.MonoTraversable.Unprefixed as X hiding (forM_, mapM_)
 import           Data.Ord                        as X
 import           Data.Sequences                  as X
 import           Data.String                     as X (IsString (..))
+import           Data.Tagged
 import qualified Data.Text                       as T (Text ())
 import qualified Data.Text.Lazy                  as LT (Text ())
 import           Data.Traversable                as X (forM)
@@ -82,9 +85,42 @@ infixr 0 :::
 (>:) a b = (a, b)
 infixr 0 >:
 
-(*:*) :: (Functor f, Functor g) => (a -> f a) -> (b -> g b) -> (a, b) -> (f :*: g) (a, b)
-(*:*) f g (a,b) = ((,b) <$> f a) :*: ((a,) <$> g b)
+(*:*) :: (Functor f, Functor g) => (a -> f a) -> (b -> g b) -> (a, b) -> Product f g (a, b)
+(*:*) f g (a,b) = Pair ((,b) <$> f a) ((a,) <$> g b)
 infixr 0 *:*
+
+
+data HLeft
+data HRight
+data HId
+data HNo
+
+type family Contains a b where
+  Contains a a         = HId
+  Contains a (Sum a b) = HLeft
+  Contains a (Sum b c) = (HRight, Contains a c)
+  Contains a b         = HNo
+
+class Sub i sub sup where
+  inj' :: Tagged i (sub a -> sup a)
+
+instance Sub HId a a where
+  inj' = Tagged id
+
+instance Sub HLeft a (Sum a b) where
+  inj' = Tagged InL
+
+instance (Sub x f g) => Sub (HRight, x) f (Sum h g) where
+  inj' = Tagged $ InR . proxy inj' (Proxy :: Proxy x)
+
+
+-- | A constraint @f :<: g@ expresses that @f@ is subsumed by @g@,
+-- i.e. @f@ can be used to construct elements in @g@.
+class (Functor sub, Functor sup) => sub :<: sup where
+  inj :: sub a -> sup a
+
+instance (Functor f, Functor g, Sub (Contains f g) f g) => f :<: g where
+  inj = proxy inj' (Proxy :: Proxy (Contains f g))
 
 
 class (Monad m, Functor f, Functor g) => PairingM f g m | f -> g where
@@ -93,13 +129,13 @@ class (Monad m, Functor f, Functor g) => PairingM f g m | f -> g where
 instance (Monad m) => PairingM Identity Identity m where
   pairM f (Identity a) (Identity b) = f a b
 
-instance (PairingM f f' m, PairingM g g' m) => PairingM (f :+: g) (f' :*: g') m where
-  pairM p (Inl x) (a :*: _) = pairM p x a
-  pairM p (Inr x) (_ :*: b) = pairM p x b
+instance (PairingM f f' m, PairingM g g' m) => PairingM (Sum f g) (Product f' g') m where
+  pairM p (InL x) (Pair a _) = pairM p x a
+  pairM p (InR x) (Pair _ b) = pairM p x b
 
-instance (PairingM f f' m, PairingM g g' m) => PairingM (f :*: g) (f' :+: g') m where
-  pairM p (a :*: _) (Inl x) = pairM p a x
-  pairM p (_ :*: b) (Inr x) = pairM p b x
+instance (PairingM f f' m, PairingM g g' m) => PairingM (Product f g) (Sum f' g') m where
+  pairM p (Pair a _) (InL x) = pairM p a x
+  pairM p (Pair _ b) (InR x) = pairM p b x
 
 interpret :: (PairingM f g m) => (a -> b -> m r) -> Cofree f a -> FreeT g m b -> m r
 interpret p eval program = do

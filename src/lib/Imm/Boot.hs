@@ -25,6 +25,9 @@ import Imm.Pretty
 import Control.Comonad.Cofree
 import Control.Monad.Trans.Free
 
+import Data.Functor.Product
+import Data.Functor.Sum
+
 import System.IO (hFlush)
 -- }}}
 
@@ -100,8 +103,8 @@ realMain (command, logLevel, colorizeLogs, interpreter) = void $ interpret (\_ b
 
 -- * DSL/interpreter model
 
-type CoImmF m = CoHttpClientF m :*: CoDatabaseF' m :*: CoLoggerF m :*: CoHooksF m
-type ImmF = HttpClientF :+: DatabaseF' :+: LoggerF :+: HooksF
+type CoImmF m = Product (CoHttpClientF m) (Product (CoDatabaseF' m) (Product (CoLoggerF m) (CoHooksF m)))
+type ImmF = Sum HttpClientF (Sum DatabaseF' (Sum LoggerF HooksF))
 
 mkCoImm :: (Functor m)
         => (a -> CoHttpClientF m a, a) -> (b -> CoDatabaseF' m b, b) -> (c -> CoLoggerF m c, c) -> (d -> CoHooksF m d, d)
