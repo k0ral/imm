@@ -2,7 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators     #-}
--- | Hooks interpreter that writes a file for each unread element.
+-- | Hooks interpreter that writes a file for each element.
 module Imm.Hooks.WriteFile where
 
 -- {{{ Imports

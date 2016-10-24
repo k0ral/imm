@@ -1,7 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators     #-}
--- | Hooks interpreter that sends a mail via a SMTP server for each unread element
+-- | Hooks interpreter that sends a mail via a SMTP server for each element.
 -- You may want to consult "Network.HaskellNet.SMTP", "Network.HaskellNet.SMTP.SSL" and "Network.Mail.Mime" modules for additional information.
 --
 -- Here is an example configuration:

@@ -7,6 +7,22 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeOperators #-}
+-- |
+-- = Getting started
+--
+-- == Dynamic reconfiguration
+--
+-- This program is dynamically configured using the <https://hackage.haskell.org/package/dyre dyre> library.
+--
+-- You may want to check out <https://hackage.haskell.org/package/dyre/docs/Config-Dyre.html this documentation> to know how to get started.
+--
+-- Your personal configuration is located at @$XDG_CONFIG_HOME\/imm\/imm.hs@.
+--
+-- == Interpreter pattern
+--
+-- The behavior of this program can be customized through the interpreter pattern, implemented using free monads (for the DSL part) and cofree comonads (for the interpreter part).
+--
+-- The design is inspired from <http://dlaing.org/cofun/ Cofun with cofree monads>.
 module Imm.Boot (imm) where
 
 -- {{{ Imports
@@ -31,10 +47,8 @@ import Data.Functor.Sum
 import System.IO (hFlush)
 -- }}}
 
--- | Main function, meant to be used in your personal configuration file,
--- by default located at @$XDG_CONFIG_HOME\/imm\/imm.hs@.
---
--- For more information about the dynamic reconfiguration system, please consult "Config.Dyre".
+-- | Main function, meant to be used in your personal configuration file.
+-- Each argument is an interpreter functor along with an initial state.
 --
 -- Here is an example:
 --
@@ -47,8 +61,8 @@ import System.IO (hFlush)
 -- >
 -- > main :: IO ()
 -- > main = do
--- >   logger <- defaultLogger
--- >   manager <- defaultManager
+-- >   logger   <- defaultLogger
+-- >   manager  <- defaultManager
 -- >   database <- defaultDatabase
 -- >
 -- >   imm (mkCoHttpClient, manager) (mkCoDatabase, database) (mkCoLogger, logger) (mkCoHooks, sendmail)
