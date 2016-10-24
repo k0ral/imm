@@ -1,28 +1,61 @@
 # imm
 
-## In a nutshell
+*imm* is a tool to execute arbitrary actions for each new element from RSS/Atom feeds (e.g. sending a mail, or writing a file).
 
-*imm* is a tool that does only one thing: it retrieves a list of RSS/Atom feeds, and executes arbitrary actions for each of them (e.g. sending a mail).
+*imm* is written and configured in *Haskell*.
 
-Notably, *imm* makes it possible to use mail readers for feeds, for the sake of *I-want-the-mutt-of-feed-readers* zealots.
+Technical documentation is available at [hackage][1].
 
-*imm* is written and configured in *Haskell*. To get started, please consult documentation of `Imm.Boot` module.
-
-Informations about versions, dependencies, source repositories and contacts can be found in [hackage][1].
+To get started, please consult documentation of `Imm.Boot` module.
 
 
-## Rationale
+## Example workflows
 
-Following numerous RSS/Atom feeds needs organization and aggregation, which is usually accomplished through feed readers.
-Although there are a lot of those, some people still feel unsatisfied with the existing implementations.
+### Online feed reader
 
-The expected features of a feed reader could be defined as follows:
+For the sake of *I-want-the-mutt-of-feed-readers* zealots, it is possible to turn any mail reader into a feed reader, by having *imm* send an e-mail with unread elements to an arbitrary address.
+You can then browse your feeds through your favourite mail reader, and leverage any mail-related tool on your feeds.
+Bonus points if your mail reader is online as you can now access your feeds from anywhere in the internet.
 
-- it retrieves a bunch of items that have some attributes: an author, a date/time, a (possibly enriched) body;
-- items can be sorted, categorized, marked as read/unread, tagged, shared/forwarded;
-- items must be available from anywhere on the internet.
+Check out `Imm.Hooks.SendMail` module.
 
-Luckily, there's already a widespread solution that provides such features: mail readers.
-Considering that, *imm* can project the RSS/Atom paradigm onto the mail one; this way, all the existing tools that work on mails can be leveraged to work on RSS/Atom feeds as well, no wheel reinventing.
+### Offline read-it-later
 
+*imm* is able to store a local copy of unread elements, to read them later while offline for example. External links won't work offline though.
+
+Check out `Imm.Hooks.WriteFile` module.
+
+
+## Example usage
+
+- Subscribe to a feed:
+
+  ```
+  imm subscribe http://your.feed.org
+  ```
+- Import feeds from an OPML file:
+
+  ```
+  cat feeds.opml | imm import
+  ```
+- List subscribed feeds:
+
+  ```
+  imm show
+  ```
+- Unsubscribe from a feed:
+
+  ```
+  imm unsubscribe http://your.feed.org
+  ```
+- Check for new elements without executing any action:
+
+  ```
+  imm check
+  ```
+- Execute configured actions for each new element from subscribed feeds:
+
+  ```
+  imm run
+  ```
 [1]: http://hackage.haskell.org/package/imm
