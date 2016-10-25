@@ -39,9 +39,9 @@ instance Pretty (JsonFileDatabase t) where
 mkJsonFileDatabase :: (Table t) => FilePath -> JsonFileDatabase t
 mkJsonFileDatabase file = JsonFileDatabase file mempty Empty
 
--- | Default database is stored in @$XDG_DATA_HOME\/imm\/feeds.json@
+-- | Default database is stored in @$XDG_CONFIG_HOME\/imm\/feeds.json@
 defaultDatabase :: Table t => IO (JsonFileDatabase t)
-defaultDatabase = mkJsonFileDatabase <$> getXdgDirectory XdgData "imm/feeds.json"
+defaultDatabase = mkJsonFileDatabase <$> getXdgDirectory XdgConfig "imm/feeds.json"
 
 
 data JsonException = UnableDecode
