@@ -3,7 +3,7 @@ version:             1.1.0.0
 synopsis:            Execute arbitrary actions for each unread element of RSS/Atom feeds
 description:         Cf README file
 homepage:            https://github.com/k0ral/imm
-license:             OtherLicense
+license:             PublicDomain
 license-file:        LICENSE
 author:              kamaradclimber, koral
 maintainer:          koral <koral@mailoo.org>
