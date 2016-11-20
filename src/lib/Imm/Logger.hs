@@ -64,24 +64,24 @@ instance Monad m => PairingM (CoLoggerF m) LoggerF m where
 
 -- * Primitives
 
-log :: (Functor f, MonadFree f m, LoggerF :<: f) => LogLevel -> Doc -> m ()
+log :: (MonadFree f m, LoggerF :<: f) => LogLevel -> Doc -> m ()
 log level message = liftF . inj $ Log level message ()
 
-getLogLevel :: (Functor f, MonadFree f m, LoggerF :<: f) => m LogLevel
+getLogLevel :: (MonadFree f m, LoggerF :<: f) => m LogLevel
 getLogLevel = liftF . inj $ GetLevel id
 
-setLogLevel :: (Functor f, MonadFree f m, LoggerF :<: f) => LogLevel -> m ()
+setLogLevel :: (MonadFree f m, LoggerF :<: f) => LogLevel -> m ()
 setLogLevel level = liftF . inj $ SetLevel level ()
 
-setColorizeLogs :: (Functor f, MonadFree f m, LoggerF :<: f) => Bool -> m ()
+setColorizeLogs :: (MonadFree f m, LoggerF :<: f) => Bool -> m ()
 setColorizeLogs colorize = liftF . inj $ SetColorize colorize ()
 
-flushLogs :: (Functor f, MonadFree f m, LoggerF :<: f) => m ()
+flushLogs :: (MonadFree f m, LoggerF :<: f) => m ()
 flushLogs = liftF . inj $ Flush ()
 
 -- * Helpers
 
-logDebug, logInfo, logWarning, logError :: (Functor f, MonadFree f m, LoggerF :<: f) => Doc -> m ()
+logDebug, logInfo, logWarning, logError :: (MonadFree f m, LoggerF :<: f) => Doc -> m ()
 logDebug = log Debug
 logInfo = log Info
 logWarning = log Warning

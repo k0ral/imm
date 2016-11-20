@@ -95,19 +95,19 @@ type CoDatabaseF' = CoDatabaseF FeedTable
 
 -- * Primitives
 
-register :: (MonadThrow m, LoggerF :<: f, DatabaseF' :<: f, Functor f, MonadFree f m)
+register :: (MonadThrow m, LoggerF :<: f, DatabaseF' :<: f, MonadFree f m)
           => FeedID -> Text -> m ()
 register feedID category = do
   logInfo $ "Registering feed " <> magenta (pretty feedID) <> "..."
   insert FeedTable feedID $ newDatabaseEntry feedID category
 
-getStatus :: (DatabaseF' :<: f, Functor f, MonadFree f m, MonadCatch m)
+getStatus :: (DatabaseF' :<: f, MonadFree f m, MonadCatch m)
           => FeedID -> m FeedStatus
 getStatus feedID = handleAny (\_ -> return Unknown) $ do
   result <- fmap Just (fetch FeedTable feedID) `catchAny` (\_ -> return Nothing)
   return $ maybe New LastUpdate $ entryLastCheck =<< result
 
-addReadHash :: (DatabaseF' :<: f, Functor f, MonadFree f m, MonadThrow m, LoggerF :<: f)
+addReadHash :: (DatabaseF' :<: f, MonadFree f m, MonadThrow m, LoggerF :<: f)
                => FeedID -> Int -> m ()
 addReadHash feedID hash = do
   logDebug $ "Adding read hash: " <> pretty hash <> "..."
@@ -115,7 +115,7 @@ addReadHash feedID hash = do
   where f a = a { entryReadHashes = insertSet hash $ entryReadHashes a }
 
 -- | Set the last check time to now
-markAsRead :: (MonadIO m, DatabaseF' :<: f, Functor f, MonadFree f m, MonadThrow m, LoggerF :<: f)
+markAsRead :: (MonadIO m, DatabaseF' :<: f, MonadFree f m, MonadThrow m, LoggerF :<: f)
            => FeedID -> m ()
 markAsRead feedID = do
   logDebug $ "Marking feed as read: " <> pretty feedID <> "..."
@@ -124,7 +124,7 @@ markAsRead feedID = do
   where f time a = a { entryLastCheck = Just time }
 
 -- | Unset feed's last update and remove all read hashes
-markAsUnread ::  (DatabaseF' :<: f, Functor f, MonadFree f m, MonadThrow m, LoggerF :<: f)
+markAsUnread ::  (DatabaseF' :<: f, MonadFree f m, MonadThrow m, LoggerF :<: f)
              => FeedID -> m ()
 markAsUnread feedID = do
   logInfo $ "Marking feed as unread: " <> show (pretty feedID) <> "..."

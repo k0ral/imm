@@ -70,7 +70,7 @@ printVersions = io $ do
   putStrLn $ "compiled by " ++ compilerName ++ "-" ++ showVersion compilerVersion
 
 -- | Print database status for given feed(s)
-showFeed :: (MonadIO m, LoggerF :<: f, MonadThrow m, Functor f, MonadFree f m, DatabaseF' :<: f)
+showFeed :: (MonadIO m, LoggerF :<: f, MonadThrow m, MonadFree f m, DatabaseF' :<: f)
          => [FeedID] -> m ()
 showFeed feedIDs = do
   feeds <- Database.fetchList FeedTable feedIDs
@@ -78,12 +78,12 @@ showFeed feedIDs = do
   if null feeds then logWarning "No subscription" else putBox $ entryTableToBox feeds
 
 -- | Register the given feed URI in database
-subscribe :: (LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, MonadCatch m)
+subscribe :: (LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, MonadCatch m)
           => URI -> Maybe Text -> m ()
 subscribe uri category = Database.register (FeedID uri) $ fromMaybe "default" category
 
 -- | Check for unread elements without processing them
-check :: (MonadIO m, MonadCatch m, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
+check :: (MonadIO m, MonadCatch m, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
       => [FeedID] -> m ()
 check feedIDs = do
   results <- forM (zip ([1..] :: [Int]) feedIDs) $ \(i, feedID) -> do
@@ -94,7 +94,7 @@ check feedIDs = do
   where width = length (show total :: String)
         total = length feedIDs
 
-checkOne :: (MonadIO m, MonadCatch m, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
+checkOne :: (MonadIO m, MonadCatch m, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
          => FeedID -> m Int
 checkOne feedID@(FeedID uri) = do
   body <- HTTP.get uri
@@ -117,7 +117,7 @@ checkOne feedID@(FeedID uri) = do
         unread _ _                = True
 
 
-run :: (MonadIO m, MonadCatch m, HooksF :<: f, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
+run :: (MonadIO m, MonadCatch m, HooksF :<: f, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
     => [FeedID] -> m ()
 run feedIDs = do
   results <- forM (zip ([1..] :: [Int]) feedIDs) $ \(i, feedID) -> do
@@ -152,7 +152,7 @@ runOne feedID@(FeedID uri) = do
   Database.markAsRead feedID
 
 
-isRead :: (Functor f, MonadCatch m, DatabaseF' :<: f, MonadFree f m) => FeedID -> FeedElement -> m Bool
+isRead :: (MonadCatch m, DatabaseF' :<: f, MonadFree f m) => FeedID -> FeedElement -> m Bool
 isRead feedID element = do
   DatabaseEntry _ _ readHashes lastCheck <- Database.fetch FeedTable feedID
   let matchHash = not $ null $ (setFromList (getHashes element) :: Set Int) `intersection` readHashes
@@ -163,12 +163,12 @@ isRead feedID element = do
   return $ matchHash || matchDate
 
 -- | 'subscribe' to all feeds described by the OPML document provided in input (stdin)
-importOPML :: (MonadIO m, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, MonadCatch m) => m ()
+importOPML :: (MonadIO m, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, MonadCatch m) => m ()
 importOPML = do
   opml <- runConduit $ Conduit.stdin =$= XML.parseBytes def =$= force "Invalid OPML" parseOpml
   forM_ (opmlOutlines opml) $ importOPML' mempty
 
-importOPML' :: (MonadIO m, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, MonadCatch m)
+importOPML' :: (MonadIO m, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, MonadCatch m)
             => Maybe Text -> Tree OpmlOutline -> m ()
 importOPML' _ (Node (OpmlOutlineGeneric b _) sub) = mapM_ (importOPML' (Just . toNullable $ OPML.text b)) sub
 importOPML' c (Node (OpmlOutlineSubscription _ s) _) = subscribe (xmlUri s) c
