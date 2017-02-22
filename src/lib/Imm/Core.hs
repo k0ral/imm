@@ -96,20 +96,15 @@ check feedIDs = do
 
 checkOne :: (MonadIO m, MonadCatch m, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
          => FeedID -> m Int
-checkOne feedID@(FeedID uri) = do
-  body <- HTTP.get uri
-  feed <- runConduit $ parseLBS def body =$= force "Invalid feed" ((fmap Left <$> atomFeed) `orE` (fmap Right <$> rssDocument))
-
+checkOne feedID = do
+  feed <- getFeed feedID
   case feed of
-    Left _ -> logDebug $ "Parsed Atom feed: " <> pretty feedID
-    Right _ -> logDebug $ "Parsed RSS feed: " <> pretty feedID
+    Atom _ -> logDebug $ "Parsed Atom feed: " <> pretty feedID
+    Rss _ -> logDebug $ "Parsed RSS feed: " <> pretty feedID
 
-  let dates = either
-              (map entryUpdated . feedEntries)
-              (mapMaybe itemPubDate . channelItems)
-              feed
+  let dates = mapMaybe getDate $ getElements feed
 
-  logDebug $ vsep $ either (map prettyEntry . feedEntries) (map prettyItem . channelItems) feed
+  logDebug $ vsep $ map prettyElement $ getElements feed
   status <- Database.getStatus feedID
 
   return $ length $ filter (unread status) dates
@@ -136,14 +131,13 @@ run feedIDs = do
   where width = length (show total :: String)
         total = length feedIDs
 
-runOne :: (MonadIO m, MonadCatch m, HooksF :<: f, LoggerF :<: f, Functor f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
+runOne :: (MonadIO m, MonadCatch m, HooksF :<: f, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
     => FeedID -> m ()
-runOne feedID@(FeedID uri) = do
-  body <- HTTP.get uri
-  feed <- runConduit $ parseLBS def body =$= force "Invalid feed" ((fmap Atom <$> atomFeed) `orE` (fmap Rss <$> rssDocument))
+runOne feedID = do
+  feed <- getFeed feedID
   unreadElements <- filterM (fmap not . isRead feedID) $ getElements feed
 
-  unless (null unreadElements) $ logInfo $ indent 2 $ green (pretty $ length unreadElements) <+> "unread element(s)"
+  unless (null unreadElements) $ logInfo $ indent 2 $ green (pretty $ length unreadElements) <+> "new element(s)"
 
   forM_ unreadElements $ \element -> do
     onNewElement feed element
@@ -173,6 +167,13 @@ importOPML' :: (MonadIO m, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, Monad
 importOPML' _ (Node (OpmlOutlineGeneric b _) sub) = mapM_ (importOPML' (Just . toNullable $ OPML.text b)) sub
 importOPML' c (Node (OpmlOutlineSubscription _ s) _) = subscribe (xmlUri s) c
 importOPML' _ _ = return ()
+
+
+getFeed :: (MonadIO m, MonadCatch m, MonadFree f m, HttpClientF :<: f, LoggerF :<: f)
+        => FeedID -> m Feed
+getFeed (FeedID uri) = do
+  body <- HTTP.get uri
+  runConduit $ parseLBS def body =$= force "Invalid feed" ((fmap Atom <$> atomFeed) `orE` (fmap Rss <$> rssDocument))
 
 
 -- * Boxes

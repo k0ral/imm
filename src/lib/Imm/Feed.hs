@@ -7,7 +7,6 @@ import           Imm.Prelude
 import           Imm.Pretty
 
 import           Data.Hashable
-import           Data.NonNull
 import           Data.Time
 
 import           Text.Atom.Types
@@ -57,3 +56,10 @@ getHashes (RssElement item) = map (hash . (show :: Doc -> String) . prettyGuid) 
   <> [hash $ itemTitle item]
   <> [hash $ itemDescription item]
 getHashes (AtomElement entry) = [hash $ entryId entry, (hash :: String -> Int) $ show $ prettyAtomText $ entryTitle entry]
+
+
+-- * Misc
+
+prettyElement :: FeedElement -> Doc
+prettyElement (RssElement item)   = prettyItem item
+prettyElement (AtomElement entry) = prettyEntry entry
