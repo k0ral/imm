@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -13,7 +14,7 @@ import           Imm.Pretty
 
 import           Control.Arrow
 
-import           Data.Monoid.Textual           hiding (map)
+import           Data.Monoid.Textual           hiding (elem, map)
 import qualified Data.Text.Lazy                as Text
 import           Data.Time
 
@@ -62,8 +63,9 @@ defaultFilePath root feed element = makeValid $ root </> feedTitle </> fileName 
   date = maybe "" (formatTime defaultTimeLocale "%F-") $ getDate element
   fileName = date <> sanitize (convertText $ getTitle element)
   feedTitle = sanitize $ convertText $ getFeedTitle feed
-  sanitize = replaceIf isPathSeparator '-' >>> replace '.' '_' >>> replace '?' '_'
-  replace a b = replaceIf (== a) b
+  sanitize = replaceIf isPathSeparator '-' >>> replaceAny ".?!#" '_'
+  replaceAny :: [Char] -> Char -> String -> String
+  replaceAny list = replaceIf (`elem` list)
   replaceIf f b = map (\c -> if f c then b else c)
 
 -- | Generate an HTML page, with a title, a header and an article that contains the feed element
