@@ -81,13 +81,13 @@ type a ::: b = (a, b)
 infixr 0 :::
 
 -- | Right-associative tuple data-constructor
-(>:) :: a -> b -> (a,b)
-(>:) a b = (a, b)
-infixr 0 >:
+(+:) :: a -> b -> (a,b)
+(+:) a b = (a, b)
+infixr 0 +:
 
-(*:*) :: (Functor f, Functor g) => (a -> f a) -> (b -> g b) -> (a, b) -> Product f g (a, b)
-(*:*) f g (a,b) = Pair ((,b) <$> f a) ((a,) <$> g b)
-infixr 0 *:*
+(*:) :: (Functor f, Functor g) => (a -> f a) -> (b -> g b) -> (a, b) -> Product f g (a, b)
+(*:) f g (a,b) = Pair ((,b) <$> f a) ((a,) <$> g b)
+infixr 0 *:
 
 
 data HLeft

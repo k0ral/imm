@@ -37,6 +37,7 @@ import Imm.Logger as Logger
 import Imm.Options as Options hiding(logLevel)
 import Imm.Prelude
 import Imm.Pretty
+import Imm.XML
 
 import Control.Comonad.Cofree
 import Control.Monad.Trans.Free
@@ -82,14 +83,15 @@ import System.IO (hFlush)
 -- >   (Just $ Authentication PLAIN "user" "password")
 -- >   (StartTls "smtp.host" defaultSettingsSMTPSTARTTLS)
 imm :: (a -> CoHttpClientF IO a, a)  -- ^ HTTP client interpreter (cf "Imm.HTTP")
-    -> (b -> CoDatabaseF' IO b, b)  -- ^ Database interpreter (cf "Imm.Database")
-    -> (c -> CoLoggerF IO c, c)     -- ^ Logger interpreter (cf "Imm.Logger")
-    -> (d -> CoHooksF IO d, d)      -- ^ Hooks interpreter (cf "Imm.Hooks")
+    -> (b -> CoDatabaseF' IO b, b)   -- ^ Database interpreter (cf "Imm.Database")
+    -> (c -> CoLoggerF IO c, c)      -- ^ Logger interpreter (cf "Imm.Logger")
+    -> (d -> CoHooksF IO d, d)       -- ^ Hooks interpreter (cf "Imm.Hooks")
+    -> (e -> CoXmlParserF IO e, e)   -- ^ XML parsing interpreter (cf "Imm.XML")
     -> IO ()
-imm coHttpClient coDatabase coLogger coHooks = void $ do
+imm coHttpClient coDatabase coLogger coHooks coXmlParser = void $ do
   options <- parseOptions
   Dyre.wrap (optionDyreMode options) realMain (optionCommand options, optionLogLevel options, optionColorizeLogs options, coiter next start)
-  where (next, start) = mkCoImm coHttpClient coDatabase coLogger coHooks
+  where (next, start) = mkCoImm coHttpClient coDatabase coLogger coHooks coXmlParser
 
 realMain :: (MonadIO m, PairingM (CoImmF m) ImmF m, MonadCatch m)
          => (Command, LogLevel, Bool, Cofree (CoImmF m) a) -> m ()
@@ -117,14 +119,22 @@ realMain (command, logLevel, colorizeLogs, interpreter) = void $ interpret (\_ b
 
 -- * DSL/interpreter model
 
-type CoImmF m = Product (CoHttpClientF m) (Product (CoDatabaseF' m) (Product (CoLoggerF m) (CoHooksF m)))
-type ImmF = Sum HttpClientF (Sum DatabaseF' (Sum LoggerF HooksF))
+type CoImmF m = Product (CoHttpClientF m)
+  (Product (CoDatabaseF' m)
+   (Product (CoLoggerF m)
+    (Product (CoHooksF m) (CoXmlParserF m)
+    )))
+type ImmF = Sum HttpClientF (Sum DatabaseF' (Sum LoggerF (Sum HooksF XmlParserF)))
 
 mkCoImm :: (Functor m)
-        => (a -> CoHttpClientF m a, a) -> (b -> CoDatabaseF' m b, b) -> (c -> CoLoggerF m c, c) -> (d -> CoHooksF m d, d)
-        -> ((a ::: b ::: c ::: d) -> CoImmF m (a ::: b ::: c ::: d), a ::: b ::: c ::: d)
-mkCoImm (coHttpClient, a) (coDatabase, b) (coLogger, c) (coHooks, d) =
-  (coHttpClient *:* coDatabase *:* coLogger *:* coHooks, a >: b >: c >: d)
+        => (a -> CoHttpClientF m a, a)
+        -> (b -> CoDatabaseF' m b, b)
+        -> (c -> CoLoggerF m c, c)
+        -> (d -> CoHooksF m d, d)
+        -> (e -> CoXmlParserF m e, e)
+        -> ((a ::: b ::: c ::: d ::: e) -> CoImmF m (a ::: b ::: c ::: d ::: e), a ::: b ::: c ::: d ::: e)
+mkCoImm (coHttpClient, a) (coDatabase, b) (coLogger, c) (coHooks, d) (coXmlParser, e) =
+  (coHttpClient *: coDatabase *: coLogger *: coHooks *: coXmlParser, a +: b +: c +: d +: e)
 
 
 -- * Util

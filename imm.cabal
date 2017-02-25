@@ -33,6 +33,8 @@ library
     Imm.Logger
     Imm.Logger.Simple
     Imm.Prelude
+    Imm.XML
+    Imm.XML.Simple
   other-modules:
     Imm.Aeson
     Imm.Dyre
@@ -40,7 +42,7 @@ library
     Imm.Options
     Imm.Pretty
     Paths_imm
-  build-depends: aeson, atom-conduit >= 0.4, base == 4.*, blaze-html, blaze-markup, bytestring, case-insensitive, chunked-data >= 0.3.0, comonad, conduit, conduit-combinators, connection, containers, directory >= 1.2.3.0, dyre, fast-logger, filepath, free, hashable, HaskellNet, HaskellNet-SSL >= 0.3.3.0, http-client >= 0.4.30, http-client-tls, http-types, mime-mail, monoid-subclasses, mono-traversable >= 1.0.0, network, opml-conduit >= 0.6, optparse-applicative, rainbow, rainbox, rss-conduit >= 0.3, safe-exceptions, tagged, text, transformers, time, timerep >= 2.0.0.0, tls, uri-bytestring, xml, xml-conduit, ansi-wl-pprint
+  build-depends: aeson, ansi-wl-pprint, atom-conduit >= 0.4, base == 4.*, blaze-html, blaze-markup, bytestring, case-insensitive, chunked-data >= 0.3.0, comonad, conduit, conduit-combinators, connection, containers, directory >= 1.2.3.0, dyre, fast-logger, filepath, free, hashable, HaskellNet, HaskellNet-SSL >= 0.3.3.0, http-client >= 0.4.30, http-client-tls, http-types, mime-mail, monoid-subclasses, mono-traversable >= 1.0.0, network, opml-conduit >= 0.6, optparse-applicative, rainbow, rainbox, rss-conduit >= 0.3, safe-exceptions, tagged, text, transformers, time, timerep >= 2.0.0.0, tls, uri-bytestring, xml, xml-conduit, xml-types
   -- Build-tools:
   hs-source-dirs: src/lib
   ghc-options: -Wall -fno-warn-unused-do-bind

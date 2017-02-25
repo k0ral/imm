@@ -8,6 +8,7 @@ import           Imm.Database.JsonFile
 import           Imm.HTTP.Simple
 import           Imm.Logger.Simple
 import           Imm.Prelude
+import           Imm.XML.Simple
 
 import           System.Exit
 -- }}}
@@ -25,4 +26,4 @@ main = do
   manager <- defaultManager
   database <- defaultDatabase
 
-  imm (mkCoHttpClient, manager) (mkCoDatabase, database) (mkCoLogger, logger) (mkDummyCoHooks, ())
+  imm (mkCoHttpClient, manager) (mkCoDatabase, database) (mkCoLogger, logger) (mkDummyCoHooks, ()) (mkCoXmlParser, defaultPreProcess)

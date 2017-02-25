@@ -29,6 +29,7 @@ import qualified Imm.HTTP as HTTP
 import Imm.Logger
 import Imm.Prelude
 import Imm.Pretty
+import Imm.XML
 
 -- import Control.Concurrent.Async.Lifted (Async, async, mapConcurrently, waitAny)
 -- import Control.Concurrent.Async.Pool
@@ -51,12 +52,8 @@ import Rainbox
 
 import           System.Info
 
-import Text.Atom.Conduit.Parse
-import Text.Atom.Types
 import Text.OPML.Conduit.Parse
 import Text.OPML.Types as OPML
-import Text.RSS.Conduit.Parse
-import Text.RSS.Types
 import Text.XML as XML ()
 import Text.XML.Stream.Parse as XML
 
@@ -83,7 +80,7 @@ subscribe :: (LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, MonadCatch m)
 subscribe uri category = Database.register (FeedID uri) $ fromMaybe "default" category
 
 -- | Check for unread elements without processing them
-check :: (MonadIO m, MonadCatch m, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
+check :: (MonadIO m, MonadCatch m, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f, XmlParserF :<: f)
       => [FeedID] -> m ()
 check feedIDs = do
   results <- forM (zip ([1..] :: [Int]) feedIDs) $ \(i, feedID) -> do
@@ -94,7 +91,7 @@ check feedIDs = do
   where width = length (show total :: String)
         total = length feedIDs
 
-checkOne :: (MonadIO m, MonadCatch m, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
+checkOne :: (MonadIO m, MonadCatch m, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f, XmlParserF :<: f)
          => FeedID -> m Int
 checkOne feedID = do
   feed <- getFeed feedID
@@ -112,7 +109,7 @@ checkOne feedID = do
         unread _ _                = True
 
 
-run :: (MonadIO m, MonadCatch m, HooksF :<: f, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
+run :: (MonadIO m, MonadCatch m, HooksF :<: f, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f, XmlParserF :<: f)
     => [FeedID] -> m ()
 run feedIDs = do
   results <- forM (zip ([1..] :: [Int]) feedIDs) $ \(i, feedID) -> do
@@ -131,7 +128,7 @@ run feedIDs = do
   where width = length (show total :: String)
         total = length feedIDs
 
-runOne :: (MonadIO m, MonadCatch m, HooksF :<: f, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f)
+runOne :: (MonadIO m, MonadCatch m, HooksF :<: f, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f, XmlParserF :<: f)
     => FeedID -> m ()
 runOne feedID = do
   feed <- getFeed feedID
@@ -169,11 +166,9 @@ importOPML' c (Node (OpmlOutlineSubscription _ s) _) = subscribe (xmlUri s) c
 importOPML' _ _ = return ()
 
 
-getFeed :: (MonadIO m, MonadCatch m, MonadFree f m, HttpClientF :<: f, LoggerF :<: f)
+getFeed :: (MonadIO m, MonadCatch m, MonadFree f m, HttpClientF :<: f, LoggerF :<: f, XmlParserF :<: f)
         => FeedID -> m Feed
-getFeed (FeedID uri) = do
-  body <- HTTP.get uri
-  runConduit $ parseLBS def body =$= force "Invalid feed" ((fmap Atom <$> atomFeed) `orE` (fmap Rss <$> rssDocument))
+getFeed (FeedID uri) = HTTP.get uri >>= parseXml uri
 
 
 -- * Boxes
