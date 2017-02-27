@@ -59,6 +59,7 @@ import System.IO (hFlush)
 -- > import           Imm.Hooks.SendMail
 -- > import           Imm.HTTP.Simple
 -- > import           Imm.Logger.Simple
+-- > import           Imm.XML.Simple
 -- >
 -- > main :: IO ()
 -- > main = do
@@ -66,7 +67,7 @@ import System.IO (hFlush)
 -- >   manager  <- defaultManager
 -- >   database <- defaultDatabase
 -- >
--- >   imm (mkCoHttpClient, manager) (mkCoDatabase, database) (mkCoLogger, logger) (mkCoHooks, sendmail)
+-- >   imm (mkCoHttpClient, manager) (mkCoDatabase, database) (mkCoLogger, logger) (mkCoHooks, sendmail) (mkCoXmlParser, defaultPreProcess)
 -- >
 -- > sendmail :: SendMailSettings
 -- > sendmail = SendMailSettings smtpServer formatMail
