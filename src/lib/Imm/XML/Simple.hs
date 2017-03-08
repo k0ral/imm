@@ -16,6 +16,7 @@ import           Data.XML.Types
 
 import           Text.Atom.Conduit.Parse
 import           Text.RSS.Conduit.Parse
+import           Text.RSS1.Conduit.Parse
 import           Text.XML.Stream.Parse
 
 import           URI.ByteString
@@ -28,7 +29,7 @@ type PreProcess m = URI -> Conduit Event m Event
 mkCoXmlParser :: (MonadIO m, MonadCatch m) => PreProcess m -> CoXmlParserF m (PreProcess m)
 mkCoXmlParser preProcess = CoXmlParserF coParse where
   coParse uri bytestring = handleAny (\e -> return (Left e, preProcess)) $ do
-    result <- runConduit $ parseLBS def bytestring =$= preProcess uri =$= force "Invalid feed" ((fmap Atom <$> atomFeed) `orE` (fmap Rss <$> rssDocument))
+    result <- runConduit $ parseLBS def bytestring =$= preProcess uri =$= force "Invalid feed" ((fmap Atom <$> atomFeed) `orE` (fmap Rss <$> rssDocument) `orE` (fmap Rss <$> rss1Document))
     return (Right result, preProcess)
 
 -- | Default pre-process always forwards all 'Event's
