@@ -83,7 +83,7 @@ subscribe uri category = Database.register (FeedID uri) $ fromMaybe "default" ca
 check :: (MonadIO m, MonadCatch m, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f, XmlParserF :<: f)
       => [FeedID] -> m ()
 check feedIDs = do
-  results <- forM (zip ([1..] :: [Int]) feedIDs) $ \(i, feedID) -> do
+  results <- for (zip ([1..] :: [Int]) feedIDs) $ \(i, feedID) -> do
     logInfo $ brackets (fill width (bold $ cyan $ pretty i) <+> "/" <+> pretty total) <+> "Checking" <+> magenta (pretty feedID) <> "..."
     try $ checkOne feedID
 
@@ -120,7 +120,7 @@ checkOne feedID = do
 run :: (MonadIO m, MonadCatch m, HooksF :<: f, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f, XmlParserF :<: f)
     => [FeedID] -> m ()
 run feedIDs = do
-  results <- forM (zip ([1..] :: [Int]) feedIDs) $ \(i, feedID) -> do
+  results <- for (zip ([1..] :: [Int]) feedIDs) $ \(i, feedID) -> do
     logInfo $ brackets (fill width (bold $ cyan $ pretty i) <+> "/" <+> pretty total) <+> "Processing" <+> magenta (pretty feedID) <> "..."
     result <- tryAny $ runOne feedID
     return $ bimap (feedID,) (feedID,) result

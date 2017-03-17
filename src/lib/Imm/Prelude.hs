@@ -45,7 +45,7 @@ import           Data.String                     as X (IsString (..))
 import           Data.Tagged
 import qualified Data.Text                       as T (Text ())
 import qualified Data.Text.Lazy                  as LT (Text ())
-import           Data.Traversable                as X (forM)
+import           Data.Traversable                as X (for, forM)
 import           Data.Typeable                   as X
 
 import qualified GHC.Show                        as Show
