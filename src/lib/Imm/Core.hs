@@ -87,7 +87,15 @@ check feedIDs = do
     logInfo $ brackets (fill width (bold $ cyan $ pretty i) <+> "/" <+> pretty total) <+> "Checking" <+> magenta (pretty feedID) <> "..."
     try $ checkOne feedID
 
+  flushLogs
+
   putBox $ statusTableToBox $ mapFromList $ zip feedIDs results
+
+  let (failures, successes) = partitionEithers $ zipWith (\a -> bimap (a,) (a,)) feedIDs results
+  unless (null failures) $ logError $ bold (pretty $ length failures) <+> "feeds in error"
+  forM_ failures $ \(feedID, e) ->
+    logError $ indent 2 (pretty feedID <++> indent 2 (pretty $ displayException e))
+
   where width = length (show total :: String)
         total = length feedIDs
 
@@ -198,6 +206,6 @@ statusTableToBox :: StatusTable -> Box Horizontal
 statusTableToBox t = tableByColumns $ Rainbox.intersperse sep $ fromList [col1, col2, col3] where
   result = sortBy (comparing fst) $ Map.toList t
   col1 = fromList $ cell "# UNREAD" : map (cell . either (const "?") show . snd) result
-  col2 = fromList $ cell "STATUS" : map (cell . either (fromString . displayException) (const "OK") . snd) result
+  col2 = fromList $ cell "STATUS" : map (cell . either (const "ERROR") (const "OK") . snd) result
   col3 = fromList $ cell "FEED" : map (cell . show . pretty . fst) result
   sep = fromList [separator mempty 2]
