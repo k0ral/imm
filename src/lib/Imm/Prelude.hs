@@ -22,10 +22,9 @@ import           Control.Monad                   as X (MonadPlus (..), unless,
                                                        void, when)
 import           Control.Monad.IO.Class          as X
 import           Control.Monad.Trans.Free        (FreeF (..), FreeT (..))
-
 import           Data.Bifunctor                  as X
-import qualified Data.ByteString                 as B (ByteString ())
-import qualified Data.ByteString.Lazy            as LB (ByteString ())
+import qualified Data.ByteString                 as B (ByteString)
+import qualified Data.ByteString.Lazy            as LB (ByteString)
 import           Data.Containers                 as X
 import           Data.Either                     as X
 import           Data.Foldable                   as X (forM_)
@@ -36,20 +35,17 @@ import           Data.IOData                     as X
 import           Data.Map                        as X (Map)
 import           Data.Maybe                      as X hiding (catMaybes)
 import           Data.Monoid                     as X hiding (Product, Sum)
-import           Data.Monoid.Textual             as X (TextualMonoid (),
-                                                       fromText)
+import           Data.Monoid.Textual             as X (TextualMonoid, fromText)
 import           Data.MonoTraversable.Unprefixed as X hiding (forM_, mapM_)
 import           Data.Ord                        as X
 import           Data.Sequences                  as X
 import           Data.String                     as X (IsString (..))
 import           Data.Tagged
-import qualified Data.Text                       as T (Text ())
-import qualified Data.Text.Lazy                  as LT (Text ())
+import qualified Data.Text                       as T (Text)
+import qualified Data.Text.Lazy                  as LT (Text)
 import           Data.Traversable                as X (for, forM)
 import           Data.Typeable                   as X
-
 import qualified GHC.Show                        as Show
-
 import           Prelude                         as X hiding (all, and, any,
                                                        break, concat, concatMap,
                                                        drop, dropWhile, elem,
@@ -63,14 +59,11 @@ import           Prelude                         as X hiding (all, and, any,
                                                        takeWhile, unlines,
                                                        unwords, words,
                                                        writeFile)
-
 import           System.IO                       as X (stderr, stdout)
-
 import           Text.PrettyPrint.ANSI.Leijen    as X (Doc, Pretty (..), angles,
                                                        brackets, equals, hsep,
                                                        indent, space, text,
                                                        vsep, (<+>))
-
 import           Text.PrettyPrint.ANSI.Leijen    (line)
 -- }}}
 
@@ -123,6 +116,7 @@ instance (Functor f, Functor g, Sub (Contains f g) f g) => f :<: g where
   inj = proxy inj' (Proxy :: Proxy (Contains f g))
 
 
+-- | Functors @f@ and @g@ are paired when they can annihilate each other
 class (Monad m, Functor f, Functor g) => PairingM f g m | f -> g where
   pairM :: (a -> b -> m r) -> f a -> g b -> m r
 

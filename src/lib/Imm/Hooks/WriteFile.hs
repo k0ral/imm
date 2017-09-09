@@ -13,14 +13,11 @@ import           Imm.Prelude
 import           Imm.Pretty
 
 import           Control.Arrow
-
 import           Data.Monoid.Textual           hiding (elem, map)
 import qualified Data.Text.Lazy                as Text
 import           Data.Time
-
 import           System.Directory              (createDirectoryIfMissing)
 import           System.FilePath
-
 import           Text.Atom.Types
 import           Text.Blaze.Html.Renderer.Text
 import           Text.Blaze.Html5              (Html, docTypeHtml,
@@ -28,7 +25,6 @@ import           Text.Blaze.Html5              (Html, docTypeHtml,
 import qualified Text.Blaze.Html5              as H hiding (map)
 import           Text.Blaze.Html5.Attributes   as H (charset, href)
 import           Text.RSS.Types
-
 import           URI.ByteString
 -- }}}
 
@@ -42,7 +38,7 @@ data WriteFileSettings = WriteFileSettings (Feed -> FeedElement -> FileInfo)
 -- * Interpreter
 
 -- | Interpreter for 'HooksF'
-mkCoHooks :: (MonadIO m) => WriteFileSettings -> CoHooksF m WriteFileSettings
+mkCoHooks :: MonadIO m => WriteFileSettings -> CoHooksF m WriteFileSettings
 mkCoHooks a@(WriteFileSettings f) = CoHooksF coOnNewElement where
   coOnNewElement feed element = do
     let FileInfo path content = f feed element

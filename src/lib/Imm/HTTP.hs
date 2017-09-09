@@ -27,7 +27,7 @@ data HttpClientF next
   deriving(Functor)
 
 -- | HTTP client interpreter
-data CoHttpClientF m a = CoHttpClientF
+newtype CoHttpClientF m a = CoHttpClientF
   { getH :: URI -> m (Either SomeException LByteString, a)
   } deriving(Functor)
 
