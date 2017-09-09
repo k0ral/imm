@@ -80,7 +80,7 @@ prettyEntry e = "Entry:" <+> prettyAtomText (entryTitle e) <++> indent 4
   -- , "   Item Body:   " ++ (Imm.Mail.getItemContent item),
   )
 
-prettyItem :: RssItem -> Doc
+prettyItem :: RssItem e -> Doc
 prettyItem i = "Item:" <+> text (fromText $ itemTitle i) <++> indent 4
   (         "By" <+> equals <+> text (fromText $ itemAuthor i)
   <++> "Updated" <+> equals <+> fromMaybe "<empty>" (prettyTime <$> itemPubDate i)

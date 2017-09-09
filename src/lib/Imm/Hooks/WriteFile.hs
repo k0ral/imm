@@ -77,40 +77,42 @@ defaultFileContent feed element = encodeUtf8 $ Text.toStrict $ renderHtml $ docT
   H.body $ do
     H.h1 $ convertText $ getFeedTitle feed
     H.article $ do
-      defaultHeader feed element
+      H.header $ do
+        defaultArticleTitle feed element
+        defaultArticleAuthor feed element
+        defaultArticleDate feed element
       defaultBody feed element
 
 
 -- * Low-level helpers
 
--- | Generate an HTML @<header>@ for a given feed element
-defaultHeader :: Feed -> FeedElement -> Html
-defaultHeader _ element@(RssElement item) = H.header $ do
-  H.h2 $ maybe id (\uri -> H.a ! H.href uri) link $ convertText $ getTitle element
-  unless (null author) $ H.address $ "Published by " >> convertText author
-  forM_ (itemPubDate item) $ \date -> H.p $ " on " >> H.time (convertDoc $ prettyTime date)
-  where link = withRssURI (convertDoc . prettyURI) <$> itemLink item
-        author = itemAuthor item
-defaultHeader _ element@(AtomElement entry) = H.header $ do
-  H.h2 $ convertText $ getTitle element
-  H.address $ do
-    "Published by "
-    forM_ (entryAuthors entry) $ \author -> do
-      convertDoc $ prettyPerson author
-      ", "
-  H.p $ "on " >> H.time (convertDoc $ prettyTime $ entryUpdated entry)
+defaultArticleTitle :: Feed -> FeedElement -> Html
+defaultArticleTitle _ element@(RssElement item) = H.h2 $ maybe id (\uri -> H.a ! H.href uri) link $ convertText $ getTitle element where
+  link = withRssURI (convertDoc . prettyURI) <$> itemLink item
+defaultArticleTitle _ element@(AtomElement _) = H.h2 $ convertText $ getTitle element
+
+defaultArticleAuthor :: Feed -> FeedElement -> Html
+defaultArticleAuthor _ (RssElement item) = unless (null author) $ H.address $ "Published by " >> convertText author where
+  author = itemAuthor item
+defaultArticleAuthor _ (AtomElement entry) = H.address $ do
+  "Published by "
+  forM_ (entryAuthors entry) $ \author -> do
+    convertDoc $ prettyPerson author
+    ", "
+
+defaultArticleDate :: Feed -> FeedElement -> Html
+defaultArticleDate _ element = forM_ (getDate element) $ \date -> H.p $ " on " >> H.time (convertDoc $ prettyTime date)
+
 
 -- | Generate the HTML content for a given feed element
 defaultBody :: Feed -> FeedElement -> Html
-defaultBody _ (RssElement item) = H.p $ preEscapedToHtml $ itemDescription item
-defaultBody _ (AtomElement entry) = do
+defaultBody _ element@(RssElement _) = H.p $ preEscapedToHtml $ getContent element
+defaultBody _ element@(AtomElement entry) = do
   unless (null links) $ H.p $ do
     "Related links:"
     H.ul $ forM_ links $ \uri -> H.li (H.a ! H.href (convertAtomURI uri) $ convertAtomURI uri)
-  H.p $ preEscapedToHtml $ fromMaybe "<empty>" $ content <|> summary
+  H.p $ preEscapedToHtml $ getContent element
   where links   = map linkHref $ entryLinks entry
-        content = show . prettyAtomContent <$> entryContent entry :: Maybe Text
-        summary = show . prettyAtomText <$> entrySummary entry :: Maybe Text
 
 
 convertAtomURI :: (IsString t) => AtomURI -> t
