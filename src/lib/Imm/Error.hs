@@ -1,5 +1,4 @@
 {-# LANGUAGE NoImplicitPrelude   #-}
-{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Imm.Error (module Imm.Error) where
 
@@ -8,7 +7,7 @@ import           Imm.Prelude
 -- }}}
 
 liftE :: (MonadThrow m, Exception e) => Either e a -> m a
-liftE (Left e) = throwM e
+liftE (Left e)  = throwM e
 liftE (Right a) = return a
 
 -- | Wrap a 'Maybe' value in 'MonadError'

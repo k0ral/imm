@@ -1,62 +1,57 @@
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE NoImplicitPrelude      #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE TupleSections          #-}
-{-# LANGUAGE PartialTypeSignatures  #-}
-{-# LANGUAGE TypeFamilies           #-}
-{-# LANGUAGE TypeOperators          #-}
+  {-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 module Imm.Core (
 -- * Types
-    FeedRef,
+  FeedRef,
 -- * Actions
-    printVersions,
-    subscribe,
-    showFeed,
-    check,
-    run,
-    importOPML,
+  printVersions,
+  subscribe,
+  showFeed,
+  check,
+  run,
+  importOPML,
 ) where
 
 -- {{{ Imports
-import qualified Imm.Database.FeedTable as Database
-import Imm.Database.FeedTable hiding(markAsRead, markAsUnread)
-import qualified Imm.Database as Database
-import Imm.Feed
-import Imm.Hooks as Hooks
-import Imm.HTTP (HttpClientF)
-import qualified Imm.HTTP as HTTP
-import Imm.Logger
-import Imm.Prelude
-import Imm.Pretty
-import Imm.XML
-
+import qualified Imm.Database             as Database
+import           Imm.Database.FeedTable
+import qualified Imm.Database.FeedTable   as Database
+import           Imm.Feed
+import           Imm.Hooks                as Hooks
+import           Imm.HTTP                 (HttpClientF)
+import qualified Imm.HTTP                 as HTTP
+import           Imm.Logger
+import           Imm.Prelude
+import           Imm.Pretty
+import           Imm.XML
 -- import Control.Concurrent.Async.Lifted (Async, async, mapConcurrently, waitAny)
 -- import Control.Concurrent.Async.Pool
-import Control.Monad.Free
-
-import qualified Data.ByteString              as ByteString
-import Data.Conduit
-import Data.Conduit.Combinators as Conduit (stdin)
-import qualified Data.Map as Map
-import Data.NonNull
-import Data.Set (Set)
-import Data.Time.Format
-import Data.Tree
+import           Control.Monad.Free
+import qualified Data.ByteString          as ByteString
+import           Data.Conduit
+import           Data.Conduit.Combinators as Conduit (stdin)
+import qualified Data.Map                 as Map
+import           Data.NonNull
+import           Data.Set                 (Set)
+import           Data.Time.Format
+import           Data.Tree
 import           Data.Version
-
-import qualified Paths_imm                      as Package
-
-import Rainbow (chunksToByteStrings, toByteStringsColors256, chunk)
-import Rainbox
-
+import qualified Paths_imm                as Package
+import           Rainbow                  (chunk, chunksToByteStrings,
+                                           toByteStringsColors256)
+import           Rainbox
 import           System.Info
-
-import Text.OPML.Conduit.Parse
-import Text.OPML.Types as OPML
-import Text.XML as XML ()
-import Text.XML.Stream.Parse as XML
-
+import           Text.OPML.Conduit.Parse
+import           Text.OPML.Types          as OPML
+import           Text.XML                 as XML ()
+import           Text.XML.Stream.Parse    as XML
 import           URI.ByteString
 -- }}}
 
@@ -99,13 +94,13 @@ check feedIDs = do
   where width = length (show total :: String)
         total = length feedIDs
 
-checkOne :: (MonadIO m, MonadCatch m, LoggerF :<: f, MonadFree f m, DatabaseF' :<: f, HttpClientF :<: f, XmlParserF :<: f)
+checkOne :: (MonadIO m, MonadCatch m, LoggerF :<: f, MonadFree (SumF f) m, DatabaseF' :<: f, HttpClientF :<: f, XmlParserF :<: f)
          => FeedID -> m Int
 checkOne feedID = do
   feed <- getFeed feedID
   case feed of
     Atom _ -> logDebug $ "Parsed Atom feed: " <> pretty feedID
-    Rss _ -> logDebug $ "Parsed RSS feed: " <> pretty feedID
+    Rss _  -> logDebug $ "Parsed RSS feed: " <> pretty feedID
 
   let dates = mapMaybe getDate $ getElements feed
 

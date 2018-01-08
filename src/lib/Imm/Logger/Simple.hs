@@ -1,5 +1,4 @@
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
 -- | Simple logger interpreter.
 -- For further information, please consult "System.Log.FastLogger".
 module Imm.Logger.Simple (module Imm.Logger.Simple, module Reexport) where

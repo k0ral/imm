@@ -47,7 +47,7 @@ getElements (Rss doc)   = map RssElement $ channelItems doc
 getElements (Atom feed) = map AtomElement $ feedEntries feed
 
 getDate :: FeedElement -> Maybe UTCTime
-getDate (RssElement item)   = itemPubDate item <|> (elementDate $ itemDcMetaData (item ^. itemExtensionL))
+getDate (RssElement item)   = itemPubDate item <|> elementDate (itemDcMetaData $ item ^. itemExtensionL)
 getDate (AtomElement entry) = Just $ entryUpdated entry
 
 getTitle :: FeedElement -> Text

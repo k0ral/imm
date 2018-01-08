@@ -11,11 +11,11 @@
 module Imm.Database.JsonFile (module Imm.Database.JsonFile, module Reexport) where
 
 -- {{{ Imports
-import           Imm.Database           hiding (commit, delete, fetchAll,
-                                         insert, purge, update)
+import           Imm.Database           hiding (commit, delete, insert, purge,
+                                         update)
 import           Imm.Database.FeedTable as Reexport
 import           Imm.Error
-import           Imm.Prelude            hiding (catch, delete, keys)
+import           Imm.Prelude            hiding (delete, keys)
 
 import           Data.Aeson
 import qualified Data.Map               as Map

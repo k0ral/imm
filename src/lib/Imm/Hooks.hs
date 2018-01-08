@@ -25,7 +25,7 @@ data HooksF next
   deriving(Functor)
 
 -- | Hooks interpreter
-data CoHooksF m a = CoHooksF
+newtype CoHooksF m a = CoHooksF
   { onNewElementH :: Feed -> FeedElement -> m a  -- ^ Triggered for each unread feed element
   } deriving(Functor)
 

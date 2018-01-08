@@ -83,8 +83,8 @@ prettyEntry e = "Entry:" <+> prettyAtomText (entryTitle e) <++> indent 4
 prettyItem :: RssItem e -> Doc
 prettyItem i = "Item:" <+> text (fromText $ itemTitle i) <++> indent 4
   (         "By" <+> equals <+> text (fromText $ itemAuthor i)
-  <++> "Updated" <+> equals <+> fromMaybe "<empty>" (prettyTime <$> itemPubDate i)
-  <++> "Link"    <+> equals <+> fromMaybe "<empty>" (withRssURI prettyURI <$> itemLink i)
+  <++> "Updated" <+> equals <+> maybe "<empty>" prettyTime (itemPubDate i)
+  <++> "Link"    <+> equals <+> maybe "<empty>" (withRssURI prettyURI) (itemLink i)
   )
 
 prettyURI :: URIRef a -> Doc

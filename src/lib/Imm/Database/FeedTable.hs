@@ -87,7 +87,7 @@ instance Pretty FeedStatus where
   pretty (LastUpdate x) = text "Last update:" <+> text (formatTime defaultTimeLocale rfc822DateFormat x)
 
 
-data Database = Database [DatabaseEntry]
+newtype Database = Database [DatabaseEntry]
   deriving (Eq, Show)
 
 type DatabaseF' = DatabaseF FeedTable

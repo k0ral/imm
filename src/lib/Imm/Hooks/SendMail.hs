@@ -93,7 +93,7 @@ defaultFormatFrom _ _ = Address (Just "Unknown") ""
 
 -- | Fill mail subject with the element title
 defaultFormatSubject :: Feed -> FeedElement -> Text
-defaultFormatSubject _ element = getTitle element
+defaultFormatSubject _ = getTitle
 
 -- | Fill mail body with:
 --

@@ -1,5 +1,4 @@
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
 -- | Simple interpreter to parse XML into 'Feed', based on 'Conduit'.
 module Imm.XML.Simple where
 

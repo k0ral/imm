@@ -22,7 +22,7 @@ import           Text.Atom.Types
 import           Text.Blaze.Html.Renderer.Text
 import           Text.Blaze.Html5              (Html, docTypeHtml,
                                                 preEscapedToHtml, (!))
-import qualified Text.Blaze.Html5              as H hiding (map)
+import qualified Text.Blaze.Html5              as H
 import           Text.Blaze.Html5.Attributes   as H (charset, href)
 import           Text.RSS.Types
 import           URI.ByteString
@@ -33,7 +33,7 @@ import           URI.ByteString
 -- | Where and what to write in a file
 data FileInfo = FileInfo FilePath ByteString
 
-data WriteFileSettings = WriteFileSettings (Feed -> FeedElement -> FileInfo)
+newtype WriteFileSettings = WriteFileSettings (Feed -> FeedElement -> FileInfo)
 
 -- * Interpreter
 
@@ -60,7 +60,7 @@ defaultFilePath root feed element = makeValid $ root </> feedTitle </> fileName 
   fileName = date <> sanitize (convertText $ getTitle element)
   feedTitle = sanitize $ convertText $ getFeedTitle feed
   sanitize = replaceIf isPathSeparator '-' >>> replaceAny ".?!#" '_'
-  replaceAny :: [Char] -> Char -> String -> String
+  replaceAny :: String -> Char -> String -> String
   replaceAny list = replaceIf (`elem` list)
   replaceIf f b = map (\c -> if f c then b else c)
 
