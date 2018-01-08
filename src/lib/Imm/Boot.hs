@@ -27,26 +27,23 @@
 module Imm.Boot (imm) where
 
 -- {{{ Imports
-import qualified Imm.Core as Core
-import Imm.Database.FeedTable as Database
-import Imm.Database as Database
-import Imm.Dyre as Dyre
-import Imm.Feed
-import Imm.HTTP as HTTP
-import Imm.Hooks
-import Imm.Logger as Logger
-import Imm.Options as Options hiding(logLevel)
-import Imm.Prelude
-import Imm.Pretty
-import Imm.XML
+import qualified Imm.Core                 as Core
+import           Imm.Database             as Database
+import           Imm.Database.FeedTable   as Database
+import           Imm.Dyre                 as Dyre
+import           Imm.Feed
+import           Imm.Hooks
+import           Imm.HTTP                 as HTTP
+import           Imm.Logger               as Logger
+import           Imm.Options              as Options hiding (logLevel)
+import           Imm.Prelude
+import           Imm.Pretty
+import           Imm.XML
 
-import Control.Comonad.Cofree
-import Control.Monad.Trans.Free
+import           Control.Comonad.Cofree
+import           Control.Monad.Trans.Free
 
-import Data.Functor.Product
-import Data.Functor.Sum
-
-import System.IO (hFlush)
+import           System.IO                (hFlush)
 -- }}}
 
 -- | Main function, meant to be used in your personal configuration file.
@@ -95,8 +92,8 @@ imm coHttpClient coDatabase coLogger coHooks coXmlParser = void $ do
   Dyre.wrap (optionDyreMode options) realMain (optionCommand options, optionLogLevel options, optionColorizeLogs options, coiter next start)
   where (next, start) = mkCoImm coHttpClient coDatabase coLogger coHooks coXmlParser
 
-realMain :: (MonadIO m, PairingM (CoImmF m) ImmF m, MonadCatch m)
-         => (Command, LogLevel, Bool, Cofree (CoImmF m) a) -> m ()
+realMain :: (MonadIO m, PairingList m (CoImmF m) ImmF, MonadCatch m)
+         => (Command, LogLevel, Bool, Cofree (ProductF (CoImmF m)) a) -> m ()
 realMain (command, logLevel, colorizeLogs, interpreter) = void $ interpret (\_ b -> return b) interpreter $ do
   setColorizeLogs colorizeLogs
   setLogLevel logLevel
@@ -121,12 +118,8 @@ realMain (command, logLevel, colorizeLogs, interpreter) = void $ interpret (\_ b
 
 -- * DSL/interpreter model
 
-type CoImmF m = Product (CoHttpClientF m)
-  (Product (CoDatabaseF' m)
-   (Product (CoLoggerF m)
-    (Product (CoHooksF m) (CoXmlParserF m)
-    )))
-type ImmF = Sum HttpClientF (Sum DatabaseF' (Sum LoggerF (Sum HooksF XmlParserF)))
+type CoImmF m = '[CoHttpClientF m, CoDatabaseF' m, CoLoggerF m, CoHooksF m, CoXmlParserF m]
+type ImmF = '[HttpClientF, DatabaseF', LoggerF, HooksF, XmlParserF]
 
 mkCoImm :: (Functor m)
         => (a -> CoHttpClientF m a, a)
@@ -134,9 +127,9 @@ mkCoImm :: (Functor m)
         -> (c -> CoLoggerF m c, c)
         -> (d -> CoHooksF m d, d)
         -> (e -> CoXmlParserF m e, e)
-        -> ((a ::: b ::: c ::: d ::: e) -> CoImmF m (a ::: b ::: c ::: d ::: e), a ::: b ::: c ::: d ::: e)
+        -> (a ::: b ::: c ::: d ::: e -> (ProductF (CoImmF m)) (a ::: b ::: c ::: d ::: e), a ::: b ::: c ::: d ::: e)
 mkCoImm (coHttpClient, a) (coDatabase, b) (coLogger, c) (coHooks, d) (coXmlParser, e) =
-  (coHttpClient *: coDatabase *: coLogger *: coHooks *: coXmlParser, a +: b +: c +: d +: e)
+  (coHttpClient *: coDatabase *: coLogger *: (coHooks $: coXmlParser), a +: b +: c +: d +: e)
 
 
 -- * Util
@@ -156,7 +149,7 @@ promptConfirm s = do
   unless (null x || x == ("Y" :: Text)) $ throwM InterruptedException
 
 
-resolveTarget :: (MonadIO m, MonadThrow m, MonadFree f m, DatabaseF' :<: f)
+resolveTarget :: (MonadIO m, MonadThrow m, MonadFree (SumF f) m, DatabaseF' :<: f)
               => SafeGuard -> Maybe Core.FeedRef -> m [FeedID]
 resolveTarget s Nothing = do
   result <- keys <$> Database.fetchAll FeedTable

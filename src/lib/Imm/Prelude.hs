@@ -1,16 +1,21 @@
-{-# LANGUAGE ConstraintKinds        #-}
-{-# LANGUAGE EmptyDataDecls         #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE RankNTypes             #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE TupleSections          #-}
-{-# LANGUAGE TypeFamilies           #-}
-{-# LANGUAGE TypeOperators          #-}
-{-# LANGUAGE UndecidableInstances   #-}
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE DataKinds                 #-}
+{-# LANGUAGE EmptyCase                 #-}
+{-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE EmptyDataDecls            #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE FunctionalDependencies    #-}
+{-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE StandaloneDeriving        #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE TypeOperators             #-}
+{-# LANGUAGE UndecidableInstances      #-}
 module Imm.Prelude (module Imm.Prelude, module X) where
 
 -- {{{ Imports
@@ -27,10 +32,9 @@ import qualified Data.ByteString                 as B (ByteString)
 import qualified Data.ByteString.Lazy            as LB (ByteString)
 import           Data.Containers                 as X
 import           Data.Either                     as X
+import           Data.Extensible.Class           as X
 import           Data.Foldable                   as X (forM_)
 import           Data.Functor.Identity
-import           Data.Functor.Product
-import           Data.Functor.Sum
 import           Data.IOData                     as X
 import           Data.Map                        as X (Map)
 import           Data.Maybe                      as X hiding (catMaybes)
@@ -40,7 +44,6 @@ import           Data.MonoTraversable.Unprefixed as X hiding (forM_, mapM_)
 import           Data.Ord                        as X
 import           Data.Sequences                  as X
 import           Data.String                     as X (IsString (..))
-import           Data.Tagged
 import qualified Data.Text                       as T (Text)
 import qualified Data.Text.Lazy                  as LT (Text)
 import           Data.Traversable                as X (for, forM)
@@ -69,6 +72,29 @@ import           Text.PrettyPrint.ANSI.Leijen    (line)
 
 -- * Free monad utilities
 
+-- | Sum of a type-level list of functors
+data SumF :: [* -> *] -> * -> * where
+  Here  :: !(f a)       -> SumF (f ': fs) a
+  There :: !(SumF fs a) -> SumF (f ': fs) a
+
+deriving instance (Functor f, Functor (SumF fs)) => Functor (SumF (f ': fs))
+
+instance Functor (SumF '[]) where
+  fmap _ impossible = case impossible of {}
+
+-- | Product of a tyoe-level list of functors
+class ProductFunctor (fs :: [* -> *]) where
+  data ProductF fs :: * -> *
+
+instance ProductFunctor '[] where
+  data ProductF '[] a = ProductNil deriving Functor
+
+instance ProductFunctor (f ': fs) where
+  data ProductF (f ': fs) a = Functor f => Some (f a) (ProductF fs a)
+
+deriving instance Functor (ProductF fs) => Functor (ProductF (f ': fs))
+
+
 -- | Right-associative tuple type-constructor
 type a ::: b = (a, b)
 infixr 0 :::
@@ -78,42 +104,42 @@ infixr 0 :::
 (+:) a b = (a, b)
 infixr 0 +:
 
-(*:) :: (Functor f, Functor g) => (a -> f a) -> (b -> g b) -> (a, b) -> Product f g (a, b)
-(*:) f g (a,b) = Pair ((,b) <$> f a) ((a,) <$> g b)
+(*:) :: (Functor f, Functor (ProductF fs)) => (a -> f a) -> (b -> ProductF fs b) -> (a, b) -> ProductF (f ': fs) (a, b)
+(*:) f g (a,b) = Some ((,b) <$> f a) ((a,) <$> g b)
 infixr 0 *:
 
-
-data HLeft
-data HRight
-data HId
-data HNo
-
-type family Contains a b where
-  Contains a a         = HId
-  Contains a (Sum a b) = HLeft
-  Contains a (Sum b c) = (HRight, Contains a c)
-  Contains a b         = HNo
-
-class Sub i sub sup where
-  inj' :: Tagged i (sub a -> sup a)
-
-instance Sub HId a a where
-  inj' = Tagged id
-
-instance Sub HLeft a (Sum a b) where
-  inj' = Tagged InL
-
-instance (Sub x f g) => Sub (HRight, x) f (Sum h g) where
-  inj' = Tagged $ InR . proxy inj' (Proxy :: Proxy x)
+($:) :: (Functor f, Functor g) => (a -> f a) -> (b -> g b) -> (a, b) -> ProductF '[f, g] (a, b)
+($:) f g (a,b) = Some ((,b) <$> f a) $ Some ((a,) <$> g b) ProductNil
 
 
--- | A constraint @f :<: g@ expresses that @f@ is subsumed by @g@,
+-- | A constraint @Injectable f g@ expresses that @f@ is subsumed by @g@,
 -- i.e. @f@ can be used to construct elements in @g@.
-class (Functor sub, Functor sup) => sub :<: sup where
-  inj :: sub a -> sup a
+class Injectable (f :: * -> *) (fs :: [* -> *]) where
+  inj :: f a -> SumF fs a
 
-instance (Functor f, Functor g, Sub (Contains f g) f g) => f :<: g where
-  inj = proxy inj' (Proxy :: Proxy (Contains f g))
+instance Functor f => Injectable f (f ': fs) where
+  inj = Here
+
+instance {-# OVERLAPPABLE #-} Injectable f fs => Injectable f (g ': fs) where
+  inj = There . inj
+
+
+class Outjectable (f :: * -> *) (fs :: [* -> *]) where
+  outj :: SumF fs a -> Maybe (f a)
+
+instance Outjectable f (f ': fs) where
+  outj (Here a) = Just a
+  outj _        = Nothing
+
+instance {-# OVERLAPPABLE #-} Outjectable f fs => Outjectable f (g ': fs) where
+  outj (There a) = outj a
+  outj _         = Nothing
+
+
+class (Injectable f fs, Functor (SumF fs))
+  => (f :: * -> *) :<: (fs :: [* -> *])
+instance (Injectable f fs, Outjectable f fs, Functor (SumF fs))
+  => (f :<: fs)
 
 
 -- | Functors @f@ and @g@ are paired when they can annihilate each other
@@ -123,21 +149,26 @@ class (Monad m, Functor f, Functor g) => PairingM f g m | f -> g where
 instance (Monad m) => PairingM Identity Identity m where
   pairM f (Identity a) (Identity b) = f a b
 
-instance (PairingM f f' m, PairingM g g' m) => PairingM (Sum f g) (Product f' g') m where
-  pairM p (InL x) (Pair a _) = pairM p x a
-  pairM p (InR x) (Pair _ b) = pairM p x b
+class PairingList m (f :: [* -> *]) (g :: [* -> *]) | f -> g where
+  pairList :: (a -> b -> m r) -> (ProductF f) a -> (SumF g) b -> m r
 
-instance (PairingM f f' m, PairingM g g' m) => PairingM (Product f g) (Sum f' g') m where
-  pairM p (Pair a _) (InL x) = pairM p a x
-  pairM p (Pair _ b) (InR x) = pairM p b x
+instance PairingList m '[] '[] where
+  pairList _ _ x = case x of {}
 
-interpret :: (PairingM f g m) => (a -> b -> m r) -> Cofree f a -> FreeT g m b -> m r
+instance (PairingList m fs gs, PairingM f g m) => PairingList m (f ': fs) (g ': gs) where
+  pairList p (Some a _) (Here x)  = pairM p a x
+  pairList p (Some _ b) (There x) = pairList p b x
+
+
+interpret :: Functor (ProductF f) => Functor (SumF g) => Monad m => PairingList m f g
+          => (a -> b -> m r) -> Cofree (ProductF f) a -> FreeT (SumF g) m b -> m r
 interpret p eval program = do
   let a = extract eval
   b <- runFreeT program
   case b of
     Pure x  -> p a x
-    Free gs -> pairM (interpret p) (unwrap eval) gs
+    Free gs -> pairList (interpret p) (unwrap eval) gs
+
 
 -- * Shortcuts
 

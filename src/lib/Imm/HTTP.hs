@@ -40,7 +40,7 @@ instance Monad m => PairingM (CoHttpClientF m) HttpClientF m where
 -- * Primitives
 
 -- | Perform an HTTP GET request
-get :: (MonadFree f m, HttpClientF :<: f, LoggerF :<: f, MonadThrow m)
+get :: (MonadFree (SumF f) m, HttpClientF :<: f, LoggerF :<: f, MonadThrow m)
     => URI -> m LByteString
 get uri = do
   logDebug $ "Fetching " <> prettyURI uri

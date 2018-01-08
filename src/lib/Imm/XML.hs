@@ -38,7 +38,7 @@ instance Monad m => PairingM (CoXmlParserF m) XmlParserF m where
 -- * Primitives
 
 -- | Parse XML into a 'Feed'
-parseXml :: (MonadFree f m, XmlParserF :<: f, MonadThrow m)
+parseXml :: (MonadFree (SumF f) m, XmlParserF :<: f, MonadThrow m)
          => URI -> LByteString -> m Feed
 parseXml uri bytestring = do
   result <- liftF . inj $ ParseXml uri bytestring id

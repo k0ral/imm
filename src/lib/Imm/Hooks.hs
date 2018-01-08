@@ -37,7 +37,7 @@ instance Monad m => PairingM (CoHooksF m) HooksF m where
 
 -- * Primitives
 
-onNewElement :: (MonadFree f m, LoggerF :<: f, HooksF :<: f) => Feed -> FeedElement -> m ()
+onNewElement :: (MonadFree (SumF f) m, LoggerF :<: f, HooksF :<: f) => Feed -> FeedElement -> m ()
 onNewElement feed element = do
   logDebug $ "Unread element:" <+> textual (getTitle element)
   liftF . inj $ OnNewElement feed element ()
