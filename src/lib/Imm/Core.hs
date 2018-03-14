@@ -159,7 +159,7 @@ isRead feedID element = do
 -- | 'subscribe' to all feeds described by the OPML document provided in input (stdin)
 importOPML :: (MonadIO m, LoggerF :<: f, MonadFree (SumF f) m, DatabaseF' :<: f, MonadCatch m) => m ()
 importOPML = do
-  opml <- runConduit $ Conduit.stdin =$= XML.parseBytes def =$= force "Invalid OPML" parseOpml
+  opml <- runConduit $ Conduit.stdin .| XML.parseBytes def .| force "Invalid OPML" parseOpml
   forM_ (opmlOutlines opml) $ importOPML' mempty
 
 importOPML' :: (MonadIO m, LoggerF :<: f, MonadFree (SumF f) m, DatabaseF' :<: f, MonadCatch m)

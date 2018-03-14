@@ -22,13 +22,13 @@ import           URI.ByteString
 -- }}}
 
 -- | A 'Conduit' to alter the raw XML before feeding it to the parser, depending on the feed 'URI'
-type PreProcess m = URI -> Conduit Event m Event
+type PreProcess m = URI -> ConduitT Event Event m ()
 
 -- | Interpreter for 'XmlParserF'
 mkCoXmlParser :: (MonadIO m, MonadCatch m) => PreProcess m -> CoXmlParserF m (PreProcess m)
 mkCoXmlParser preProcess = CoXmlParserF coParse where
   coParse uri bytestring = handleAny (\e -> return (Left e, preProcess)) $ do
-    result <- runConduit $ parseLBS def bytestring =$= preProcess uri =$= force "Invalid feed" ((fmap Atom <$> atomFeed) `orE` (fmap Rss <$> rssDocument) `orE` (fmap Rss <$> rss1Document))
+    result <- runConduit $ parseLBS def bytestring .| preProcess uri .| force "Invalid feed" ((fmap Atom <$> atomFeed) `orE` (fmap Rss <$> rssDocument) `orE` (fmap Rss <$> rss1Document))
     return (Right result, preProcess)
 
 -- | Default pre-process always forwards all 'Event's
