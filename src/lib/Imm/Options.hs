@@ -5,16 +5,16 @@
 module Imm.Options where
 
 -- {{{ Imports
-import           Imm.Dyre                    as Dyre (Mode (..))
-import qualified Imm.Dyre                    as Dyre
+import           Imm.Dyre                       as Dyre (Mode (..))
+import qualified Imm.Dyre                       as Dyre
 import           Imm.Feed
-import           Imm.Logger                  as Logger
+import           Imm.Logger                     as Logger
 import           Imm.Prelude
 import           Imm.Pretty
 
-import           Options.Applicative.Builder
-import           Options.Applicative.Extra
-import           Options.Applicative.Types
+import           Options.Applicative
+import           Options.Applicative.Help.Core  as Help
+import           Options.Applicative.Help.Types
 
 import           URI.ByteString
 -- }}}
@@ -27,6 +27,7 @@ data Command = Check (Maybe FeedRef)
              | Unread (Maybe FeedRef)
              | Run (Maybe FeedRef)
              | Show (Maybe FeedRef)
+             | Help
              | ShowVersion
              | Subscribe URI (Maybe Text)
              | Unsubscribe (Maybe FeedRef)
@@ -42,6 +43,7 @@ instance Pretty Command where
   pretty (Unread f)      = "Mark feed(s) as unread:" <+> pretty f
   pretty (Run f)         = "Download new entries from feed(s):" <+> pretty f
   pretty (Show f)        = "Show status for feed(s):" <+> pretty f
+  pretty Help            = "Display help"
   pretty ShowVersion     = "Show program version"
   pretty (Subscribe f _) = "Subscribe to feed:" <+> prettyURI f
   pretty (Unsubscribe f) = "Unsubscribe from feed(s):" <+> pretty f
@@ -67,10 +69,15 @@ defaultOptions = CliOptions defaultCommand Dyre.defaultMode Info True
 --         ]
 --         ++ catMaybes [("CONFIG=" ++) <$> opts^.configurationLabel_]
 
-parseOptions :: (MonadIO m) => m CliOptions
-parseOptions = io $ customExecParser (prefs noBacktrack) (info parser $ progDesc "Convert items from RSS/Atom feeds to mails.")
-  where parser = helper <*> optional dyreMasterBinary *> optional dyreDebug *> cliOptions
+helpString :: String
+helpString = renderHelp 100 $ Help.parserHelp defaultPrefs optionsParser
 
+parseOptions :: (MonadIO m) => m CliOptions
+parseOptions = io $ customExecParser defaultPrefs (info optionsParser $ progDesc "Fetch elements from RSS/Atom feeds and execute arbitrary actions for each of them.")
+
+
+optionsParser :: Parser CliOptions
+optionsParser = optional dyreMasterBinary *> optional dyreDebug *> cliOptions
 
 cliOptions :: Parser CliOptions
 cliOptions = CliOptions
@@ -82,16 +89,19 @@ cliOptions = CliOptions
 
 commands :: Parser Command
 commands = subparser $ mconcat
-  [ command "check" . info (Check <$> optional feedRefOption) $ progDesc "Check availability and validity of all feed sources currently configured, without writing any mail."
-  , command "import" . info (pure Import) $ progDesc "Import feeds list from an OPML descriptor (read from stdin)."
-  , command "read" . info (Read <$> optional feedRefOption) $ progDesc "Mark given feed as read."
-  , command "rebuild" . info (pure Rebuild) $ progDesc "Rebuild configuration file."
-  , command "run" . info (Run <$> optional feedRefOption) $ progDesc "Update list of feeds."
-  , command "show" . info (Show <$> optional feedRefOption) $ progDesc "List all feed sources currently configured, along with their status."
-  , command "subscribe" . info subscribeOptions $ progDesc "Subscribe to a feed."
-  , command "unread" . info (Unread <$> optional feedRefOption) $ progDesc "Mark given feed as unread."
-  , command "unsubscribe" . info unsubscribeOptions $ progDesc "Unsubscribe from a feed."
-  , command "version" . info (pure ShowVersion) $ progDesc "Print version."
+  [ command "add" $ info subscribeOptions $ progDesc "Alias for subscribe."
+  , command "check" $ info (Check <$> optional feedRefOption) $ progDesc "Check availability and validity of all feed sources currently configured, without writing any mail."
+  , command "help" $ info (pure Help) $ progDesc "Display help"
+  , command "import" $ info (pure Import) $ progDesc "Import feeds list from an OPML descriptor (read from stdin)."
+  , command "read" $ info (Read <$> optional feedRefOption) $ progDesc "Mark given feed as read."
+  , command "rebuild" $ info (pure Rebuild) $ progDesc "Rebuild configuration file."
+  , command "remove" $ info unsubscribeOptions $ progDesc "Alias for unsubscribe."
+  , command "run" $ info (Run <$> optional feedRefOption) $ progDesc "Update list of feeds."
+  , command "show" $ info (Show <$> optional feedRefOption) $ progDesc "List all feed sources currently configured, along with their status."
+  , command "subscribe" $ info subscribeOptions $ progDesc "Subscribe to a feed."
+  , command "unread" $ info (Unread <$> optional feedRefOption) $ progDesc "Mark given feed as unread."
+  , command "unsubscribe" $ info unsubscribeOptions $ progDesc "Unsubscribe from a feed."
+  , command "version" $ info (pure ShowVersion) $ progDesc "Print version."
   ]
 
 

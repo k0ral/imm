@@ -103,6 +103,7 @@ realMain (command, logLevel, colorizeLogs, interpreter) = void $ interpret (\_ b
 
   handleAny (logError . textual . displayException) $ case command of
     Check t        -> Core.check            =<< resolveTarget ByPassConfirmation t
+    Help           -> io $ putStrLn helpString
     Import         -> Core.importOPML
     Read t         -> mapM_ Database.markAsRead   =<< resolveTarget AskConfirmation t
     Run t          -> Core.run              =<< resolveTarget ByPassConfirmation t
