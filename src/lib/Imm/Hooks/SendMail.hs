@@ -1,8 +1,9 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators     #-}
--- | Hooks interpreter that sends a mail via a SMTP server for each element.
--- You may want to consult "Network.HaskellNet.SMTP", "Network.HaskellNet.SMTP.SSL" and "Network.Mail.Mime" modules for additional information.
+-- | Implementation of "Imm.Hooks" that sends a mail via a SMTP server for each new RSS/Atom element.
+-- You may want to check out "Network.HaskellNet.SMTP", "Network.HaskellNet.SMTP.SSL" and "Network.Mail.Mime" modules for additional information.
 --
 -- Here is an example configuration:
 --
@@ -29,19 +30,18 @@ import           Imm.Hooks
 import           Imm.Prelude
 import           Imm.Pretty
 
+import           Control.Monad.Trans.Reader
 import           Data.NonNull
 import           Data.Time
-
 import           Network.HaskellNet.SMTP     as Reexport
 import           Network.HaskellNet.SMTP.SSL as Reexport
 import           Network.Mail.Mime           as Reexport hiding (sendmail)
 import           Network.Socket
-
 import           Text.Atom.Types
 import           Text.RSS.Types
 -- }}}
 
--- * Settings
+-- * Types
 
 type Username = String
 type Password = String
@@ -68,18 +68,16 @@ data FormatMail = FormatMail
 
 data SendMailSettings = SendMailSettings (Feed -> FeedElement -> SMTPServer) FormatMail
 
-
--- * Interpreter
-
--- | Interpreter for 'HooksF'
-mkCoHooks :: (MonadIO m) => SendMailSettings -> CoHooksF m SendMailSettings
-mkCoHooks a@(SendMailSettings connectionSettings formatMail) = CoHooksF coOnNewElement where
-  coOnNewElement feed element = do
-    timezone <- io getCurrentTimeZone
-    currentTime <- io getCurrentTime
+instance MonadImm (ReaderT SendMailSettings IO) where
+  processNewElement feed element = do
+    SendMailSettings connectionSettings formatMail <- ask
+    timezone <- lift getCurrentTimeZone
+    currentTime <- lift getCurrentTime
     let mail = buildMail formatMail currentTime timezone feed element
-    io $ withSMTPConnection (connectionSettings feed element) $ sendMimeMail2 mail
-    return a
+    lift $ withSMTPConnection (connectionSettings feed element) $ sendMimeMail2 mail
+
+
+-- * Default behavior
 
 -- | Fill 'addressName' with the feed title and, if available, the authors' names.
 --

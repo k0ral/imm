@@ -1,29 +1,23 @@
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
 --module Executable where
 
 -- {{{ Imports
 import           Imm
 import           Imm.Database.JsonFile
+import           Imm.Hooks.Dummy
 import           Imm.HTTP.Simple
 import           Imm.Logger.Simple
 import           Imm.Prelude
-import           Imm.XML.Simple
+import           Imm.XML.Conduit
 
-import           System.Exit
+import           Control.Concurrent.MVar
 -- }}}
-
-mkDummyCoHooks :: (MonadIO m, MonadThrow m) => () -> CoHooksF m ()
-mkDummyCoHooks _ = CoHooksF coOnNewElement where
-  coOnNewElement _ _ = do
-    io $ putStrLn "No hook defined."
-    throwM $ ExitFailure 1
 
 
 main :: IO ()
 main = do
   logger <- defaultLogger
   manager <- defaultManager
-  database <- defaultDatabase
+  database <- defaultDatabase :: IO (MVar (JsonFileDatabase FeedTable))
 
-  imm (mkCoHttpClient, manager) (mkCoDatabase, database) (mkCoLogger, logger) (mkDummyCoHooks, ()) (mkCoXmlParser, defaultPreProcess)
+  imm $ mkModulesM manager database logger DummyHooks defaultXmlParser

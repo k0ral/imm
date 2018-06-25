@@ -1,37 +1,38 @@
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Imm.Pretty (module Imm.Pretty, module X) where
 
 -- {{{ Imports
 import           Imm.Prelude
 
-import           Data.Monoid.Textual
 import           Data.NonNull
 import           Data.Time
 import           Data.Tree
 
-import           Text.Atom.Types              as Atom
+import           Text.Atom.Types                           as Atom
 -- import           Text.OPML.Types              as OPML hiding (text)
 -- import qualified Text.OPML.Types              as OPML
-import           Text.PrettyPrint.ANSI.Leijen as X hiding (sep, width, (<$>),
-                                                    (</>), (<>))
-import           Text.RSS.Types               as RSS
-
+import           Data.Text.Prettyprint.Doc                 as X hiding (list,
+                                                                 width)
+import           Data.Text.Prettyprint.Doc                 (list)
+import           Data.Text.Prettyprint.Doc.Render.Terminal as X (AnsiStyle)
+import           Data.Text.Prettyprint.Doc.Render.Terminal
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import           Text.RSS.Types                            as RSS
 import           URI.ByteString
 -- }}}
 
--- | Generalized 'text'
-textual :: TextualMonoid t => t -> Doc
-textual = text . toString (const "?")
+-- | Infix operator for 'line'
+(<++>) :: Doc a -> Doc a -> Doc a
+x <++> y = x <> line <> y
 
-prettyTree :: (Pretty a) => Tree a -> Doc
+prettyTree :: (Pretty a) => Tree a -> Doc b
 prettyTree (Node n s) = pretty n <++> indent 2 (vsep $ prettyTree <$> s)
 
-prettyTime :: UTCTime -> Doc
-prettyTime = text . formatTime defaultTimeLocale rfc822DateFormat
+prettyTime :: UTCTime -> Doc a
+prettyTime = pretty . formatTime defaultTimeLocale rfc822DateFormat
 
 -- instance Pretty OpmlHead where
 --   pretty h = hsep $ catMaybes
@@ -59,20 +60,20 @@ prettyTime = text . formatTime defaultTimeLocale rfc822DateFormat
 -- instance Pretty Opml where
 --   pretty o = text "OPML" <+> pretty (opmlVersion o) <++> indent 2 (pretty (opmlHead o) <++> (vsep . map pretty $ opmlOutlines o))
 
-prettyPerson :: AtomPerson -> Doc
-prettyPerson p = text (fromText $ toNullable $ personName p) <> email where
+prettyPerson :: AtomPerson -> Doc a
+prettyPerson p = pretty (toNullable $ personName p) <> email where
   email = if null $ personEmail p
     then mempty
-    else space <> angles (text $ fromText $ personEmail p)
+    else space <> angles (pretty $ personEmail p)
 
-prettyLink :: AtomLink -> Doc
+prettyLink :: AtomLink -> Doc a
 prettyLink l = withAtomURI prettyURI $ linkHref l
 
-prettyAtomText :: AtomText -> Doc
-prettyAtomText (AtomPlainText _ t) = text $ fromText t
-prettyAtomText (AtomXHTMLText t)   = text $ fromText t
+prettyAtomText :: AtomText -> Doc a
+prettyAtomText (AtomPlainText _ t) = pretty t
+prettyAtomText (AtomXHTMLText t)   = pretty t
 
-prettyEntry :: AtomEntry -> Doc
+prettyEntry :: AtomEntry -> Doc a
 prettyEntry e = "Entry:" <+> prettyAtomText (entryTitle e) <++> indent 4
   (         "By" <+> equals <+> list (prettyPerson <$> entryAuthors e)
   <++> "Updated" <+> equals <+> prettyTime (entryUpdated e)
@@ -80,22 +81,40 @@ prettyEntry e = "Entry:" <+> prettyAtomText (entryTitle e) <++> indent 4
   -- , "   Item Body:   " ++ (Imm.Mail.getItemContent item),
   )
 
-prettyItem :: RssItem e -> Doc
-prettyItem i = "Item:" <+> text (fromText $ itemTitle i) <++> indent 4
-  (         "By" <+> equals <+> text (fromText $ itemAuthor i)
+prettyItem :: RssItem e -> Doc a
+prettyItem i = "Item:" <+> pretty (itemTitle i) <++> indent 4
+  (         "By" <+> equals <+> pretty (itemAuthor i)
   <++> "Updated" <+> equals <+> maybe "<empty>" prettyTime (itemPubDate i)
   <++> "Link"    <+> equals <+> maybe "<empty>" (withRssURI prettyURI) (itemLink i)
   )
 
-prettyURI :: URIRef a -> Doc
-prettyURI uri = text $ fromText $ decodeUtf8 $ serializeURIRef' uri
+prettyURI :: URIRef a -> Doc b
+prettyURI uri = pretty $ decodeUtf8 $ serializeURIRef' uri
 
-prettyGuid :: RssGuid -> Doc
-prettyGuid (GuidText t)         = text $ fromText t
+prettyGuid :: RssGuid -> Doc a
+prettyGuid (GuidText t)         = pretty t
 prettyGuid (GuidUri (RssURI u)) = prettyURI u
 
-prettyAtomContent :: AtomContent -> Doc
-prettyAtomContent (AtomContentInlineText _ t)  = text $ fromText t
-prettyAtomContent (AtomContentInlineXHTML t)   = text $ fromText t
-prettyAtomContent (AtomContentInlineOther _ t) = text $ fromText t
+prettyAtomContent :: AtomContent -> Doc a
+prettyAtomContent (AtomContentInlineText _ t)  = pretty t
+prettyAtomContent (AtomContentInlineXHTML t)   = pretty t
+prettyAtomContent (AtomContentInlineOther _ t) = pretty t
 prettyAtomContent (AtomContentOutOfLine _ u)   = withAtomURI prettyURI u
+
+magenta :: Doc AnsiStyle -> Doc AnsiStyle
+magenta = annotate $ color Magenta
+
+yellow :: Doc AnsiStyle -> Doc AnsiStyle
+yellow = annotate $ color Yellow
+
+red :: Doc AnsiStyle -> Doc AnsiStyle
+red = annotate $ color Red
+
+green :: Doc AnsiStyle -> Doc AnsiStyle
+green = annotate $ color Green
+
+cyan :: Doc AnsiStyle -> Doc AnsiStyle
+cyan = annotate $ color Cyan
+
+bold :: Doc AnsiStyle -> Doc AnsiStyle
+bold = annotate Pretty.bold

@@ -1,25 +1,22 @@
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TypeFamilies     #-}
-{-# LANGUAGE TypeOperators     #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies      #-}
 -- | Feed table definitions. This is a specialization of "Imm.Database".
 module Imm.Database.FeedTable where
 
 -- {{{ Imports
-import Imm.Aeson
-import Imm.Database
+import           Imm.Aeson
+import           Imm.Database
 import           Imm.Logger
-import Imm.Prelude
-import Imm.Pretty
+import           Imm.Prelude
+import           Imm.Pretty
 
-import Control.Monad.Trans.Free
-
+import           Control.Monad.Time
 import           Data.Aeson
-import           Data.Set (Set)
-import           Data.Time           as Time
-
-import URI.ByteString
+import           Data.Set           (Set)
+import           Data.Time
+import           URI.ByteString
 -- }}}
 
 -- * Types
@@ -27,6 +24,9 @@ import URI.ByteString
 -- | Unique key in feeds table
 newtype FeedID = FeedID URI
   deriving(Eq, Ord, Show)
+
+prettyFeedID :: FeedID -> Doc AnsiStyle
+prettyFeedID (FeedID uri) = prettyURI uri
 
 instance FromJSON FeedID where
   parseJSON = fmap FeedID . parseJsonURI
@@ -39,33 +39,36 @@ instance Pretty FeedID where
 
 
 data DatabaseEntry = DatabaseEntry
-  { entryURI         :: URI
-  , entryCategory    :: Text
-  , entryReadHashes  :: Set Int
-  , entryLastCheck   :: Maybe UTCTime
+  { entryURI        :: URI
+  , entryTags       :: Set Text
+  , entryReadHashes :: Set Int
+  , entryLastCheck  :: Maybe UTCTime
   } deriving(Eq, Show)
 
-instance Pretty DatabaseEntry where
-  pretty r = text "Entry:" <+> prettyURI (entryURI r) <++> indent 2
-    ( text "Category:" <+> text (fromText $ entryCategory r)
-    <++> text "Last check:" <+> text (maybe "<never>" (formatTime defaultTimeLocale rfc822DateFormat) $ entryLastCheck r)
-    <++> text "Read hashes:" <+> text (show $ length $ entryReadHashes r)
-    )
+prettyDatabaseEntry :: DatabaseEntry -> Doc AnsiStyle
+prettyDatabaseEntry entry = magenta feedID
+  <++> indent 3 tags
+  <++> indent 3 ("Last checked:" <+> lastCheck)
+
+  where feedID = prettyURI $ entryURI entry
+        tags = sep $ map ((<>) "#" . pretty) $ toList $ entryTags entry
+        lastCheck = format $ entryLastCheck entry
+        format = maybe "never" (fromString . formatTime defaultTimeLocale "%F %R")
 
 instance FromJSON DatabaseEntry where
-  parseJSON (Object v) = DatabaseEntry <$> (parseJsonURI =<< v .: "uri") <*> v .: "category" <*> v.: "readHashes" <*> v .: "lastCheck"
+  parseJSON (Object v) = DatabaseEntry <$> (parseJsonURI =<< v .: "uri") <*> v .: "tags" <*> v.: "readHashes" <*> v .: "lastCheck"
   parseJSON _          = mzero
 
 instance ToJSON DatabaseEntry where
   toJSON entry = object
     [ "uri"        .= toJsonURI (entryURI entry)
-    , "category"   .= entryCategory entry
+    , "tags"       .= entryTags entry
     , "readHashes" .= entryReadHashes entry
     , "lastCheck"  .= entryLastCheck entry
     ]
 
-newDatabaseEntry :: FeedID -> Text -> DatabaseEntry
-newDatabaseEntry (FeedID uri) category = DatabaseEntry uri category mempty Nothing
+newDatabaseEntry :: FeedID -> Set Text -> DatabaseEntry
+newDatabaseEntry (FeedID uri) tags = DatabaseEntry uri tags mempty Nothing
 
 -- | Singleton type to represent feeds table
 data FeedTable = FeedTable
@@ -82,50 +85,47 @@ instance Table FeedTable where
 data FeedStatus = Unknown | New | LastUpdate UTCTime
 
 instance Pretty FeedStatus where
-  pretty Unknown        = text "Unknown"
-  pretty New            = text "New"
-  pretty (LastUpdate x) = text "Last update:" <+> text (formatTime defaultTimeLocale rfc822DateFormat x)
+  pretty Unknown        = "Unknown"
+  pretty New            = "New"
+  pretty (LastUpdate x) = "Last update:" <+> pretty (formatTime defaultTimeLocale rfc822DateFormat x)
 
 
 newtype Database = Database [DatabaseEntry]
   deriving (Eq, Show)
 
-type DatabaseF' = DatabaseF FeedTable
-type CoDatabaseF' = CoDatabaseF FeedTable
-
 -- * Primitives
 
-register :: (MonadThrow m, LoggerF :<: f, DatabaseF' :<: f, MonadFree (SumF f) m)
-          => FeedID -> Text -> m ()
-register feedID category = do
-  logInfo $ "Registering feed " <> magenta (pretty feedID) <> "..."
-  insert FeedTable feedID $ newDatabaseEntry feedID category
+register :: (MonadThrow m, MonadLog m, MonadDatabase FeedTable m)
+          => FeedID -> Set Text -> m ()
+register feedID tags = do
+  logInfo $ "Registering feed" <+> magenta (pretty feedID) <> "..."
+  insert FeedTable feedID $ newDatabaseEntry feedID tags
 
-getStatus :: (DatabaseF' :<: f, MonadFree (SumF f) m, MonadCatch m)
+getStatus :: (MonadDatabase FeedTable m, MonadCatch m)
           => FeedID -> m FeedStatus
 getStatus feedID = handleAny (\_ -> return Unknown) $ do
   result <- fmap Just (fetch FeedTable feedID) `catchAny` (\_ -> return Nothing)
   return $ maybe New LastUpdate $ entryLastCheck =<< result
 
-addReadHash :: (DatabaseF' :<: f, MonadFree (SumF f) m, MonadThrow m, LoggerF :<: f)
+addReadHash :: (MonadDatabase FeedTable m, MonadThrow m, MonadLog m)
                => FeedID -> Int -> m ()
 addReadHash feedID hash = do
-  logDebug $ "Adding read hash: " <> pretty hash <> "..."
+  logDebug $ "Adding read hash:" <+> pretty hash <> "..."
   update FeedTable feedID f
   where f a = a { entryReadHashes = insertSet hash $ entryReadHashes a }
 
 -- | Set the last check time to now
-markAsRead :: (MonadIO m, DatabaseF' :<: f, MonadFree (SumF f) m, MonadThrow m, LoggerF :<: f)
+markAsRead :: (MonadTime m, MonadDatabase FeedTable m, MonadThrow m, MonadLog m)
            => FeedID -> m ()
 markAsRead feedID = do
-  logDebug $ "Marking feed as read: " <> pretty feedID <> "..."
-  currentTime <- io Time.getCurrentTime
-  update FeedTable feedID (f currentTime)
+  logDebug $ "Marking feed as read:" <+> pretty feedID <> "..."
+  utcTime <- currentTime
+  update FeedTable feedID (f utcTime)
   where f time a = a { entryLastCheck = Just time }
 
 -- | Unset feed's last update and remove all read hashes
-markAsUnread ::  (DatabaseF' :<: f, MonadFree (SumF f) m, MonadThrow m, LoggerF :<: f)
+markAsUnread :: (MonadDatabase FeedTable m, MonadThrow m, MonadLog m)
              => FeedID -> m ()
 markAsUnread feedID = do
-  logInfo $ "Marking feed as unread: " <> show (pretty feedID) <> "..."
+  logInfo $ "Marking feed as unread:" <+> prettyFeedID feedID <> "..."
   update FeedTable feedID $ \a -> a { entryReadHashes = mempty, entryLastCheck = Nothing }

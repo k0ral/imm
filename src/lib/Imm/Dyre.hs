@@ -13,12 +13,13 @@ module Imm.Dyre
 
 -- {{{ Imports
 import           Imm.Prelude
+import           Imm.Pretty
 
 import           Config.Dyre
 import           Config.Dyre.Compile
 import           Config.Dyre.Paths
 
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
+import           System.IO
 -- }}}
 
 -- | How dynamic reconfiguration process should behave.
@@ -31,7 +32,7 @@ defaultMode = Normal
 
 
 -- | Describe the paths used for dynamic reconfiguration
-describePaths :: (MonadIO m) => m Doc
+describePaths :: (MonadIO m) => m (Doc AnsiStyle)
 describePaths = io $ do
   (a, b, c, d, e) <- getPaths baseParameters
   return $ vsep
@@ -43,7 +44,7 @@ describePaths = io $ do
     ]
 
 -- | Dynamic reconfiguration settings
-parameters :: Mode -> (a -> IO ()) -> Params (Either Text a)
+parameters :: Mode -> (a -> IO ()) -> Params (Either String a)
 parameters mode main = baseParameters
     { configCheck = mode /= Vanilla
     , realMain = main'
@@ -52,10 +53,10 @@ parameters mode main = baseParameters
     main' (Left e)  = hPutStrLn stderr e
     main' (Right x) = main x
 
-baseParameters :: Params (Either Text a)
+baseParameters :: Params (Either String a)
 baseParameters = defaultParams
   { projectName             = "imm"
-  , showError               = const (Left . fromString)
+  , showError               = const Left
   , ghcOpts                 = ["-threaded"]
   , statusOut               = hPutStrLn stderr
   , includeCurrentDirectory = False

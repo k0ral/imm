@@ -12,10 +12,12 @@ import           Imm.Logger                     as Logger
 import           Imm.Prelude
 import           Imm.Pretty
 
+import           Data.Set                       (Set)
+import qualified Data.Set                       as Set
+import qualified Data.Text                      as Text
 import           Options.Applicative
 import           Options.Applicative.Help.Core  as Help
 import           Options.Applicative.Help.Types
-
 import           URI.ByteString
 -- }}}
 
@@ -29,7 +31,7 @@ data Command = Check (Maybe FeedRef)
              | Show (Maybe FeedRef)
              | Help
              | ShowVersion
-             | Subscribe URI (Maybe Text)
+             | Subscribe URI (Set Text)
              | Unsubscribe (Maybe FeedRef)
 
 deriving instance Eq Command
@@ -69,8 +71,8 @@ defaultOptions = CliOptions defaultCommand Dyre.defaultMode Info True
 --         ]
 --         ++ catMaybes [("CONFIG=" ++) <$> opts^.configurationLabel_]
 
-helpString :: String
-helpString = renderHelp 100 $ Help.parserHelp defaultPrefs optionsParser
+helpString :: Text
+helpString = Text.pack $ renderHelp 100 $ Help.parserHelp defaultPrefs optionsParser
 
 parseOptions :: (MonadIO m) => m CliOptions
 parseOptions = io $ customExecParser defaultPrefs (info optionsParser $ progDesc "Fetch elements from RSS/Atom feeds and execute arbitrary actions for each of them.")
@@ -129,11 +131,11 @@ colorizeLogs = flag' False $ long "nocolor" <> help "Disable log colorisation."
 -- }}}
 
 -- {{{ Other options
-configLabelOption :: Parser Text
-configLabelOption = option auto $ long "config" <> short 'C' <> metavar "CONFIG" <> help "Use the given configuration for all operations."
+tagOption :: Parser Text
+tagOption = option auto $ long "tag" <> short 't' <> metavar "TAG" <> help "Set the given tag."
 
 subscribeOptions, unsubscribeOptions :: Parser Command
-subscribeOptions    = Subscribe <$> uriArgument "URI to subscribe to." <*> optional configLabelOption
+subscribeOptions    = Subscribe <$> uriArgument "URI to subscribe to." <*> (Set.fromList <$> many tagOption)
 unsubscribeOptions  = Unsubscribe <$> optional feedRefOption
 -- }}}
 

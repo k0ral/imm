@@ -26,6 +26,7 @@ library
     Imm.Database.JsonFile
     Imm.Feed
     Imm.Hooks
+    Imm.Hooks.Dummy
     Imm.Hooks.SendMail
     Imm.Hooks.WriteFile
     Imm.HTTP
@@ -34,7 +35,7 @@ library
     Imm.Logger.Simple
     Imm.Prelude
     Imm.XML
-    Imm.XML.Simple
+    Imm.XML.Conduit
   other-modules:
     Imm.Aeson
     Imm.Dyre
@@ -44,44 +45,46 @@ library
     Paths_imm
   build-depends:
     aeson,
-    ansi-wl-pprint,
     atom-conduit >= 0.4,
     base == 4.*,
     blaze-html,
     blaze-markup,
     bytestring,
     case-insensitive,
-    chunked-data >= 0.3.0,
-    comonad,
     conduit,
-    conduit-combinators,
     connection,
     containers,
     directory >= 1.2.3.0,
     dyre,
-    extensible,
     fast-logger,
     filepath,
-    free,
     hashable,
     HaskellNet,
     HaskellNet-SSL >= 0.3.3.0,
     http-client >= 0.4.30,
     http-client-tls,
     http-types,
-    mime-mail,
-    monoid-subclasses,
+    lifted-base,
     microlens,
+    mime-mail,
+    monad-time,
+    monoid-subclasses,
     mono-traversable >= 1,
+    mtl,
     network,
     opml-conduit >= 0.6,
     optparse-applicative,
-    rainbow,
-    rainbox,
+    prettyprinter,
+    prettyprinter-ansi-terminal,
     rss-conduit >= 0.4.1,
     safe-exceptions,
+    stm,
+    streaming-bytestring,
+    streaming-with,
+    streamly,
     text,
     transformers,
+    transformers-base,
     time,
     timerep >= 2.0.0.0,
     tls,
@@ -94,7 +97,7 @@ library
   ghc-options: -Wall -fno-warn-unused-do-bind
 
 executable imm
-  build-depends: imm, base == 4.*, free
+  build-depends: imm, base == 4.*
   main-is: Executable.hs
   hs-source-dirs: src/bin
   ghc-options: -Wall -fno-warn-unused-do-bind -threaded

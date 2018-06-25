@@ -1,11 +1,8 @@
-{-# LANGUAGE DeriveFunctor         #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TypeOperators         #-}
--- | DSL/interpreter model for hooks, ie various events that can trigger arbitrary actions
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+-- | Hooks module to define the main behavior of the program.
 module Imm.Hooks where
 
 -- {{{ Imports
@@ -13,31 +10,18 @@ import           Imm.Feed
 import           Imm.Logger
 import           Imm.Prelude
 import           Imm.Pretty
-
-import           Control.Monad.Free.Class
 -- }}}
 
 -- * Types
 
--- | Hooks DSL
-data HooksF next
-  = OnNewElement Feed FeedElement next
-  deriving(Functor)
-
--- | Hooks interpreter
-newtype CoHooksF m a = CoHooksF
-  { onNewElementH :: Feed -> FeedElement -> m a  -- ^ Triggered for each unread feed element
-  } deriving(Functor)
-
-instance Monad m => PairingM (CoHooksF m) HooksF m where
-  -- pairM :: (a -> b -> m r) -> f a -> g b -> m r
-  pairM p (CoHooksF f) (OnNewElement feed element next) = do
-    a <- f feed element
-    p a next
+-- | Monad capable of acting on specific events.
+class Monad m => MonadImm m where
+  -- | Action triggered for each unread feed element
+  processNewElement :: Feed -> FeedElement -> m ()
 
 -- * Primitives
 
-onNewElement :: (MonadFree (SumF f) m, LoggerF :<: f, HooksF :<: f) => Feed -> FeedElement -> m ()
+onNewElement :: (MonadImm m, MonadLog m) => Feed -> FeedElement -> m ()
 onNewElement feed element = do
-  logDebug $ "Unread element:" <+> textual (getTitle element)
-  liftF . inj $ OnNewElement feed element ()
+  logDebug $ "Unread element:" <+> pretty (getTitle element)
+  processNewElement feed element

@@ -1,29 +1,28 @@
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
--- | Simple HTTP client interpreter.
--- For more information, please consult "Network.HTTP.Client".
-module Imm.HTTP.Simple (defaultManager, mkCoHttpClient, module Reexport) where
+-- | Implementation of "Imm.HTTP" based on "Network.HTTP.Client".
+module Imm.HTTP.Simple (defaultManager, module Reexport) where
 
 -- {{{ Imports
 import           Imm.HTTP
 import           Imm.Prelude
 import           Imm.Pretty
 
+import           Control.Monad.Trans.Reader
 import           Data.CaseInsensitive
-
-import           Network.Connection      as Reexport
-import           Network.HTTP.Client     as Reexport
-import           Network.HTTP.Client.TLS as Reexport
-
+import           Network.Connection         as Reexport
+import           Network.HTTP.Client        as Reexport
+import           Network.HTTP.Client.TLS    as Reexport
 import           URI.ByteString
 -- }}}
 
--- | Interpreter for 'HttpClientF'
-mkCoHttpClient :: (MonadIO m, MonadCatch m) => Manager -> CoHttpClientF m Manager
-mkCoHttpClient manager = CoHttpClientF coGet where
-  coGet uri = handleAny (\e -> return (Left e, manager)) $ do
-    result <- httpGet manager uri
-    return (Right result, manager)
+-- | Monad capable of performing HTTP GET requests.
+instance MonadHttpClient (ReaderT Manager IO) where
+  httpGet uri = do
+    manager <- ask
+    lift $ httpGet' manager uri
 
 -- | Default manager uses TLS and no proxy
 defaultManager :: IO Manager
@@ -31,11 +30,10 @@ defaultManager = newManager $ mkManagerSettings (TLSSettingsSimple False False F
 
 
 -- | Perform an HTTP GET request and return the response body
-httpGet :: (MonadIO m, MonadThrow m)
-    => Manager -> URI -> m LByteString
-httpGet manager uri = do
+httpGet' :: Manager -> URI -> IO LByteString
+httpGet' manager uri = do
   request <- makeRequest uri
-  responseBody <$> io (httpLbs request manager)
+  responseBody <$> httpLbs request manager
     -- codec'   <- reader $ view (config.codec)
     -- return $ response $=+ decode codec'
 
@@ -43,7 +41,7 @@ parseRequest' :: (MonadThrow m) => URI -> m Request
 parseRequest' = parseRequest . show . prettyURI
 
 -- | Build an HTTP request for given URI
-makeRequest :: (MonadIO m, MonadThrow m) => URI -> m Request
+makeRequest :: URI -> IO Request
 makeRequest uri = do
   req <- parseRequest' uri
   return $ req { requestHeaders = [

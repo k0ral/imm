@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications  #-}
 -- | Helpers to manipulate feeds
 module Imm.Feed where
 
@@ -26,7 +27,7 @@ data FeedRef = ByUID Int | ByURI URI
   deriving(Eq, Show)
 
 instance Pretty FeedRef where
-  pretty (ByUID n) = text "feed" <+> text (show n)
+  pretty (ByUID n) = "feed" <+> pretty n
   pretty (ByURI u) = prettyURI u
 
 data Feed = Rss (RssDocument '[ContentModule, DublinCoreModule]) | Atom AtomFeed
@@ -63,7 +64,7 @@ getContent (AtomElement entry) = fromMaybe "<empty>" $ content <|> summary where
 
 
 getHashes :: FeedElement -> [Int]
-getHashes (RssElement item) = map (hash . (show :: Doc -> String) . prettyGuid) (maybeToList $ itemGuid item)
+getHashes (RssElement item) = map (hash @String . show . prettyGuid) (maybeToList $ itemGuid item)
   <> map ((hash :: String -> Int) . show . withRssURI prettyURI) (maybeToList $ itemLink item)
   <> [hash $ itemTitle item]
   <> [hash $ itemDescription item]
@@ -72,6 +73,6 @@ getHashes (AtomElement entry) = [hash $ entryId entry, (hash :: String -> Int) $
 
 -- * Misc
 
-prettyElement :: FeedElement -> Doc
+prettyElement :: FeedElement -> Doc a
 prettyElement (RssElement item)   = prettyItem item
 prettyElement (AtomElement entry) = prettyEntry entry
