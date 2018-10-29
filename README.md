@@ -9,13 +9,13 @@ Technical documentation is available at [hackage][1].
 To get started, please consult documentation of `Imm.Boot` module.
 
 
-## Example workflows
+## Example use cases
 
 ### Online feed reader
 
 For the sake of *I-want-the-mutt-of-feed-readers* zealots, it is possible to turn any mail reader into a feed reader, by having *imm* send an e-mail with unread elements to an arbitrary address.
 You can then browse your feeds through your favourite mail reader, and leverage any mail-related tool on your feeds.
-Bonus points if your mail reader is online as you can now access your feeds from anywhere in the internet.
+Bonus points if your mail reader is online as you can now access your feeds from any computer connected to the Internet.
 
 Check out `Imm.Hooks.SendMail` module.
 
