@@ -184,7 +184,7 @@ resolveTarget s Nothing = do
   when (s == AskConfirmation) $ liftBase $ promptConfirm $ "This will affect " <> show (length result) <> " feeds."
   return result
 resolveTarget _ (Just (ByUID i)) = do
-  result <- fst . (!! i) . mapToList <$> Database.fetchAll FeedTable
+  result <- fst . (!! (i-1)) . mapToList <$> Database.fetchAll FeedTable
   -- logInfo $ "Target(s): " <> show (pretty result)
   return $ singleton result
 resolveTarget _ (Just (ByURI uri)) = return [FeedID uri]
