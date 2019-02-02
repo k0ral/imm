@@ -3,7 +3,7 @@ module Imm.Prelude (module Imm.Prelude, module X) where
 
 -- {{{ Imports
 import           Control.Applicative             as X
-import           Control.Exception.Safe          as X
+import           Control.Exception.Safe          as X hiding(handle)
 import           Control.Monad                   as X (MonadPlus (..), unless,
                                                        void, when)
 import           Control.Monad.Base              as X

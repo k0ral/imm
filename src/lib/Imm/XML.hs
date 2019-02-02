@@ -1,5 +1,9 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 -- | XML module abstracts over the parsing of RSS/Atom feeds.
+--
+-- This module follows the [Handle pattern](https://jaspervdj.be/posts/2018-03-08-handle-pattern.html).
+--
+-- > import qualified Imm.XML as XML
 module Imm.XML where
 
 -- {{{ Imports
@@ -9,6 +13,6 @@ import           Imm.Prelude
 import           URI.ByteString
 -- }}}
 
--- | Monad capable of parsing XML into a 'Feed' (RSS or Atom).
-class MonadThrow m => MonadXmlParser m where
-  parseXml :: URI -> LByteString -> m Feed
+newtype Handle m = Handle
+  { parseXml :: URI -> LByteString -> m Feed
+  }

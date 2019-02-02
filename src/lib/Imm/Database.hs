@@ -3,14 +3,20 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE StandaloneDeriving    #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UndecidableInstances  #-}
 -- | Database module abstracts over a key-value database that supports CRUD operations.
+--
+-- This module follows the [Handle pattern](https://jaspervdj.be/posts/2018-03-08-handle-pattern.html).
+--
+-- > import qualified Imm.Database as Database
 module Imm.Database where
 
 -- {{{ Imports
-import           Imm.Logger
+import qualified Imm.Logger as Logger
+import           Imm.Logger hiding(Handle)
 import           Imm.Prelude
 import           Imm.Pretty
 
@@ -24,17 +30,18 @@ class (Ord (Key t), Show (Key t), Show (Entry t), Typeable t, Show t, Pretty t, 
   => Table t where
   type Key t :: *
   type Entry t :: *
+  rep :: t
 
--- | Monad capable of interacting with a key-value store.
-class MonadThrow m => MonadDatabase t m where
-  _describeDatabase :: t -> m (Doc a)
-  _fetchList :: t -> [Key t] -> m (Map (Key t) (Entry t))
-  _fetchAll :: t -> m (Map (Key t) (Entry t))
-  _update :: t -> Key t -> (Entry t -> Entry t) -> m ()
-  _insertList :: t -> [(Key t, Entry t)] -> m ()
-  _deleteList :: t -> [Key t] -> m ()
-  _purge :: t -> m ()
-  _commit :: t -> m ()
+data Handle m t = Handle
+  { _describeDatabase :: forall a . m (Doc a)
+  , _fetchList :: [Key t] -> m (Map (Key t) (Entry t))
+  , _fetchAll :: m (Map (Key t) (Entry t))
+  , _update :: Key t -> (Entry t -> Entry t) -> m ()
+  , _insertList :: [(Key t, Entry t)] -> m ()
+  , _deleteList :: [Key t] -> m ()
+  , _purge :: m ()
+  , _commit :: m ()
+  }
 
 
 data DatabaseException t
@@ -64,43 +71,46 @@ instance (Pretty t, Pretty (Key t)) => Pretty (DatabaseException t) where
 
 -- * Primitives
 
-fetch :: (MonadDatabase t m, Table t, MonadThrow m) => t -> Key t -> m (Entry t)
-fetch t k = do
-  results <- _fetchList t [k]
-  maybe (throwM $ NotFound t [k]) return $ lookup k results
+fetch :: Monad m => Table t => MonadThrow m => Handle m t -> Key t -> m (Entry t)
+fetch handle k = do
+  results <- _fetchList handle [k]
+  maybe (throwM $ NotFound (table handle) [k]) return $ lookup k results
 
-fetchList :: (MonadDatabase t m, MonadThrow m) => t -> [Key t] -> m (Map (Key t) (Entry t))
+fetchList :: Monad m => Handle m t -> [Key t] -> m (Map (Key t) (Entry t))
 fetchList = _fetchList
 
-fetchAll :: (MonadThrow m, MonadDatabase t m) => t -> m (Map (Key t) (Entry t))
+fetchAll :: Monad m => Handle m t -> m (Map (Key t) (Entry t))
 fetchAll = _fetchAll
 
-update :: (MonadDatabase t m, MonadThrow m) => t -> Key t -> (Entry t -> Entry t) -> m ()
+update :: Monad m => Handle m t -> Key t -> (Entry t -> Entry t) -> m ()
 update  = _update
 
-insert :: (MonadThrow m, MonadDatabase t m, MonadLog m) => t -> Key t -> Entry t -> m ()
-insert t k v = insertList t [(k, v)]
+insert :: Monad m => Logger.Handle m -> Handle m t -> Key t -> Entry t -> m ()
+insert logger handle k v = insertList logger handle [(k, v)]
 
-insertList :: (MonadThrow m, MonadDatabase t m, MonadLog m) => t -> [(Key t, Entry t)] -> m ()
-insertList t i = do
-  logInfo $ "Inserting " <> yellow (pretty $ length i) <> " entries..."
-  _insertList t i
+insertList :: Monad m => Logger.Handle m -> Handle m t -> [(Key t, Entry t)] -> m ()
+insertList logger handle i = do
+  log logger Info $ "Inserting " <> yellow (pretty $ length i) <> " entries..."
+  _insertList handle i
 
-delete :: (MonadThrow m, MonadDatabase t m, MonadLog m) => t -> Key t -> m ()
-delete t k = deleteList t [k]
+delete :: Monad m => Logger.Handle m -> Handle m t -> Key t -> m ()
+delete logger handle k = deleteList logger handle [k]
 
-deleteList :: (MonadThrow m, MonadDatabase t m, MonadLog m) => t -> [Key t] -> m ()
-deleteList t k = do
-  logInfo $ "Deleting " <> yellow (pretty $ length k) <> " entries..."
-  _deleteList t k
+deleteList :: Monad m => Logger.Handle m -> Handle m t -> [Key t] -> m ()
+deleteList logger handle k = do
+  log logger Info $ "Deleting " <> yellow (pretty $ length k) <> " entries..."
+  _deleteList handle k
 
-purge :: (MonadThrow m, MonadDatabase t m, MonadLog m) => t -> m ()
-purge t = do
-  logInfo "Purging database..."
-  _purge t
+purge :: Monad m => Logger.Handle m -> Handle m t -> m ()
+purge logger handle = do
+  log logger Info "Purging database..."
+  _purge handle
 
-commit :: (MonadThrow m, MonadDatabase t m, MonadLog m) => t -> m ()
-commit t = do
-  logDebug "Committing database transaction..."
-  _commit t
-  logDebug "Database transaction committed"
+commit :: Monad m => Logger.Handle m -> Handle m t -> m ()
+commit logger handle = do
+  log logger Debug "Committing database transaction..."
+  _commit handle
+  log logger Debug "Database transaction committed"
+
+table :: Table t => Handle m t -> t
+table _ = rep

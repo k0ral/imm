@@ -16,10 +16,10 @@
 --
 -- Your personal configuration is located at @$XDG_CONFIG_HOME\/imm\/imm.hs@.
 --
--- == @ReaderT@ pattern
+-- == Handle pattern
 --
--- The behavior of this program can be customized through the @ReaderT@ pattern.
-module Imm.Boot (imm, Modules(..), ModulesM, mkModulesM) where
+-- The behavior of this program can be customized through the [Handle pattern](https://jaspervdj.be/posts/2018-03-08-handle-pattern.html).
+module Imm.Boot (imm) where
 
 -- {{{ Imports
 import qualified Imm.Core                   as Core
@@ -27,96 +27,43 @@ import           Imm.Database               as Database
 import           Imm.Database.FeedTable     as Database
 import           Imm.Dyre                   as Dyre
 import           Imm.Feed
-import           Imm.Hooks
+import           Imm.Hooks as Hooks
 import           Imm.HTTP                   as HTTP
 import           Imm.Logger                 as Logger
 import           Imm.Options                as Options hiding (logLevel)
 import           Imm.Prelude
 import           Imm.Pretty
-import           Imm.XML
+import           Imm.XML as XML
 
-import           Control.Monad.Time
-import           Control.Monad.Trans.Reader
 import           Data.Conduit.Combinators   (stdin)
-import           Streamly                   (MonadAsync)
 import           System.IO                  (hFlush)
 -- }}}
-
--- | Modules are independent features of the program which behavior can be controlled by the user.
-data Modules httpClient databaseClient logger hooks xmlParser = Modules
-  { _httpClient     :: httpClient      -- ^ HTTP client interpreter (cf "Imm.HTTP")
-  , _databaseClient :: databaseClient  -- ^ Database interpreter (cf "Imm.Database")
-  , _logger         :: logger          -- ^ Logging interpreter (cf "Imm.Logger")
-  , _hooks          :: hooks           -- ^ Hooks interpreter (cf "Imm.Hooks")
-  , _xmlParser      :: xmlParser       -- ^ XML parsing interpreter (cf "Imm.XML")
-  }
-
--- | Type-erased version of 'Modules', using existential quantification.
-data ModulesM m = forall a b c d e .
-  ( MonadHttpClient (ReaderT a m)
-  , MonadDatabase FeedTable (ReaderT b m)
-  , MonadLog (ReaderT c m)
-  , MonadImm (ReaderT d m)
-  , MonadXmlParser (ReaderT e m)
-  ) => ModulesM (Modules a b c d e)
-
--- | Constructor for 'ModulesM'.
-mkModulesM :: (MonadXmlParser (ReaderT e m), MonadImm (ReaderT d m), MonadLog (ReaderT c m), MonadDatabase FeedTable (ReaderT b m), MonadHttpClient (ReaderT a m))
-           => a -> b -> c -> d -> e -> ModulesM m
-mkModulesM a b c d e = ModulesM $ Modules a b c d e
-
-
-instance (MonadIO m, MonadLog (ReaderT c m)) => MonadLog (ReaderT (Modules a b c d e) m) where
-  log l t = withReaderT _logger $ log l t
-  getLogLevel = withReaderT _logger getLogLevel
-  setLogLevel l = withReaderT _logger $ setLogLevel l
-  setColorizeLogs c = withReaderT _logger $ setColorizeLogs c
-  flushLogs = withReaderT _logger flushLogs
-
-instance (Monad m, MonadImm (ReaderT d m)) => MonadImm (ReaderT (Modules a b c d e) m) where
-  processNewElement feed element = withReaderT _hooks $ processNewElement feed element
-
-instance (MonadThrow m, MonadHttpClient (ReaderT a m)) => MonadHttpClient (ReaderT (Modules a b c d e) m) where
-  httpGet uri = withReaderT _httpClient $ httpGet uri
-
-instance (MonadThrow m, MonadXmlParser (ReaderT e m))
-  => MonadXmlParser (ReaderT (Modules a b c d e) m) where
-  parseXml uri bytes = withReaderT _xmlParser $ parseXml uri bytes
-
-instance (MonadThrow m, MonadDatabase FeedTable (ReaderT b m))
-  => MonadDatabase FeedTable (ReaderT (Modules a b c d e) m) where
-  _describeDatabase t = withReaderT _databaseClient $ _describeDatabase t
-  _fetchList t k = withReaderT _databaseClient $ _fetchList t k
-  _fetchAll t = withReaderT _databaseClient $ _fetchAll t
-  _update t key f = withReaderT _databaseClient $ _update t key f
-  _insertList t list = withReaderT _databaseClient $ _insertList t list
-  _deleteList t k = withReaderT _databaseClient $ _deleteList t k
-  _purge t = withReaderT _databaseClient $ _purge t
-  _commit t = withReaderT _databaseClient $ _commit t
-
 
 -- | Main function, meant to be used in your personal configuration file.
 --
 -- Here is an example:
 --
 -- > import           Imm.Boot
--- > import           Imm.Database.JsonFile
+-- > import           Imm.Database.JsonFile as Database
 -- > import           Imm.Feed
--- > import           Imm.Hooks.SendMail
--- > import           Imm.HTTP.Conduit
--- > import           Imm.Logger.Simple
--- > import           Imm.XML.Simple
+-- > import           Imm.Hooks.SendMail as Hooks
+-- > import           Imm.HTTP.Simple as HTTP
+-- > import           Imm.Logger.Simple as Logger
+-- > import           Imm.XML.Conduit as XML
 -- >
 -- > main :: IO ()
 -- > main = do
--- >   logger   <- defaultLogger
--- >   manager  <- defaultManager
--- >   database <- defaultDatabase
+-- >   logger     <- Logger.mkHandle <$> defaultLogger
+-- >   database   <- Database.mkHandle <$> defaultDatabase
+-- >   httpClient <- HTTP.mkHandle <$> defaultManager
 -- >
--- >   imm $ mkModulesM manager database logger sendmail defaultXmlParser
+-- >   imm logger database httpClient hooks xmlParser
 -- >
--- > sendmail :: SendMailSettings
--- > sendmail = SendMailSettings smtpServer formatMail
+-- > xmlParser :: XML.Handle IO
+-- > xmlParser = XML.mkHandle defaultXmlParser
+-- >
+-- > hooks :: Hooks.Handle IO
+-- > hooks = Hooks.mkHandle $ SendMailSettings smtpServer formatMail
 -- >
 -- > formatMail :: FormatMail
 -- > formatMail = FormatMail
@@ -129,35 +76,34 @@ instance (MonadThrow m, MonadDatabase FeedTable (ReaderT b m))
 -- > smtpServer _ _ = SMTPServer
 -- >   (Just $ Authentication PLAIN "user" "password")
 -- >   (StartTls "smtp.host" defaultSettingsSMTPSTARTTLS)
-imm :: ModulesM IO -> IO ()
-imm modules = void $ do
+imm :: Logger.Handle IO -> Database.Handle IO FeedTable -> HTTP.Handle IO -> Hooks.Handle IO -> XML.Handle IO -> IO ()
+imm logger database httpClient hooks xmlParser = void $ do
   options <- parseOptions
-  Dyre.wrap (optionDyreMode options) realMain (optionCommand options, optionLogLevel options, optionColorizeLogs options, modules)
+  Dyre.wrap (optionDyreMode options) realMain (optionCommand options, optionLogLevel options, optionColorizeLogs options, logger, database, httpClient, hooks, xmlParser)
 
-realMain :: (MonadAsync m, MonadTime m, MonadCatch m)
-         => (Command, LogLevel, Bool, ModulesM m) -> m ()
-realMain (command, logLevel, enableColors, ModulesM modules) = void $ flip runReaderT modules $ do
-  setColorizeLogs enableColors
-  setLogLevel logLevel
-  logDebug . ("Dynamic reconfiguration settings:" <++>) . indent 2 =<< Dyre.describePaths
-  logDebug $ "Executing: " <> pretty command
-  logDebug . ("Using database:" <++>) . indent 2 =<< _describeDatabase FeedTable
+realMain :: (Command, LogLevel, Bool, Logger.Handle IO, Database.Handle IO FeedTable, HTTP.Handle IO, Hooks.Handle IO, XML.Handle IO) -> IO ()
+realMain (command, logLevel, enableColors, logger, database, httpClient, hooks, xmlParser) = void $ do
+  setColorizeLogs logger enableColors
+  setLogLevel logger logLevel
+  log logger Debug . ("Dynamic reconfiguration settings:" <++>) . indent 2 =<< Dyre.describePaths
+  log logger Debug $ "Executing: " <> pretty command
+  log logger Debug . ("Using database:" <++>) . indent 2 =<< _describeDatabase database
 
-  handleAny (logError . pretty . displayException) $ case command of
-    Check t        -> Core.check =<< resolveTarget ByPassConfirmation t
+  handleAny (log logger Error . pretty . displayException) $ case command of
+    Check t        -> Core.check logger database httpClient xmlParser =<< resolveTarget database ByPassConfirmation t
     Help           -> liftBase $ putStrLn helpString
-    Import         -> Core.importOPML stdin
-    Read t         -> mapM_ Database.markAsRead =<< resolveTarget AskConfirmation t
-    Run t          -> Core.run =<< resolveTarget ByPassConfirmation t
-    Show t         -> Core.showFeed =<< resolveTarget ByPassConfirmation t
+    Import         -> Core.importOPML logger database stdin
+    Read t         -> mapM_ (Database.markAsRead logger database) =<< resolveTarget database AskConfirmation t
+    Run t          -> Core.run logger database httpClient hooks xmlParser =<< resolveTarget database ByPassConfirmation t
+    Show t         -> Core.showFeed logger database =<< resolveTarget database ByPassConfirmation t
     ShowVersion    -> Core.printVersions
-    Subscribe u c  -> Core.subscribe u c
-    Unread t       -> mapM_ Database.markAsUnread =<< resolveTarget AskConfirmation t
-    Unsubscribe t  -> Database.deleteList FeedTable =<< resolveTarget AskConfirmation t
+    Subscribe u c  -> Core.subscribe logger database u c
+    Unread t       -> mapM_ (Database.markAsUnread logger database) =<< resolveTarget database AskConfirmation t
+    Unsubscribe t  -> Database.deleteList logger database =<< resolveTarget database AskConfirmation t
     _              -> return ()
 
-  Database.commit FeedTable
-  flushLogs
+  Database.commit logger database
+  flushLogs logger
 
 
 -- * Util
@@ -177,14 +123,13 @@ promptConfirm s = do
   unless (null x || x == ("Y" :: Text)) $ throwM InterruptedException
 
 
-resolveTarget :: (MonadBase IO m, MonadThrow m, MonadDatabase FeedTable m)
-              => SafeGuard -> Maybe Core.FeedRef -> m [FeedID]
-resolveTarget s Nothing = do
-  result <- keys <$> Database.fetchAll FeedTable
+resolveTarget :: MonadBase IO m => MonadThrow m => Database.Handle m FeedTable -> SafeGuard -> Maybe Core.FeedRef -> m [FeedID]
+resolveTarget database s Nothing = do
+  result <- keys <$> Database.fetchAll database
   when (s == AskConfirmation) $ liftBase $ promptConfirm $ "This will affect " <> show (length result) <> " feeds."
   return result
-resolveTarget _ (Just (ByUID i)) = do
-  result <- fst . (!! (i-1)) . mapToList <$> Database.fetchAll FeedTable
-  -- logInfo $ "Target(s): " <> show (pretty result)
+resolveTarget database _ (Just (ByUID i)) = do
+  result <- fst . (!! (i-1)) . mapToList <$> Database.fetchAll database
+  -- log logger Info $ "Target(s): " <> show (pretty result)
   return $ singleton result
-resolveTarget _ (Just (ByURI uri)) = return [FeedID uri]
+resolveTarget _ _ (Just (ByURI uri)) = return [FeedID uri]

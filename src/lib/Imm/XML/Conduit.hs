@@ -2,7 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RankNTypes        #-}
 -- | Implementation of "Imm.XML" based on 'Conduit'.
-module Imm.XML.Conduit where
+module Imm.XML.Conduit (module Imm.XML.Conduit, module Imm.XML) where
 
 -- {{{ Imports
 import           Imm.Feed
@@ -11,7 +11,6 @@ import           Imm.XML
 
 import           Control.Monad
 import           Control.Monad.Fix
-import           Control.Monad.Trans.Reader
 import           Data.Conduit
 import           Data.XML.Types
 import           Text.Atom.Conduit.Parse
@@ -26,10 +25,10 @@ import           URI.ByteString
 newtype XmlParser = XmlParser (forall m . Monad m => URI -> ConduitT Event Event m ())
 
 -- | 'Conduit' based implementation
-instance (MonadIO m, MonadCatch m) => MonadXmlParser (ReaderT XmlParser m) where
-  parseXml uri bytestring = do
-    XmlParser preProcess <- ask
-    lift $ runConduit $ parseLBS def bytestring .| preProcess uri .| force "Invalid feed" ((fmap Atom <$> atomFeed) `orE` (fmap Rss <$> rssDocument) `orE` (fmap Rss <$> rss1Document))
+mkHandle :: MonadIO m => MonadCatch m => XmlParser -> Handle m
+mkHandle (XmlParser preProcess) = Handle
+  { parseXml = \uri bytestring -> liftIO $ runConduit $ parseLBS def bytestring .| preProcess uri .| force "Invalid feed" ((fmap Atom <$> atomFeed) `orE` (fmap Rss <$> rssDocument) `orE` (fmap Rss <$> rss1Document))
+  }
 
 -- | Forward all 'Event's without any pre-process
 defaultXmlParser :: XmlParser

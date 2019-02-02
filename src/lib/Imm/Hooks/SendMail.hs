@@ -1,7 +1,6 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeOperators     #-}
 -- | Implementation of "Imm.Hooks" that sends a mail via a SMTP server for each new RSS/Atom element.
 -- You may want to check out "Network.HaskellNet.SMTP", "Network.HaskellNet.SMTP.SSL" and "Network.Mail.Mime" modules for additional information.
 --
@@ -30,7 +29,6 @@ import           Imm.Hooks
 import           Imm.Prelude
 import           Imm.Pretty
 
-import           Control.Monad.Trans.Reader
 import           Data.NonNull
 import           Data.Time
 import           Network.HaskellNet.SMTP     as Reexport
@@ -68,13 +66,14 @@ data FormatMail = FormatMail
 
 data SendMailSettings = SendMailSettings (Feed -> FeedElement -> SMTPServer) FormatMail
 
-instance MonadImm (ReaderT SendMailSettings IO) where
-  processNewElement feed element = do
-    SendMailSettings connectionSettings formatMail <- ask
-    timezone <- lift getCurrentTimeZone
-    currentTime <- lift getCurrentTime
-    let mail = buildMail formatMail currentTime timezone feed element
-    lift $ withSMTPConnection (connectionSettings feed element) $ sendMimeMail2 mail
+mkHandle :: MonadBase IO m => SendMailSettings -> Handle m
+mkHandle (SendMailSettings connectionSettings formatMail) = Handle
+  { processNewElement = \feed element -> do
+      timezone <- liftBase getCurrentTimeZone
+      currentTime <- liftBase getCurrentTime
+      let mail = buildMail formatMail currentTime timezone feed element
+      liftBase $ withSMTPConnection (connectionSettings feed element) $ sendMimeMail2 mail
+  }
 
 
 -- * Default behavior

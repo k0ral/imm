@@ -10,6 +10,7 @@ module Imm.Database.JsonFile
   ( JsonFileDatabase
   , mkJsonFileDatabase
   , defaultDatabase
+  , mkHandle
   , JsonException(..)
   , module Imm.Database.FeedTable
   ) where
@@ -23,8 +24,6 @@ import           Imm.Prelude                    hiding (delete, keys)
 import           Imm.Pretty
 
 import           Control.Concurrent.MVar.Lifted
-import           Control.Monad.Reader.Class
-import           Control.Monad.Trans.Reader     (ReaderT)
 import           Data.Aeson
 import           Data.ByteString.Lazy           (hPut)
 import           Data.ByteString.Streaming      (hGetContents, toLazy_)
@@ -61,25 +60,21 @@ instance Exception JsonException where
   displayException _ = "Unable to parse JSON"
 
 
-instance (Table t, FromJSON (Key t), FromJSON (Entry t), ToJSON (Key t), ToJSON (Entry t))
-  => MonadDatabase t (ReaderT (MVar (JsonFileDatabase t)) IO) where
-  _describeDatabase _ = pretty <$> (readMVar =<< ask)
-  _fetchList t keys = Map.filterWithKey (\uri _ -> member uri $ Set.fromList keys) <$> fetchAll t
-  _fetchAll _ = do
-    mvar <- ask
-    lift $ modifyMVar mvar $ \database -> do
-      a@(JsonFileDatabase _ cache _) <- loadInCache database
-      return (a, cache)
-  _update _ key f = exec (\a -> update a key f)
-  _insertList _ rows = exec $ insert rows
-  _deleteList _ keys = exec $ delete keys
-  _purge _ = exec purge
-  _commit _ = exec commit
-
-exec :: (a -> IO a) -> ReaderT (MVar a) IO ()
-exec f = do
-  mvar <- ask
-  lift $ modifyMVar_ mvar f
+mkHandle :: (Table t, FromJSON (Key t), FromJSON (Entry t), ToJSON (Key t), ToJSON (Entry t), MonadBase IO m)
+         => MVar (JsonFileDatabase t) -> Handle m t
+mkHandle mvar = Handle
+  { _describeDatabase = pretty <$> readMVar mvar
+  , _fetchList = \keys -> Map.filterWithKey (\uri _ -> member uri $ Set.fromList keys) <$> fetchAll_
+  , _fetchAll = fetchAll_
+  , _update = \key f -> liftBase $ modifyMVar_ mvar (\a -> update a key f)
+  , _insertList = liftBase . modifyMVar_ mvar . insert
+  , _deleteList = liftBase . modifyMVar_ mvar . delete
+  , _purge = liftBase $ modifyMVar_ mvar purge
+  , _commit = liftBase $ modifyMVar_ mvar commit
+  }
+  where fetchAll_ = liftBase $ modifyMVar mvar $ \database -> do
+          a@(JsonFileDatabase _ cache _) <- loadInCache database
+          return (a, cache)
 
 
 -- * Low-level implementation
@@ -132,6 +127,6 @@ commit :: (ToJSON (Key t), ToJSON (Entry t))
        => JsonFileDatabase t -> IO (JsonFileDatabase t)
 commit t@(JsonFileDatabase file cache status) = case status of
   Dirty -> do
-    withFile file WriteMode $ \h -> (hPut h $ encode $ Map.toList cache)
+    withFile file WriteMode $ \h -> hPut h $ encode $ Map.toList cache
     return $ JsonFileDatabase file cache Clean
   _ -> return t

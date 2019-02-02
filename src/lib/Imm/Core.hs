@@ -18,18 +18,16 @@ module Imm.Core (
 ) where
 
 -- {{{ Imports
-import           Imm.Database                (MonadDatabase)
 import qualified Imm.Database                as Database
 import           Imm.Database.FeedTable
 import qualified Imm.Database.FeedTable      as Database
 import           Imm.Feed
 import           Imm.Hooks                   as Hooks
-import           Imm.HTTP                    (MonadHttpClient)
 import qualified Imm.HTTP                    as HTTP
-import           Imm.Logger
+import           Imm.Logger as Logger
 import           Imm.Prelude
 import           Imm.Pretty
-import           Imm.XML
+import           Imm.XML as XML
 
 import           Control.Concurrent.STM      (STM, atomically)
 import           Control.Concurrent.STM.TVar
@@ -60,105 +58,103 @@ printVersions = liftBase $ do
   putStrLn $ "compiled by " <> Text.pack compilerName <> "-" <> Text.pack (showVersion compilerVersion)
 
 -- | Print database status for given feed(s)
-showFeed :: (MonadLog m, MonadThrow m, MonadDatabase FeedTable m)
-         => [FeedID] -> m ()
-showFeed feedIDs = do
-  entries <- Database.fetchList FeedTable feedIDs
-  flushLogs
-  when (null entries) $ logWarning "No subscription"
+showFeed :: MonadThrow m => Logger.Handle m -> Database.Handle m FeedTable -> [FeedID] -> m ()
+showFeed logger database feedIDs = do
+  entries <- Database.fetchList database feedIDs
+  flushLogs logger
+  when (null entries) $ log logger Warning "No subscription"
   forM_ (zip [1..] $ Map.elems entries) $ \(i, entry) ->
-    logInfo $ pretty (i :: Int) <+> prettyDatabaseEntry entry
+    log logger Info $ pretty (i :: Int) <+> prettyDatabaseEntry entry
 
 -- | Register the given feed URI in database
-subscribe :: (MonadLog m, MonadDatabase FeedTable m, MonadCatch m)
-          => URI -> Set Text -> m ()
-subscribe uri = Database.register (FeedID uri)
+subscribe :: MonadCatch m => Logger.Handle m -> Database.Handle m FeedTable -> URI -> Set Text -> m ()
+subscribe logger database uri = Database.register logger database (FeedID uri)
 
 -- | Check for unread elements without processing them
-check :: (MonadAsync m, MonadCatch m, MonadLog m, MonadDatabase FeedTable m, MonadHttpClient m, MonadXmlParser m)
-      => [FeedID] -> m ()
-check feedIDs = do
+check :: (MonadAsync m, MonadCatch m)
+      => Logger.Handle m -> Database.Handle m FeedTable -> HTTP.Handle m -> XML.Handle m -> [FeedID] -> m ()
+check logger database httpClient xmlParser feedIDs = do
   progress <- liftBase $ newTVarIO 0
 
   results <- Stream.toList $ wAsyncly $ do
     feedID <- Stream.fromFoldable feedIDs
-    result <- lift $ tryAny $ checkOne feedID
+    result <- lift $ tryAny $ checkOne logger database httpClient xmlParser feedID
     let logResult = either (red . pretty . displayException) (\n -> green (pretty n) <+> "new element(s)") result
     n <- liftBase $ atomically $ do
       modifyTVar (progress :: TVar Int) (+ 1)
       readTVar progress
-    lift $ logInfo $ brackets (fill width (bold $ cyan $ pretty n) <+> "/" <+> pretty total) <+> "Checked" <+> magenta (pretty feedID) <+> "=>" <+> logResult
+    lift $ log logger Info $ brackets (fill width (bold $ cyan $ pretty n) <+> "/" <+> pretty total) <+> "Checked" <+> magenta (pretty feedID) <+> "=>" <+> logResult
     return result
 
-  flushLogs
+  flushLogs logger
 
   let (failures, successes) = partitionEithers $ zipWith (\a -> bimap (a,) (a,)) feedIDs results
-  unless (null failures) $ logError $ bold (pretty $ length failures) <+> "feeds in error"
-  logInfo $ bold (pretty $ sum $ map snd successes) <+> "new element(s) overall"
+  unless (null failures) $ log logger Error $ bold (pretty $ length failures) <+> "feeds in error"
+  log logger Info $ bold (pretty $ sum $ map snd successes) <+> "new element(s) overall"
 
   where width = length (show total :: String)
         total = length feedIDs
 
-checkOne :: (MonadBase IO m, MonadCatch m, MonadLog m, MonadDatabase FeedTable m, MonadHttpClient m, MonadXmlParser m)
-         => FeedID -> m Int
-checkOne feedID = do
-  feed <- getFeed feedID
+checkOne :: (MonadBase IO m, MonadCatch m)
+         => Logger.Handle m -> Database.Handle m FeedTable -> HTTP.Handle m -> XML.Handle m -> FeedID -> m Int
+checkOne logger database httpClient xmlParser feedID = do
+  feed <- getFeed logger httpClient xmlParser feedID
   case feed of
-    Atom _ -> logDebug $ "Parsed Atom feed: " <> pretty feedID
-    Rss _  -> logDebug $ "Parsed RSS feed: " <> pretty feedID
+    Atom _ -> log logger Debug $ "Parsed Atom feed: " <> pretty feedID
+    Rss _  -> log logger Debug $ "Parsed RSS feed: " <> pretty feedID
 
   let dates = mapMaybe getDate $ getElements feed
 
-  logDebug $ vsep $ map prettyElement $ getElements feed
-  status <- Database.getStatus feedID
+  log logger Debug $ vsep $ map prettyElement $ getElements feed
+  status <- Database.getStatus database feedID
 
   return $ length $ filter (unread status) dates
   where unread (LastUpdate t1) t2 = t2 > t1
         unread _ _                = True
 
 
-run :: (MonadTime m, MonadAsync m, MonadCatch m, MonadImm m, MonadLog m, MonadDatabase FeedTable m, MonadHttpClient m, MonadXmlParser m)
-    => [FeedID] -> m ()
-run feedIDs = do
+run :: (MonadTime m, MonadAsync m, MonadCatch m)
+    => Logger.Handle m -> Database.Handle m FeedTable -> HTTP.Handle m -> Hooks.Handle m -> XML.Handle m -> [FeedID] -> m ()
+run logger database httpClient hooks xmlParser feedIDs = do
   progress <- liftBase $ newTVarIO 0
 
   results <- Stream.toList $ wAsyncly $ do
     feedID <- Stream.fromFoldable feedIDs
-    result <- lift $ tryAny $ runOne feedID
+    result <- lift $ tryAny $ runOne logger database httpClient hooks xmlParser feedID
     let logResult = either (red . pretty . displayException) (\n -> green (pretty n) <+> "new element(s)") result
     n <- liftBase $ atomically $ do
       modifyTVar progress (+ 1)
       readTVar progress :: STM Int
-    lift $ logInfo $ brackets (fill width (bold $ cyan $ pretty n) <+> "/" <+> pretty total) <+> "Processed" <+> magenta (pretty feedID) <+> "=>" <+> logResult
+    lift $ log logger Info $ brackets (fill width (bold $ cyan $ pretty n) <+> "/" <+> pretty total) <+> "Processed" <+> magenta (pretty feedID) <+> "=>" <+> logResult
     return $ bimap (feedID,) (feedID,) result
 
-  flushLogs
+  flushLogs logger
 
   let (failures, successes) = partitionEithers results
 
-  unless (null failures) $ logError $ bold (pretty $ length failures) <+> "feeds in error"
-  logInfo $ bold (pretty $ sum $ map snd successes) <+> "new element(s) overall"
+  unless (null failures) $ log logger Error $ bold (pretty $ length failures) <+> "feeds in error"
+  log logger Info $ bold (pretty $ sum $ map snd successes) <+> "new element(s) overall"
 
   where width = length (show total :: String)
         total = length feedIDs
 
-runOne :: (MonadTime m, MonadCatch m, MonadImm m, MonadLog m, MonadDatabase FeedTable m, MonadHttpClient m, MonadXmlParser m)
-       => FeedID -> m Int
-runOne feedID = do
-  feed <- getFeed feedID
-  unreadElements <- filterM (fmap not . isRead feedID) $ getElements feed
+runOne :: (MonadTime m, MonadCatch m)
+       => Logger.Handle m -> Database.Handle m FeedTable -> HTTP.Handle m -> Hooks.Handle m -> XML.Handle m -> FeedID -> m Int
+runOne logger database httpClient hooks xmlParser feedID = do
+  feed <- getFeed logger httpClient xmlParser feedID
+  unreadElements <- filterM (fmap not . isRead database feedID) $ getElements feed
 
   forM_ unreadElements $ \element -> do
-    onNewElement feed element
-    mapM_ (Database.addReadHash feedID) $ getHashes element
+    onNewElement logger hooks feed element
+    mapM_ (Database.addReadHash logger database feedID) $ getHashes element
 
-  Database.markAsRead feedID
+  Database.markAsRead logger database feedID
   return $ length unreadElements
 
 
-isRead :: (MonadCatch m, MonadDatabase FeedTable m) => FeedID -> FeedElement -> m Bool
-isRead feedID element = do
-  DatabaseEntry _ _ readHashes lastCheck <- Database.fetch FeedTable feedID
+isRead :: MonadCatch m => Database.Handle m FeedTable -> FeedID -> FeedElement -> m Bool
+isRead database feedID element = do
+  DatabaseEntry _ _ readHashes lastCheck <- Database.fetch database feedID
   let matchHash = not $ null $ (setFromList (getHashes element) :: Set Int) `intersection` readHashes
       matchDate = case (lastCheck, getDate element) of
         (Nothing, _)     -> False
@@ -167,19 +163,16 @@ isRead feedID element = do
   return $ matchHash || matchDate
 
 -- | 'subscribe' to all feeds described by the OPML document provided in input
-importOPML :: (MonadLog m, MonadDatabase FeedTable m, MonadCatch m)
-           => ConduitT () ByteString m () -> m ()
-importOPML input = do
+importOPML :: MonadCatch m => Logger.Handle m -> Database.Handle m FeedTable -> ConduitT () ByteString m () -> m ()
+importOPML logger database input = do
   opml <- runConduit $ input .| XML.parseBytes def .| force "Invalid OPML" parseOpml
-  forM_ (opmlOutlines opml) $ importOPML' mempty
+  forM_ (opmlOutlines opml) $ importOPML' logger database mempty
 
-importOPML' :: (MonadLog m, MonadDatabase FeedTable m, MonadCatch m)
-            => Set Text -> Tree OpmlOutline -> m ()
-importOPML' _ (Node (OpmlOutlineGeneric b _) sub) = mapM_ (importOPML' (Set.singleton . toNullable $ OPML.text b)) sub
-importOPML' c (Node (OpmlOutlineSubscription _ s) _) = subscribe (xmlUri s) c
-importOPML' _ _ = return ()
+importOPML' :: MonadCatch m => Logger.Handle m -> Database.Handle m FeedTable -> Set Text -> Tree OpmlOutline -> m ()
+importOPML' logger database _ (Node (OpmlOutlineGeneric b _) sub) = mapM_ (importOPML' logger database (Set.singleton . toNullable $ OPML.text b)) sub
+importOPML' logger database c (Node (OpmlOutlineSubscription _ s) _) = subscribe logger database (xmlUri s) c
+importOPML' _ _ _ _ = return ()
 
 
-getFeed :: (MonadCatch m, MonadHttpClient m, MonadLog m, MonadXmlParser m)
-        => FeedID -> m Feed
-getFeed (FeedID uri) = HTTP.get uri >>= parseXml uri
+getFeed :: MonadCatch m => Logger.Handle m -> HTTP.Handle m -> XML.Handle m -> FeedID -> m Feed
+getFeed logger httpClient xmlParser (FeedID uri) = HTTP.get logger httpClient uri >>= parseXml xmlParser uri

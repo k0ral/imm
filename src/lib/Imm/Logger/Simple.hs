@@ -11,7 +11,7 @@ import           Imm.Prelude
 import           Imm.Pretty
 
 import           Control.Concurrent.MVar.Lifted
-import           Control.Monad.Trans.Reader
+import           Control.Monad.Trans.Control
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           System.Log.FastLogger                     as Reexport
 -- }}}
@@ -23,6 +23,7 @@ data LoggerSettings = LoggerSettings
   , _colorizeLogs   :: Bool       -- ^ Enable log colorisation
   }
 
+
 -- | Default logger forwards error messages to stderr, and other messages to stdout.
 defaultLogger :: IO (MVar LoggerSettings)
 defaultLogger = newMVar =<< LoggerSettings
@@ -31,30 +32,21 @@ defaultLogger = newMVar =<< LoggerSettings
   <*> pure Info
   <*> pure True
 
-instance MonadLog (ReaderT (MVar LoggerSettings) IO) where
-  -- log :: LogLevel -> Doc -> m ()
-  log l t = do
-    settings <- readMVar =<< ask
-    let loggerSet = (if l == Error then _errorLoggerSet else _loggerSet) settings
-        handleColor = (\c -> if c then id else unAnnotate) $ _colorizeLogs settings
-        refLevel = _logLevel settings
-    when (l >= refLevel) $ lift $ pushLogStrLn loggerSet $ toLogStr $ renderLazy $ layoutPretty defaultLayoutOptions $ handleColor t
 
-  -- getLogLevel :: m LogLevel
-  getLogLevel = _logLevel <$> (readMVar =<< ask)
+mkHandle :: MonadBaseControl IO m => MVar LoggerSettings -> Handle m
+mkHandle settings = Handle
+  { log = \l t -> do
+      s <- readMVar settings
+      let loggerSet = (if l == Error then _errorLoggerSet else _loggerSet) s
+          handleColor = (\c -> if c then id else unAnnotate) $ _colorizeLogs s
+          refLevel = _logLevel s
+      when (l >= refLevel) $ liftBase $ pushLogStrLn loggerSet $ toLogStr $ renderLazy $ layoutPretty defaultLayoutOptions $ handleColor t
 
-  -- setLogLevel :: LogLevel -> m ()
-  setLogLevel level = do
-    mvar <- ask
-    modifyMVar_ mvar $ \settings -> return (settings { _logLevel = level })
-
-  -- setColorizeLogs :: Bool -> m ()
-  setColorizeLogs value = do
-    mvar <- ask
-    modifyMVar_ mvar $ \settings -> return (settings { _colorizeLogs = value })
-
-  -- flushLogs :: m ()
-  flushLogs = do
-    settings <- readMVar =<< ask
-    lift $ flushLogStr $ _loggerSet settings
-    lift $ flushLogStr $ _errorLoggerSet settings
+  , getLogLevel = _logLevel <$> readMVar settings
+  , setLogLevel = \level -> modifyMVar_ settings $ \s -> return (s { _logLevel = level })
+  , setColorizeLogs = \value -> modifyMVar_ settings $ \s -> return (s { _colorizeLogs = value })
+  , flushLogs = do
+      s <- readMVar settings
+      liftBase $ flushLogStr $ _loggerSet s
+      liftBase $ flushLogStr $ _errorLoggerSet s
+  }

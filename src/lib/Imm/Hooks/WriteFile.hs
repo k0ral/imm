@@ -1,5 +1,4 @@
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Implementation of "Imm.Hooks" that writes a file for each new RSS/Atom item.
@@ -12,7 +11,6 @@ import           Imm.Prelude
 import           Imm.Pretty
 
 import           Control.Arrow
-import           Control.Monad.Trans.Reader
 import           Data.ByteString.Builder
 import           Data.ByteString.Streaming     (toStreamingByteString)
 import           Data.Monoid.Textual           hiding (elem, map)
@@ -37,12 +35,13 @@ data FileInfo = FileInfo FilePath Builder
 
 newtype WriteFileSettings = WriteFileSettings (Feed -> FeedElement -> FileInfo)
 
-instance MonadImm (ReaderT WriteFileSettings IO) where
-  processNewElement feed element = do
-    WriteFileSettings f <- ask
-    let FileInfo path content = f feed element
-    lift $ createDirectoryIfMissing True $ takeDirectory path
-    writeBinaryFile path $ toStreamingByteString content
+mkHandle :: MonadBase IO m => MonadIO m => MonadMask m => WriteFileSettings -> Handle m
+mkHandle (WriteFileSettings f) = Handle
+  { processNewElement = \feed element -> do
+      let FileInfo path content = f feed element
+      liftBase $ createDirectoryIfMissing True $ takeDirectory path
+      writeBinaryFile path $ toStreamingByteString content
+  }
 
 -- * Default behavior
 

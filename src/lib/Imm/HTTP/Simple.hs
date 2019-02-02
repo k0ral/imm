@@ -3,14 +3,13 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Implementation of "Imm.HTTP" based on "Network.HTTP.Client".
-module Imm.HTTP.Simple (defaultManager, module Reexport) where
+module Imm.HTTP.Simple (mkHandle, defaultManager, module Reexport) where
 
 -- {{{ Imports
 import           Imm.HTTP
 import           Imm.Prelude
 import           Imm.Pretty
 
-import           Control.Monad.Trans.Reader
 import           Data.CaseInsensitive
 import           Network.Connection         as Reexport
 import           Network.HTTP.Client        as Reexport
@@ -18,11 +17,10 @@ import           Network.HTTP.Client.TLS    as Reexport
 import           URI.ByteString
 -- }}}
 
--- | Monad capable of performing HTTP GET requests.
-instance MonadHttpClient (ReaderT Manager IO) where
-  httpGet uri = do
-    manager <- ask
-    lift $ httpGet' manager uri
+mkHandle :: MonadBase IO m => Manager -> Handle m
+mkHandle manager = Handle
+  { httpGet = liftBase . httpGet' manager
+  }
 
 -- | Default manager uses TLS and no proxy
 defaultManager :: IO Manager
@@ -37,7 +35,7 @@ httpGet' manager uri = do
     -- codec'   <- reader $ view (config.codec)
     -- return $ response $=+ decode codec'
 
-parseRequest' :: (MonadThrow m) => URI -> m Request
+parseRequest' :: MonadThrow m => URI -> m Request
 parseRequest' = parseRequest . show . prettyURI
 
 -- | Build an HTTP request for given URI

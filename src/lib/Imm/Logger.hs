@@ -3,7 +3,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
--- | Logger module.
+-- | Logger module abstracts over logging data.
+--
+-- This module follows the [Handle pattern](https://jaspervdj.be/posts/2018-03-08-handle-pattern.html).
+--
+-- > import qualified Imm.Logger as Logger (Handle)
+-- > import Imm.Logger hiding (Handle)
 module Imm.Logger where
 
 -- {{{ Imports
@@ -13,6 +18,14 @@ import           Imm.Pretty
 
 -- * Types
 
+data Handle m = Handle
+  { log :: LogLevel -> Doc AnsiStyle -> m ()
+  , getLogLevel :: m LogLevel
+  , setLogLevel :: LogLevel -> m ()
+  , setColorizeLogs :: Bool -> m ()
+  , flushLogs :: m ()
+  }
+
 data LogLevel = Debug | Info | Warning | Error
   deriving(Eq, Ord, Read, Show)
 
@@ -21,19 +34,3 @@ instance Pretty LogLevel where
   pretty Info    = "INFO"
   pretty Warning = "WARNING"
   pretty Error   = "ERROR"
-
--- | Monad capable of logging pretty text.
-class Monad m => MonadLog m where
-  log :: LogLevel -> Doc AnsiStyle -> m ()
-  getLogLevel :: m LogLevel
-  setLogLevel :: LogLevel -> m ()
-  setColorizeLogs :: Bool -> m ()
-  flushLogs :: m ()
-
--- * Helpers
-
-logDebug, logInfo, logWarning, logError :: MonadLog m => Doc AnsiStyle -> m ()
-logDebug = log Debug
-logInfo = log Info
-logWarning = log Warning
-logError = log Error

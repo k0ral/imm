@@ -3,21 +3,27 @@
 
 -- {{{ Imports
 import           Imm
-import           Imm.Database.JsonFile
-import           Imm.Hooks.Dummy
-import           Imm.HTTP.Simple
-import           Imm.Logger.Simple
+import           Imm.Database.JsonFile as Database
+import           Imm.Hooks.Dummy as Hooks
+import           Imm.HTTP.Simple as HTTP
+import           Imm.Logger.Simple as Logger
 import           Imm.Prelude
-import           Imm.XML.Conduit
-
-import           Control.Concurrent.MVar
+import           Imm.XML.Conduit as XML
 -- }}}
 
 
 main :: IO ()
 main = do
-  logger <- defaultLogger
-  manager <- defaultManager
-  database <- defaultDatabase :: IO (MVar (JsonFileDatabase FeedTable))
+  logger <- Logger.mkHandle <$> defaultLogger
+  database <- Database.mkHandle <$> defaultDatabase
+  httpClient <- HTTP.mkHandle <$> defaultManager
 
-  imm $ mkModulesM manager database logger DummyHooks defaultXmlParser
+  imm logger database httpClient hooks xmlParser
+
+xmlParser :: XML.Handle IO
+xmlParser = XML.mkHandle defaultXmlParser
+
+hooks :: Hooks.Handle IO
+hooks = Hooks.mkHandle
+
+

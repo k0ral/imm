@@ -7,8 +7,8 @@ module Imm.Database.FeedTable where
 
 -- {{{ Imports
 import           Imm.Aeson
-import           Imm.Database
-import           Imm.Logger
+import           Imm.Database as Database
+import           Imm.Logger as Logger
 import           Imm.Prelude
 import           Imm.Pretty
 
@@ -80,6 +80,7 @@ instance Pretty FeedTable where
 instance Table FeedTable where
   type Key FeedTable = FeedID
   type Entry FeedTable = DatabaseEntry
+  rep = FeedTable
 
 
 data FeedStatus = Unknown | New | LastUpdate UTCTime
@@ -95,37 +96,33 @@ newtype Database = Database [DatabaseEntry]
 
 -- * Primitives
 
-register :: (MonadThrow m, MonadLog m, MonadDatabase FeedTable m)
-          => FeedID -> Set Text -> m ()
-register feedID tags = do
-  logInfo $ "Registering feed" <+> magenta (pretty feedID) <> "..."
-  insert FeedTable feedID $ newDatabaseEntry feedID tags
+register :: MonadThrow m => Logger.Handle m -> Database.Handle m FeedTable -> FeedID -> Set Text -> m ()
+register logger database feedID tags = do
+  log logger Info $ "Registering feed" <+> magenta (pretty feedID) <> "..."
+  insert logger database feedID $ newDatabaseEntry feedID tags
 
-getStatus :: (MonadDatabase FeedTable m, MonadCatch m)
-          => FeedID -> m FeedStatus
-getStatus feedID = handleAny (\_ -> return Unknown) $ do
-  result <- fmap Just (fetch FeedTable feedID) `catchAny` (\_ -> return Nothing)
+getStatus :: MonadCatch m => Database.Handle m FeedTable -> FeedID -> m FeedStatus
+getStatus database feedID = handleAny (\_ -> return Unknown) $ do
+  result <- fmap Just (fetch database feedID) `catchAny` (\_ -> return Nothing)
   return $ maybe New LastUpdate $ entryLastCheck =<< result
 
-addReadHash :: (MonadDatabase FeedTable m, MonadThrow m, MonadLog m)
-               => FeedID -> Int -> m ()
-addReadHash feedID hash = do
-  logDebug $ "Adding read hash:" <+> pretty hash <> "..."
-  update FeedTable feedID f
+addReadHash :: MonadThrow m => Logger.Handle m -> Database.Handle m FeedTable -> FeedID -> Int -> m ()
+addReadHash logger database feedID hash = do
+  log logger Debug $ "Adding read hash:" <+> pretty hash <> "..."
+  update database feedID f
   where f a = a { entryReadHashes = insertSet hash $ entryReadHashes a }
 
 -- | Set the last check time to now
-markAsRead :: (MonadTime m, MonadDatabase FeedTable m, MonadThrow m, MonadLog m)
-           => FeedID -> m ()
-markAsRead feedID = do
-  logDebug $ "Marking feed as read:" <+> pretty feedID <> "..."
+markAsRead :: (MonadTime m, MonadThrow m)
+           => Logger.Handle m -> Database.Handle m FeedTable -> FeedID -> m ()
+markAsRead logger database feedID = do
+  log logger Debug $ "Marking feed as read:" <+> pretty feedID <> "..."
   utcTime <- currentTime
-  update FeedTable feedID (f utcTime)
+  update database feedID (f utcTime)
   where f time a = a { entryLastCheck = Just time }
 
 -- | Unset feed's last update and remove all read hashes
-markAsUnread :: (MonadDatabase FeedTable m, MonadThrow m, MonadLog m)
-             => FeedID -> m ()
-markAsUnread feedID = do
-  logInfo $ "Marking feed as unread:" <+> prettyFeedID feedID <> "..."
-  update FeedTable feedID $ \a -> a { entryReadHashes = mempty, entryLastCheck = Nothing }
+markAsUnread :: MonadThrow m => Logger.Handle m -> Database.Handle m FeedTable -> FeedID -> m ()
+markAsUnread logger database feedID = do
+  log logger Info $ "Marking feed as unread:" <+> prettyFeedID feedID <> "..."
+  update database feedID $ \a -> a { entryReadHashes = mempty, entryLastCheck = Nothing }
