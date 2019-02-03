@@ -1,5 +1,5 @@
 name:                imm
-version:             1.3.0.0
+version:             1.4.0.0
 synopsis:            Execute arbitrary actions for each unread element of RSS/Atom feeds
 description:         Cf README file
 homepage:            https://github.com/k0ral/imm
