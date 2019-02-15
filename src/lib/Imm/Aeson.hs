@@ -1,10 +1,7 @@
 {-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 module Imm.Aeson where
 
 -- {{{ Imports
-import           Imm.Prelude
-
 import           Data.Aeson
 
 import           URI.ByteString

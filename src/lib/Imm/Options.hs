@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE NoImplicitPrelude  #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications   #-}
 module Imm.Options where
 
 -- {{{ Imports
@@ -9,7 +9,6 @@ import           Imm.Dyre                       as Dyre (Mode (..))
 import qualified Imm.Dyre                       as Dyre
 import           Imm.Feed
 import           Imm.Logger                     as Logger
-import           Imm.Prelude
 import           Imm.Pretty
 
 import           Data.Set                       (Set)
@@ -141,7 +140,7 @@ unsubscribeOptions  = Unsubscribe <$> optional feedRefOption
 
 -- {{{ Util
 uriReader :: ReadM URI
-uriReader = eitherReader $ first show . parseURI laxURIParserOptions . encodeUtf8 . fromString
+uriReader = eitherReader $ first show . parseURI laxURIParserOptions . encodeUtf8 @Text . fromString
 
 feedRefOption :: Parser FeedRef
 feedRefOption = argument ((ByUID <$> auto) <|> (ByURI <$> uriReader)) $ metavar "TARGET"

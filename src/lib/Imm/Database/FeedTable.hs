@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 -- | Feed table definitions. This is a specialization of "Imm.Database".
@@ -7,14 +6,14 @@ module Imm.Database.FeedTable where
 
 -- {{{ Imports
 import           Imm.Aeson
-import           Imm.Database as Database
-import           Imm.Logger as Logger
-import           Imm.Prelude
+import           Imm.Database           as Database
+import           Imm.Logger             as Logger
 import           Imm.Pretty
 
+import           Control.Exception.Safe
 import           Control.Monad.Time
 import           Data.Aeson
-import           Data.Set           (Set)
+import qualified Data.Set               as Set (insert)
 import           Data.Time
 import           URI.ByteString
 -- }}}
@@ -110,7 +109,7 @@ addReadHash :: MonadThrow m => Logger.Handle m -> Database.Handle m FeedTable ->
 addReadHash logger database feedID hash = do
   log logger Debug $ "Adding read hash:" <+> pretty hash <> "..."
   update database feedID f
-  where f a = a { entryReadHashes = insertSet hash $ entryReadHashes a }
+  where f a = a { entryReadHashes = Set.insert hash $ entryReadHashes a }
 
 -- | Set the last check time to now
 markAsRead :: (MonadTime m, MonadThrow m)

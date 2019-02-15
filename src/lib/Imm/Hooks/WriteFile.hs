@@ -1,19 +1,16 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Implementation of "Imm.Hooks" that writes a file for each new RSS/Atom item.
-module Imm.Hooks.WriteFile where
+module Imm.Hooks.WriteFile (module Imm.Hooks.WriteFile, module Imm.Hooks) where
 
 -- {{{ Imports
 import           Imm.Feed
 import           Imm.Hooks
-import           Imm.Prelude
 import           Imm.Pretty
 
-import           Control.Arrow
 import           Data.ByteString.Builder
 import           Data.ByteString.Streaming     (toStreamingByteString)
-import           Data.Monoid.Textual           hiding (elem, map)
+import qualified Data.Text as Text             (null, replace)
 import           Data.Time
 import           Streaming.With
 import           System.Directory              (createDirectoryIfMissing)
@@ -23,7 +20,7 @@ import           Text.Blaze.Html.Renderer.Utf8
 import           Text.Blaze.Html5              (Html, docTypeHtml,
                                                 preEscapedToHtml, (!))
 import qualified Text.Blaze.Html5              as H
-import           Text.Blaze.Html5.Attributes   as H (charset, href)
+import qualified Text.Blaze.Html5.Attributes   as H (charset, href)
 import           Text.RSS.Types
 import           URI.ByteString
 -- }}}
@@ -54,14 +51,15 @@ defaultSettings root = WriteFileSettings $ \feed element -> FileInfo
 
 -- | Generate a path @<root>/<feed title>/<element date>-<element title>.html@, where @<root>@ is the first argument
 defaultFilePath :: FilePath -> Feed -> FeedElement -> FilePath
-defaultFilePath root feed element = makeValid $ root </> title </> fileName <.> "html" where
+defaultFilePath root feed element = makeValid $ root </> toString title </> fileName <.> "html" where
   date = maybe "" (formatTime defaultTimeLocale "%F-") $ getDate element
-  fileName = date <> sanitize (convertText $ getTitle element)
-  title = sanitize $ convertText $ getFeedTitle feed
-  sanitize = replaceIf isPathSeparator '-' >>> replaceAny ".?!#" '_'
-  replaceAny :: String -> Char -> String -> String
-  replaceAny list = replaceIf (`elem` list)
-  replaceIf f b = map (\c -> if f c then b else c)
+  fileName = date <> toString (sanitize $ getTitle element)
+  title = sanitize $ getFeedTitle feed
+  sanitize = appEndo (mconcat [Endo $ Text.replace (toText [s]) "_" | s <- pathSeparators])
+    >>> Text.replace "." "_"
+    >>> Text.replace "?" "_"
+    >>> Text.replace "!" "_"
+    >>> Text.replace "#" "_"
 
 -- | Generate an HTML page, with a title, a header and an article that contains the feed element
 defaultFileContent :: Feed -> FeedElement -> Builder
@@ -87,7 +85,7 @@ defaultArticleTitle _ element@(RssElement item) = H.h2 $ maybe id (\uri -> H.a !
 defaultArticleTitle _ element@(AtomElement _) = H.h2 $ convertText $ getTitle element
 
 defaultArticleAuthor :: Feed -> FeedElement -> Html
-defaultArticleAuthor _ (RssElement item) = unless (null author) $ H.address $ "Published by " >> convertText author where
+defaultArticleAuthor _ (RssElement item) = unless (Text.null author) $ H.address $ "Published by " >> convertText author where
   author = itemAuthor item
 defaultArticleAuthor _ (AtomElement entry) = H.address $ do
   "Published by "
@@ -105,10 +103,12 @@ defaultBody _ element@(RssElement _) = H.p $ preEscapedToHtml $ getContent eleme
 defaultBody _ element@(AtomElement entry) = do
   unless (null links) $ H.p $ do
     "Related links:"
-    H.ul $ forM_ links $ \uri -> H.li (H.a ! H.href (convertAtomURI uri) $ convertAtomURI uri)
+    H.ul $ forM_ links $ \uri -> H.li (H.a ! withAtomURI href uri $ convertAtomURI uri)
   H.p $ preEscapedToHtml $ getContent element
   where links   = map linkHref $ entryLinks entry
 
+href :: URIRef a -> H.Attribute
+href = H.href . convertURI
 
 convertAtomURI :: (IsString t) => AtomURI -> t
 convertAtomURI = withAtomURI convertURI
@@ -117,7 +117,7 @@ convertURI :: (IsString t) => URIRef a -> t
 convertURI = convertText . decodeUtf8 . serializeURIRef'
 
 convertText :: (IsString t) => Text -> t
-convertText = fromString . toString (const "?")
+convertText = fromString . toString
 
 convertDoc :: (IsString t) => Doc a -> t
 convertDoc = show

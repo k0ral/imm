@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE MultiParamTypeClasses     #-}
-{-# LANGUAGE NoImplicitPrelude         #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RankNTypes                #-}
 -- |
@@ -22,21 +21,25 @@
 module Imm.Boot (imm) where
 
 -- {{{ Imports
-import qualified Imm.Core                   as Core
-import           Imm.Database               as Database
-import           Imm.Database.FeedTable     as Database
-import           Imm.Dyre                   as Dyre
+import qualified Imm.Core                 as Core
+import           Imm.Database             as Database
+import           Imm.Database.FeedTable   as Database
+import           Imm.Dyre                 as Dyre
 import           Imm.Feed
-import           Imm.Hooks as Hooks
-import           Imm.HTTP                   as HTTP
-import           Imm.Logger                 as Logger
-import           Imm.Options                as Options hiding (logLevel)
-import           Imm.Prelude
+import           Imm.Hooks                as Hooks
+import           Imm.HTTP                 as HTTP
+import           Imm.Logger               as Logger
+import           Imm.Options              as Options hiding (logLevel)
 import           Imm.Pretty
-import           Imm.XML as XML
+import           Imm.XML                  as XML
 
-import           Data.Conduit.Combinators   (stdin)
-import           System.IO                  (hFlush)
+import           Control.Exception.Safe
+import           Data.Conduit.Combinators as Conduit (stdin)
+import qualified Data.Map                 as Map
+import           Data.Text                as Text hiding (length)
+import           Data.Text.IO             as Text
+import           Relude.Unsafe            (at)
+import           System.IO                (hFlush)
 -- }}}
 
 -- | Main function, meant to be used in your personal configuration file.
@@ -91,8 +94,8 @@ realMain (command, logLevel, enableColors, logger, database, httpClient, hooks, 
 
   handleAny (log logger Error . pretty . displayException) $ case command of
     Check t        -> Core.check logger database httpClient xmlParser =<< resolveTarget database ByPassConfirmation t
-    Help           -> liftBase $ putStrLn helpString
-    Import         -> Core.importOPML logger database stdin
+    Help           -> Text.putStrLn helpString
+    Import         -> Core.importOPML logger database Conduit.stdin
     Read t         -> mapM_ (Database.markAsRead logger database) =<< resolveTarget database AskConfirmation t
     Run t          -> Core.run logger database httpClient hooks xmlParser =<< resolveTarget database ByPassConfirmation t
     Show t         -> Core.showFeed logger database =<< resolveTarget database ByPassConfirmation t
@@ -117,19 +120,19 @@ instance Exception InterruptedException where
 
 promptConfirm :: Text -> IO ()
 promptConfirm s = do
-  putStr $ s <> " Confirm [Y/n] "
+  Text.putStr $ s <> " Confirm [Y/n] "
   hFlush stdout
-  x <- getLine
-  unless (null x || x == ("Y" :: Text)) $ throwM InterruptedException
+  x <- Text.getLine
+  unless (Text.null x || x == "Y") $ throwM InterruptedException
 
 
-resolveTarget :: MonadBase IO m => MonadThrow m => Database.Handle m FeedTable -> SafeGuard -> Maybe Core.FeedRef -> m [FeedID]
+resolveTarget :: MonadIO m => MonadThrow m => Database.Handle m FeedTable -> SafeGuard -> Maybe Core.FeedRef -> m [FeedID]
 resolveTarget database s Nothing = do
-  result <- keys <$> Database.fetchAll database
-  when (s == AskConfirmation) $ liftBase $ promptConfirm $ "This will affect " <> show (length result) <> " feeds."
+  result <- Map.keys <$> Database.fetchAll database
+  when (s == AskConfirmation) $ liftIO $ promptConfirm $ "This will affect " <> show (length result) <> " feeds."
   return result
 resolveTarget database _ (Just (ByUID i)) = do
-  result <- fst . (!! (i-1)) . mapToList <$> Database.fetchAll database
+  result <- fst . at (i-1) . Map.toList <$> Database.fetchAll database
   -- log logger Info $ "Target(s): " <> show (pretty result)
-  return $ singleton result
+  return [result]
 resolveTarget _ _ (Just (ByURI uri)) = return [FeedID uri]

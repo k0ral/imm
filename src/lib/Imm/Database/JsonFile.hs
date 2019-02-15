@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedLists       #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE UndecidableInstances  #-}
@@ -16,21 +15,20 @@ module Imm.Database.JsonFile
   ) where
 
 -- {{{ Imports
-import           Imm.Database                   hiding (commit, delete, insert,
-                                                 purge, update)
+import           Imm.Database                hiding (commit, delete, insert,
+                                              purge, update)
 import           Imm.Database.FeedTable
 import           Imm.Error
-import           Imm.Prelude                    hiding (delete, keys)
 import           Imm.Pretty
 
-import           Control.Concurrent.MVar.Lifted
+import           Control.Concurrent.STM.TVar (swapTVar)
 import           Data.Aeson
-import           Data.ByteString.Lazy           (hPut)
-import           Data.ByteString.Streaming      (hGetContents, toLazy_)
-import           Data.Map                       (Map)
-import qualified Data.Map                       as Map
-import qualified Data.Set                       as Set
-import           Streaming.With
+import           Data.ByteString.Lazy        (hPut)
+import           Data.ByteString.Streaming   (hGetContents, toLazy_)
+import           Data.Map                    (Map)
+import qualified Data.Map                    as Map
+import qualified Data.Set                    as Set
+import           Streaming.With              hiding (withFile)
 import           System.Directory
 import           System.FilePath
 -- }}}
@@ -47,10 +45,10 @@ mkJsonFileDatabase :: (Table t) => FilePath -> JsonFileDatabase t
 mkJsonFileDatabase file = JsonFileDatabase file mempty Empty
 
 -- | Default database is stored in @$XDG_CONFIG_HOME\/imm\/feeds.json@
-defaultDatabase :: Table t => IO (MVar (JsonFileDatabase t))
+defaultDatabase :: Table t => IO (TVar (JsonFileDatabase t))
 defaultDatabase = do
   databaseFile <- getXdgDirectory XdgConfig "imm/feeds.json"
-  newMVar $ mkJsonFileDatabase databaseFile
+  newTVarIO $ mkJsonFileDatabase databaseFile
 
 
 data JsonException = UnableDecode
@@ -60,73 +58,65 @@ instance Exception JsonException where
   displayException _ = "Unable to parse JSON"
 
 
-mkHandle :: (Table t, FromJSON (Key t), FromJSON (Entry t), ToJSON (Key t), ToJSON (Entry t), MonadBase IO m)
-         => MVar (JsonFileDatabase t) -> Handle m t
-mkHandle mvar = Handle
-  { _describeDatabase = pretty <$> readMVar mvar
-  , _fetchList = \keys -> Map.filterWithKey (\uri _ -> member uri $ Set.fromList keys) <$> fetchAll_
-  , _fetchAll = fetchAll_
-  , _update = \key f -> liftBase $ modifyMVar_ mvar (\a -> update a key f)
-  , _insertList = liftBase . modifyMVar_ mvar . insert
-  , _deleteList = liftBase . modifyMVar_ mvar . delete
-  , _purge = liftBase $ modifyMVar_ mvar purge
-  , _commit = liftBase $ modifyMVar_ mvar commit
+mkHandle :: (Table t, FromJSON (Key t), FromJSON (Entry t), ToJSON (Key t), ToJSON (Entry t), MonadIO m, MonadMask m)
+         => TVar (JsonFileDatabase t) -> Handle m t
+mkHandle tvar = Handle
+  { _describeDatabase = pretty <$> readTVarIO tvar
+  , _fetchList = \keys -> loadInCache tvar >> (Map.filterWithKey (\uri _ -> Set.member uri $ Set.fromList keys) <$> getCache tvar)
+  , _fetchAll = loadInCache tvar >> getCache tvar
+  , _update = \key f -> loadInCache tvar >> atomically (modifyTVar' tvar $ updateInCache key f)
+  , _insertList = \list -> loadInCache tvar >> atomically (modifyTVar' tvar $ insertInCache list)
+  , _deleteList = \list -> loadInCache tvar >> atomically (modifyTVar' tvar $ deleteInCache list)
+  , _purge = loadInCache tvar >> atomically (modifyTVar' tvar purgeInCache)
+  , _commit = commit tvar
   }
-  where fetchAll_ = liftBase $ modifyMVar mvar $ \database -> do
-          a@(JsonFileDatabase _ cache _) <- loadInCache database
-          return (a, cache)
-
 
 -- * Low-level implementation
 
-loadInCache :: (Table t, FromJSON (Key t), FromJSON (Entry t))
-            => JsonFileDatabase t -> IO (JsonFileDatabase t)
-loadInCache t@(JsonFileDatabase file _ status) = case status of
-  Empty -> do
-    createDirectoryIfMissing True $ takeDirectory file
-    fileContent <- withBinaryFile file ReadWriteMode (toLazy_ . hGetContents)
-    cache <- (`failWith` UnableDecode) $ fmap Map.fromList $ decode $ fromEmpty "[]" fileContent
-    return $ JsonFileDatabase file cache Clean
-  _ -> return t
+loadInCache :: (Table t, FromJSON (Key t), FromJSON (Entry t), MonadIO m, MonadMask m) => TVar (JsonFileDatabase t) -> m ()
+loadInCache tvar = do
+  JsonFileDatabase file _ status <- readTVarIO tvar
+  when (status == Empty) $ do
+    database <- loadFromDisk file
+    atomically $ do
+      JsonFileDatabase _ _ status' <- readTVar tvar
+      when (status' == Empty) $ writeTVar tvar database
+
+loadFromDisk :: (Table t, FromJSON (Key t), FromJSON (Entry t), MonadIO m, MonadMask m) => FilePath -> m (JsonFileDatabase t)
+loadFromDisk file = do
+  liftIO $ createDirectoryIfMissing True $ takeDirectory file
+  fileContent <- withBinaryFile file ReadWriteMode (toLazy_ . hGetContents)
+  cache <- (`failWith` UnableDecode) $ fmap Map.fromList $ decode $ fromEmpty "[]" fileContent
+  return $ JsonFileDatabase file cache Clean
   where fromEmpty x "" = x
         fromEmpty _ y  = y
 
+getCache :: MonadIO m => TVar (JsonFileDatabase t) -> m (Map (Key t) (Entry t))
+getCache tvar = do
+  JsonFileDatabase _ cache _ <- readTVarIO tvar
+  return cache
 
-insert :: (Table t, FromJSON (Key t), FromJSON (Entry t))
-       => [(Key t, Entry t)] -> JsonFileDatabase t -> IO (JsonFileDatabase t)
-insert rows t = insertInCache rows <$> loadInCache t
 
 insertInCache :: Table t => [(Key t, Entry t)] -> JsonFileDatabase t -> JsonFileDatabase t
 insertInCache rows (JsonFileDatabase file cache _) = JsonFileDatabase file (Map.union cache $ Map.fromList rows) Dirty
-
-
-update :: (Table t, FromJSON (Key t), FromJSON (Entry t))
-       => JsonFileDatabase t -> Key t -> (Entry t -> Entry t) -> IO (JsonFileDatabase t)
-update t key f = updateInCache key f <$> loadInCache t
 
 updateInCache :: Table t => Key t -> (Entry t -> Entry t) -> JsonFileDatabase t -> JsonFileDatabase t
 updateInCache key f (JsonFileDatabase file cache _) = JsonFileDatabase file newCache Dirty where
   newCache = Map.update (Just . f) key cache
 
-delete :: (Table t, FromJSON (Key t), FromJSON (Entry t))
-       => [Key t] -> JsonFileDatabase t -> IO (JsonFileDatabase t)
-delete keys t = deleteInCache keys <$> loadInCache t
-
 deleteInCache :: Table t => [Key t] -> JsonFileDatabase t -> JsonFileDatabase t
 deleteInCache keys (JsonFileDatabase file cache _) = JsonFileDatabase file newCache Dirty where
   newCache = foldr Map.delete cache keys
 
-purge :: (Table t, FromJSON (Key t), FromJSON (Entry t))
-      => JsonFileDatabase t -> IO (JsonFileDatabase t)
-purge t = purgeInCache <$> loadInCache t
-
 purgeInCache :: Table t => JsonFileDatabase t -> JsonFileDatabase t
 purgeInCache (JsonFileDatabase file _ _) = JsonFileDatabase file mempty Dirty
 
-commit :: (ToJSON (Key t), ToJSON (Entry t))
-       => JsonFileDatabase t -> IO (JsonFileDatabase t)
-commit t@(JsonFileDatabase file cache status) = case status of
-  Dirty -> do
-    withFile file WriteMode $ \h -> hPut h $ encode $ Map.toList cache
-    return $ JsonFileDatabase file cache Clean
-  _ -> return t
+commit :: (ToJSON (Key t), ToJSON (Entry t), MonadIO m)
+       => TVar (JsonFileDatabase t) -> m ()
+commit tvar = do
+  JsonFileDatabase file cache status <- atomically $ do
+    database@(JsonFileDatabase file cache status) <- readTVar tvar
+    when (status == Dirty) $ void $ swapTVar tvar $ JsonFileDatabase file cache Clean
+    return database
+
+  when (status == Dirty) $ liftIO $ withFile file WriteMode $ \h -> hPut h $ encode $ Map.toList cache

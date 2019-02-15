@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Implementation of "Imm.Hooks" that sends a mail via a SMTP server for each new RSS/Atom element.
 -- You may want to check out "Network.HaskellNet.SMTP", "Network.HaskellNet.SMTP.SSL" and "Network.Mail.Mime" modules for additional information.
@@ -21,20 +20,20 @@
 -- >   (Just $ Authentication PLAIN "user" "password")
 -- >   (StartTls "smtp.server" defaultSettingsSMTPSTARTTLS)
 --
-module Imm.Hooks.SendMail (module Imm.Hooks.SendMail, module Reexport) where
+module Imm.Hooks.SendMail (module Imm.Hooks.SendMail, module Imm.Hooks, module Reexport) where
 
 -- {{{ Imports
 import           Imm.Feed
 import           Imm.Hooks
-import           Imm.Prelude
 import           Imm.Pretty
 
-import           Data.NonNull
+import           Data.Text                   as Text (intercalate)
 import           Data.Time
 import           Network.HaskellNet.SMTP     as Reexport
 import           Network.HaskellNet.SMTP.SSL as Reexport
 import           Network.Mail.Mime           as Reexport hiding (sendmail)
 import           Network.Socket
+import           Refined
 import           Text.Atom.Types
 import           Text.RSS.Types
 -- }}}
@@ -85,7 +84,7 @@ defaultFormatFrom :: Feed -> FeedElement -> Address
 defaultFormatFrom (Rss doc) (RssElement item) = Address (Just $ channelTitle doc <> " (" <> itemAuthor item <> ")") ""
 defaultFormatFrom (Atom feed) (AtomElement entry) = Address (Just $ title <> " (" <> authors <> ")") ""
   where title = show . prettyAtomText $ feedTitle feed
-        authors = intercalate ", " $ map (toNullable . personName) $ entryAuthors entry <> feedAuthors feed
+        authors = Text.intercalate ", " $ map (unrefine . personName) $ entryAuthors entry <> feedAuthors feed
 defaultFormatFrom _ _ = Address (Just "Unknown") ""
 
 -- | Fill mail subject with the element title
@@ -98,7 +97,7 @@ defaultFormatSubject _ = getTitle
 -- - the element's content or description/summary
 defaultFormatBody :: Feed -> FeedElement -> Text
 defaultFormatBody _ (RssElement item) = "<p>" <> maybe "<no link>" (withRssURI (show . prettyURI)) (itemLink item) <> "</p><p>" <> itemDescription item <> "</p>"
-defaultFormatBody _ (AtomElement entry) = "<p>" <> intercalate "<br/>" links <> "</p><p>" <> fromMaybe "<empty>" (content <|> summary) <> "</p>"
+defaultFormatBody _ (AtomElement entry) = "<p>" <> Text.intercalate "<br/>" links <> "</p><p>" <> fromMaybe "<empty>" (content <|> summary) <> "</p>"
   where links   = map (withAtomURI (show . prettyURI) . linkHref) $ entryLinks entry
         content = show . prettyAtomContent <$> entryContent entry
         summary = show . prettyAtomText <$> entrySummary entry

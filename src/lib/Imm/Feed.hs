@@ -1,15 +1,14 @@
 {-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 -- | Helpers to manipulate feeds
 module Imm.Feed where
 
 -- {{{ Imports
-import           Imm.Prelude
 import           Imm.Pretty
 
 import           Data.Hashable
+import           Data.Text                      as Text (null)
 import           Data.Time
 import           Lens.Micro
 import           Text.Atom.Types
@@ -56,7 +55,7 @@ getTitle (RssElement item)   = itemTitle item
 getTitle (AtomElement entry) = show $ prettyAtomText $ entryTitle entry
 
 getContent :: FeedElement -> Text
-getContent (RssElement item) = if not (null content) then content else itemDescription item where
+getContent (RssElement item) = if not (Text.null content) then content else itemDescription item where
   ContentItem content = item ^. itemExtensionL
 getContent (AtomElement entry) = fromMaybe "<empty>" $ content <|> summary where
   content = show . prettyAtomContent <$> entryContent entry

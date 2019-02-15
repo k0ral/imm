@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | HTTP module abstracts over HTTP requests to the external world.
 --
@@ -12,7 +11,6 @@ module Imm.HTTP where
 -- {{{ Imports
 import qualified Imm.Logger as Logger
 import           Imm.Logger hiding(Handle)
-import           Imm.Prelude
 import           Imm.Pretty
 
 import           URI.ByteString

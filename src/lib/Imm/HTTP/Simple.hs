@@ -1,15 +1,14 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Implementation of "Imm.HTTP" based on "Network.HTTP.Client".
 module Imm.HTTP.Simple (mkHandle, defaultManager, module Reexport) where
 
 -- {{{ Imports
 import           Imm.HTTP
-import           Imm.Prelude
 import           Imm.Pretty
 
+import           Control.Exception.Safe
 import           Data.CaseInsensitive
 import           Network.Connection         as Reexport
 import           Network.HTTP.Client        as Reexport

@@ -1,4 +1,3 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Hooks module abstracts over the main behavior of the program.
 --
@@ -11,7 +10,6 @@ module Imm.Hooks where
 import           Imm.Feed
 import qualified Imm.Logger as Logger
 import           Imm.Logger hiding(Handle)
-import           Imm.Prelude
 import           Imm.Pretty
 -- }}}
 

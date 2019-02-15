@@ -1,4 +1,3 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Implementation of "Imm.Hooks" that does nothing,
 -- except suggesting the user to define proper hooks.
@@ -8,9 +7,9 @@ module Imm.Hooks.Dummy (module Imm.Hooks.Dummy, module Imm.Hooks) where
 
 -- {{{ Imports
 import           Imm.Hooks
-import           Imm.Prelude
 
 import           Control.Exception
+import           Control.Exception.Safe
 -- }}}
 
 data DummyHooks = DummyHooks

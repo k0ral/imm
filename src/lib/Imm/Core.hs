@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE TupleSections         #-}
@@ -18,44 +17,41 @@ module Imm.Core (
 ) where
 
 -- {{{ Imports
-import qualified Imm.Database                as Database
+import qualified Imm.Database            as Database
 import           Imm.Database.FeedTable
-import qualified Imm.Database.FeedTable      as Database
+import qualified Imm.Database.FeedTable  as Database
 import           Imm.Feed
-import           Imm.Hooks                   as Hooks
-import qualified Imm.HTTP                    as HTTP
-import           Imm.Logger as Logger
-import           Imm.Prelude
+import           Imm.Hooks               as Hooks
+import qualified Imm.HTTP                as HTTP
+import           Imm.Logger              as Logger
 import           Imm.Pretty
-import           Imm.XML as XML
+import           Imm.XML                 as XML
 
-import           Control.Concurrent.STM      (STM, atomically)
-import           Control.Concurrent.STM.TVar
+import           Control.Exception.Safe
 import           Control.Monad.Time
 import           Data.Conduit
-import qualified Data.Map                    as Map
-import           Data.NonNull
-import           Data.Set                    (Set)
-import qualified Data.Set                    as Set
-import qualified Data.Text                   as Text
+import qualified Data.Map                as Map
+import           Data.Set                (Set)
+import qualified Data.Set                as Set
 import           Data.Tree
 import           Data.Version
-import qualified Paths_imm                   as Package
-import           Streamly                    hiding ((<>))
-import qualified Streamly.Prelude            as Stream
+import qualified Paths_imm               as Package
+import           Refined
+import           Streamly                hiding ((<>))
+import qualified Streamly.Prelude        as Stream
 import           System.Info
 import           Text.OPML.Conduit.Parse
-import           Text.OPML.Types             as OPML
-import           Text.XML                    as XML ()
-import           Text.XML.Stream.Parse       as XML
+import           Text.OPML.Types         as OPML
+import           Text.XML                as XML ()
+import           Text.XML.Stream.Parse   as XML
 import           URI.ByteString
 -- }}}
 
 
 printVersions :: (MonadBase IO m) => m ()
 printVersions = liftBase $ do
-  putStrLn $ "imm-" <> Text.pack (showVersion Package.version)
-  putStrLn $ "compiled by " <> Text.pack compilerName <> "-" <> Text.pack (showVersion compilerVersion)
+  putStrLn $ "imm-" <> showVersion Package.version
+  putStrLn $ "compiled by " <> compilerName <> "-" <> showVersion compilerVersion
 
 -- | Print database status for given feed(s)
 showFeed :: MonadThrow m => Logger.Handle m -> Database.Handle m FeedTable -> [FeedID] -> m ()
@@ -81,7 +77,7 @@ check logger database httpClient xmlParser feedIDs = do
     result <- lift $ tryAny $ checkOne logger database httpClient xmlParser feedID
     let logResult = either (red . pretty . displayException) (\n -> green (pretty n) <+> "new element(s)") result
     n <- liftBase $ atomically $ do
-      modifyTVar (progress :: TVar Int) (+ 1)
+      modifyTVar' (progress :: TVar Int) (+ 1)
       readTVar progress
     lift $ log logger Info $ brackets (fill width (bold $ cyan $ pretty n) <+> "/" <+> pretty total) <+> "Checked" <+> magenta (pretty feedID) <+> "=>" <+> logResult
     return result
@@ -123,7 +119,7 @@ run logger database httpClient hooks xmlParser feedIDs = do
     result <- lift $ tryAny $ runOne logger database httpClient hooks xmlParser feedID
     let logResult = either (red . pretty . displayException) (\n -> green (pretty n) <+> "new element(s)") result
     n <- liftBase $ atomically $ do
-      modifyTVar progress (+ 1)
+      modifyTVar' progress (+ 1)
       readTVar progress :: STM Int
     lift $ log logger Info $ brackets (fill width (bold $ cyan $ pretty n) <+> "/" <+> pretty total) <+> "Processed" <+> magenta (pretty feedID) <+> "=>" <+> logResult
     return $ bimap (feedID,) (feedID,) result
@@ -155,7 +151,7 @@ runOne logger database httpClient hooks xmlParser feedID = do
 isRead :: MonadCatch m => Database.Handle m FeedTable -> FeedID -> FeedElement -> m Bool
 isRead database feedID element = do
   DatabaseEntry _ _ readHashes lastCheck <- Database.fetch database feedID
-  let matchHash = not $ null $ (setFromList (getHashes element) :: Set Int) `intersection` readHashes
+  let matchHash = not $ Set.null $ Set.fromList (getHashes element) `Set.intersection` readHashes
       matchDate = case (lastCheck, getDate element) of
         (Nothing, _)     -> False
         (_, Nothing)     -> False
@@ -169,7 +165,7 @@ importOPML logger database input = do
   forM_ (opmlOutlines opml) $ importOPML' logger database mempty
 
 importOPML' :: MonadCatch m => Logger.Handle m -> Database.Handle m FeedTable -> Set Text -> Tree OpmlOutline -> m ()
-importOPML' logger database _ (Node (OpmlOutlineGeneric b _) sub) = mapM_ (importOPML' logger database (Set.singleton . toNullable $ OPML.text b)) sub
+importOPML' logger database _ (Node (OpmlOutlineGeneric b _) sub) = mapM_ (importOPML' logger database (Set.singleton . unrefine $ OPML.text b)) sub
 importOPML' logger database c (Node (OpmlOutlineSubscription _ s) _) = subscribe logger database (xmlUri s) c
 importOPML' _ _ _ _ = return ()
 

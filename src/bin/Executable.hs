@@ -1,5 +1,4 @@
-{-# LANGUAGE NoImplicitPrelude #-}
---module Executable where
+-- module Executable where
 
 -- {{{ Imports
 import           Imm
@@ -7,7 +6,6 @@ import           Imm.Database.JsonFile as Database
 import           Imm.Hooks.Dummy as Hooks
 import           Imm.HTTP.Simple as HTTP
 import           Imm.Logger.Simple as Logger
-import           Imm.Prelude
 import           Imm.XML.Conduit as XML
 -- }}}
 

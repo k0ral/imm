@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE StandaloneDeriving    #-}
@@ -15,12 +14,12 @@
 module Imm.Database where
 
 -- {{{ Imports
-import qualified Imm.Logger as Logger
-import           Imm.Logger hiding(Handle)
-import           Imm.Prelude
+import           Imm.Logger             hiding (Handle)
+import qualified Imm.Logger             as Logger
 import           Imm.Pretty
 
-import           Data.Map    (Map)
+import           Control.Exception.Safe hiding (handle)
+import           Data.Map               (Map)
 -- }}}
 
 -- * Types
@@ -34,13 +33,13 @@ class (Ord (Key t), Show (Key t), Show (Entry t), Typeable t, Show t, Pretty t, 
 
 data Handle m t = Handle
   { _describeDatabase :: forall a . m (Doc a)
-  , _fetchList :: [Key t] -> m (Map (Key t) (Entry t))
-  , _fetchAll :: m (Map (Key t) (Entry t))
-  , _update :: Key t -> (Entry t -> Entry t) -> m ()
-  , _insertList :: [(Key t, Entry t)] -> m ()
-  , _deleteList :: [Key t] -> m ()
-  , _purge :: m ()
-  , _commit :: m ()
+  , _fetchList        :: [Key t] -> m (Map (Key t) (Entry t))
+  , _fetchAll         :: m (Map (Key t) (Entry t))
+  , _update           :: Key t -> (Entry t -> Entry t) -> m ()
+  , _insertList       :: [(Key t, Entry t)] -> m ()
+  , _deleteList       :: [Key t] -> m ()
+  , _purge            :: m ()
+  , _commit           :: m ()
   }
 
 

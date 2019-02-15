@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
 -- | Logger module abstracts over logging data.
 --
@@ -12,7 +11,6 @@
 module Imm.Logger where
 
 -- {{{ Imports
-import           Imm.Prelude
 import           Imm.Pretty
 -- }}}
 

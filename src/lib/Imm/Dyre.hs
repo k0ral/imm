@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -12,7 +11,6 @@ module Imm.Dyre
   ) where
 
 -- {{{ Imports
-import           Imm.Prelude
 import           Imm.Pretty
 
 import           Config.Dyre

@@ -33,7 +33,6 @@ library
     Imm.HTTP.Simple
     Imm.Logger
     Imm.Logger.Simple
-    Imm.Prelude
     Imm.XML
     Imm.XML.Conduit
   other-modules:
@@ -43,10 +42,11 @@ library
     Imm.Options
     Imm.Pretty
     Paths_imm
+    Prelude
   build-depends:
     aeson,
-    atom-conduit >= 0.4,
-    base == 4.*,
+    atom-conduit >= 0.6,
+    base-noprelude == 4.*,
     blaze-html,
     blaze-markup,
     bytestring,
@@ -64,19 +64,18 @@ library
     http-client >= 0.4.30,
     http-client-tls,
     http-types,
-    lifted-base,
     microlens,
     mime-mail,
-    monad-control,
     monad-time,
     monoid-subclasses,
-    mono-traversable >= 1,
     mtl,
     network,
-    opml-conduit >= 0.6,
+    opml-conduit >= 0.7,
     optparse-applicative,
     prettyprinter,
     prettyprinter-ansi-terminal,
+    refined,
+    relude,
     rss-conduit >= 0.4.1,
     safe-exceptions,
     stm,

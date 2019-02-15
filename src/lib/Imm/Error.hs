@@ -1,9 +1,8 @@
-{-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Imm.Error (module Imm.Error) where
 
 -- {{{ Imports
-import           Imm.Prelude
+import           Control.Exception.Safe
 -- }}}
 
 liftE :: (MonadThrow m, Exception e) => Either e a -> m a

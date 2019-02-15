@@ -1,13 +1,11 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications  #-}
 module Imm.Pretty (module Imm.Pretty, module X) where
 
 -- {{{ Imports
-import           Imm.Prelude
-
-import           Data.NonNull
+import           Data.Text                                 as Text
 import           Data.Time
 import           Data.Tree
 
@@ -20,6 +18,7 @@ import           Data.Text.Prettyprint.Doc                 (list)
 import           Data.Text.Prettyprint.Doc.Render.Terminal as X (AnsiStyle)
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import           Refined
 import           Text.RSS.Types                            as RSS
 import           URI.ByteString
 -- }}}
@@ -61,8 +60,8 @@ prettyTime = pretty . formatTime defaultTimeLocale rfc822DateFormat
 --   pretty o = text "OPML" <+> pretty (opmlVersion o) <++> indent 2 (pretty (opmlHead o) <++> (vsep . map pretty $ opmlOutlines o))
 
 prettyPerson :: AtomPerson -> Doc a
-prettyPerson p = pretty (toNullable $ personName p) <> email where
-  email = if null $ personEmail p
+prettyPerson p = pretty (unrefine $ personName p) <> email where
+  email = if Text.null $ personEmail p
     then mempty
     else space <> angles (pretty $ personEmail p)
 
@@ -89,7 +88,7 @@ prettyItem i = "Item:" <+> pretty (itemTitle i) <++> indent 4
   )
 
 prettyURI :: URIRef a -> Doc b
-prettyURI uri = pretty $ decodeUtf8 $ serializeURIRef' uri
+prettyURI uri = pretty @Text $ decodeUtf8 $ serializeURIRef' uri
 
 prettyGuid :: RssGuid -> Doc a
 prettyGuid (GuidText t)         = pretty t
