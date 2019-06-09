@@ -5,10 +5,11 @@
 module Imm.Pretty (module Imm.Pretty, module X) where
 
 -- {{{ Imports
-import           Data.Text                                 as Text
+import           Data.Text                                 (Text)
+import qualified Data.Text                                 as Text
 import           Data.Time
 import           Data.Tree
-
+import           Data.XML.Types                            as XML
 import           Text.Atom.Types                           as Atom
 -- import           Text.OPML.Types              as OPML hiding (text)
 -- import qualified Text.OPML.Types              as OPML
@@ -23,6 +24,10 @@ import           Text.RSS.Types                            as RSS
 import           URI.ByteString
 -- }}}
 
+
+-- | Newtype wrapper to prettyprint a key uniquely identifying an object
+newtype PrettyKey a = PrettyKey a
+
 -- | Infix operator for 'line'
 (<++>) :: Doc a -> Doc a -> Doc a
 x <++> y = x <> line <> y
@@ -31,7 +36,7 @@ prettyTree :: (Pretty a) => Tree a -> Doc b
 prettyTree (Node n s) = pretty n <++> indent 2 (vsep $ prettyTree <$> s)
 
 prettyTime :: UTCTime -> Doc a
-prettyTime = pretty . formatTime defaultTimeLocale rfc822DateFormat
+prettyTime = pretty . formatTime defaultTimeLocale "%F %T"
 
 -- instance Pretty OpmlHead where
 --   pretty h = hsep $ catMaybes
@@ -69,8 +74,22 @@ prettyLink :: AtomLink -> Doc a
 prettyLink l = withAtomURI prettyURI $ linkHref l
 
 prettyAtomText :: AtomText -> Doc a
-prettyAtomText (AtomPlainText _ t) = pretty t
-prettyAtomText (AtomXHTMLText t)   = pretty t
+prettyAtomText (AtomPlainText _ t)     = pretty t
+prettyAtomText (AtomXHTMLText element) = prettyElement element
+
+prettyElement :: Element -> Doc a
+prettyElement (Element _ _ nodes) = mconcat $ map prettyNode nodes
+
+prettyNode :: Node -> Doc a
+prettyNode (NodeElement element) = prettyElement element
+prettyNode (NodeContent content) = prettyContent content
+prettyNode _                     = mempty
+
+prettyContent :: Content -> Doc a
+prettyContent (ContentText t)      = pretty t
+prettyContent (ContentEntity "lt") = "<"
+prettyContent (ContentEntity "gt") = ">"
+prettyContent _                    = "?"
 
 prettyEntry :: AtomEntry -> Doc a
 prettyEntry e = "Entry:" <+> prettyAtomText (entryTitle e) <++> indent 4
@@ -95,10 +114,10 @@ prettyGuid (GuidText t)         = pretty t
 prettyGuid (GuidUri (RssURI u)) = prettyURI u
 
 prettyAtomContent :: AtomContent -> Doc a
-prettyAtomContent (AtomContentInlineText _ t)  = pretty t
-prettyAtomContent (AtomContentInlineXHTML t)   = pretty t
-prettyAtomContent (AtomContentInlineOther _ t) = pretty t
-prettyAtomContent (AtomContentOutOfLine _ u)   = withAtomURI prettyURI u
+prettyAtomContent (AtomContentInlineText _ t)      = pretty t
+prettyAtomContent (AtomContentInlineXHTML element) = prettyElement element
+prettyAtomContent (AtomContentInlineOther _ t)     = pretty t
+prettyAtomContent (AtomContentOutOfLine _ u)       = withAtomURI prettyURI u
 
 magenta :: Doc AnsiStyle -> Doc AnsiStyle
 magenta = annotate $ color Magenta

@@ -1,17 +1,20 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
--- | Implementation of "Imm.Hooks" that writes a file for each new RSS/Atom item.
-module Imm.Hooks.WriteFile (module Imm.Hooks.WriteFile, module Imm.Hooks) where
-
+-- | Write a file from the input RSS/Atom item.
+--
+-- Meant to be use as a callback for imm.
 -- {{{ Imports
+import           Imm.Callback
 import           Imm.Feed
-import           Imm.Hooks
 import           Imm.Pretty
 
+import           Data.Aeson
+import           Data.ByteString (getContents)
 import           Data.ByteString.Builder
 import           Data.ByteString.Streaming     (toStreamingByteString)
-import qualified Data.Text as Text             (null, replace)
+import qualified Data.Text                     as Text (null, replace)
 import           Data.Time
+import           Options.Applicative
 import           Streaming.With
 import           System.Directory              (createDirectoryIfMissing)
 import           System.FilePath
@@ -25,29 +28,37 @@ import           Text.RSS.Types
 import           URI.ByteString
 -- }}}
 
--- * Types
+data CliOptions = CliOptions
+  { _directory :: FilePath
+  , _dryRun    :: Bool
+  } deriving (Eq, Ord, Read, Show)
 
--- | Where and what to write in a file
-data FileInfo = FileInfo FilePath Builder
+parseOptions :: MonadIO m => m CliOptions
+parseOptions = io $ customExecParser defaultPrefs (info cliOptions $ progDesc "Write a file for each new RSS/Atom item. An intermediate folder will be created for each feed.")
 
-newtype WriteFileSettings = WriteFileSettings (Feed -> FeedElement -> FileInfo)
+cliOptions :: Parser CliOptions
+cliOptions = CliOptions
+  <$> strOption (long "directory" <> short 'd' <> metavar "PATH" <> help "Root directory where files will be created.")
+  <*> switch (long "dry-run" <> help "Disable all I/Os, except for logs.")
 
-mkHandle :: MonadBase IO m => MonadIO m => MonadMask m => WriteFileSettings -> Handle m
-mkHandle (WriteFileSettings f) = Handle
-  { processNewElement = \feed element -> do
-      let FileInfo path content = f feed element
-      liftBase $ createDirectoryIfMissing True $ takeDirectory path
-      writeBinaryFile path $ toStreamingByteString content
-  }
+
+
+main :: IO ()
+main = do
+  CliOptions directory dryRun <- parseOptions
+  message <- getContents <&> fromStrict <&> eitherDecode
+  case message of
+    Left e -> putStrLn e
+    Right (Message feed element) -> do
+      let content = defaultFileContent feed element
+          filePath = defaultFilePath directory feed element
+      putStrLn filePath
+      unless dryRun $ do
+        createDirectoryIfMissing True $ takeDirectory filePath
+        writeBinaryFile filePath $ toStreamingByteString content
+  return ()
 
 -- * Default behavior
-
--- | Wrapper around 'defaultFilePath' and 'defaultFileContent'
-defaultSettings :: FilePath            -- ^ Root directory for 'defaultFilePath'
-                -> WriteFileSettings
-defaultSettings root = WriteFileSettings $ \feed element -> FileInfo
-  (defaultFilePath root feed element)
-  (defaultFileContent feed element)
 
 -- | Generate a path @<root>/<feed title>/<element date>-<element title>.html@, where @<root>@ is the first argument
 defaultFilePath :: FilePath -> Feed -> FeedElement -> FilePath

@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes        #-}
 -- | Implementation of "Imm.XML" based on 'Conduit'.
-module Imm.XML.Conduit (module Imm.XML.Conduit, module Imm.XML) where
+module XML (module XML, module Imm.XML) where
 
 -- {{{ Imports
 import           Imm.Feed

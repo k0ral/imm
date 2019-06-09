@@ -1,38 +1,21 @@
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
--- | Implementation of "Imm.Hooks" that sends a mail via a SMTP server for each new RSS/Atom element.
--- You may want to check out "Network.HaskellNet.SMTP", "Network.HaskellNet.SMTP.SSL" and "Network.Mail.Mime" modules for additional information.
---
--- Here is an example configuration:
---
--- > sendmail :: SendMailSettings
--- > sendmail = SendMailSettings smtpServer formatMail
--- >
--- > formatMail :: FormatMail
--- > formatMail = FormatMail
--- >   (\a b -> (defaultFormatFrom a b) { addressEmail = "user@host" } )
--- >   defaultFormatSubject
--- >   defaultFormatBody
--- >   (\_ _ -> [Address Nothing "user@host"])
--- >
--- > smtpServer :: Feed -> FeedElement -> SMTPServer
--- > smtpServer _ _ = SMTPServer
--- >   (Just $ Authentication PLAIN "user" "password")
--- >   (StartTls "smtp.server" defaultSettingsSMTPSTARTTLS)
---
-module Imm.Hooks.SendMail (module Imm.Hooks.SendMail, module Imm.Hooks, module Reexport) where
-
+-- | 'Callback' for @imm@ that sends a mail via a SMTP server the input RSS/Atom item.
 -- {{{ Imports
+import           Imm.Callback
 import           Imm.Feed
-import           Imm.Hooks
 import           Imm.Pretty
 
+import           Data.Aeson
+import           Data.ByteString             (getContents)
 import           Data.Text                   as Text (intercalate)
 import           Data.Time
-import           Network.HaskellNet.SMTP     as Reexport
-import           Network.HaskellNet.SMTP.SSL as Reexport
-import           Network.Mail.Mime           as Reexport hiding (sendmail)
+import           Network.HaskellNet.SMTP
+import           Network.HaskellNet.SMTP.SSL
+import           Network.Mail.Mime           hiding (sendmail)
 import           Network.Socket
+import           Options.Applicative
 import           Refined
 import           Text.Atom.Types
 import           Text.RSS.Types
@@ -45,15 +28,15 @@ type Password = String
 type ServerName = String
 
 -- | How to connect to the SMTP server
-data ConnectionSettings = Plain ServerName PortNumber | Ssl ServerName Settings | StartTls ServerName Settings
-  deriving(Eq, Show)
+data ConnectionSettings = Plain ServerName PortNumber | Encrypted ServerName Settings Bool
+  deriving(Eq, Generic, Ord, Show)
 
 -- | How to authenticate to the SMTP server
 data Authentication = Authentication AuthType Username Password
-  deriving(Eq, Show)
+  deriving(Eq, Generic, Show)
 
 data SMTPServer = SMTPServer (Maybe Authentication) ConnectionSettings
-  deriving (Eq, Show)
+  deriving (Eq, Generic, Show)
 
 -- | How to format outgoing mails from feed elements
 data FormatMail = FormatMail
@@ -63,16 +46,74 @@ data FormatMail = FormatMail
   , formatTo      :: Feed -> FeedElement -> [Address]  -- ^ How to write the To: header of feed mails
   }
 
-data SendMailSettings = SendMailSettings (Feed -> FeedElement -> SMTPServer) FormatMail
+data CliOptions = CliOptions
+  { _smtpServer :: SMTPServer
+  , _recipients :: [Address]
+  , _dryRun     :: Bool
+  } deriving (Eq, Generic, Show)
 
-mkHandle :: MonadBase IO m => SendMailSettings -> Handle m
-mkHandle (SendMailSettings connectionSettings formatMail) = Handle
-  { processNewElement = \feed element -> do
-      timezone <- liftBase getCurrentTimeZone
-      currentTime <- liftBase getCurrentTime
-      let mail = buildMail formatMail currentTime timezone feed element
-      liftBase $ withSMTPConnection (connectionSettings feed element) $ sendMimeMail2 mail
-  }
+
+parseOptions :: MonadIO m => m CliOptions
+parseOptions = io $ customExecParser (prefs $ showHelpOnError <> showHelpOnEmpty) (info (cliOptions <**> helper) $ progDesc "Send a mail for each new RSS/Atom item.")
+
+cliOptions :: Parser CliOptions
+cliOptions = CliOptions
+  <$> smtpServerParser
+  <*> many recipientParser
+  <*> switch (long "dry-run" <> help "Disable all I/Os, except for logs.")
+
+smtpServerParser :: Parser SMTPServer
+smtpServerParser = SMTPServer
+  <$> ((Just <$> authenticationParser) <|> pure Nothing)
+  <*> (plainConnection <|> encryptedConnection)
+
+authenticationParser :: Parser Authentication
+authenticationParser = Authentication
+  <$> authenticationType
+  <*> strOption (long "user" <> short 'u' <> help "SMTP username")
+  <*> strOption (long "password" <> short 'P' <> help "SMTP password")
+
+authenticationType :: Parser AuthType
+authenticationType = flag' PLAIN (long "plain" <> help "Use plain authentication.")
+  <|> flag' LOGIN (long "login" <> help "Use login authentication")
+  <|> flag' CRAM_MD5 (long "cram-md5" <> help "Use CRAM MD5 authentication")
+
+plainConnection :: Parser ConnectionSettings
+plainConnection = Plain
+  <$> strOption (long "server" <> short 's' <> help "SMTP server address.")
+  <*> option auto (long "port" <> short 'p' <> help "SMTP server port.")
+
+encryptedConnection :: Parser ConnectionSettings
+encryptedConnection = Encrypted
+  <$> strOption (long "server" <> short 's' <> help "SMTP server address.")
+  <*> encryptionSettings
+  <*> switch (long "starttls" <> help "Use STARTTLS.")
+
+encryptionSettings :: Parser Settings
+encryptionSettings = Settings
+  <$> option auto (long "ssl-port" <> short 's' <> help "SSL port.")
+  <*> option auto (long "max-line-length" <> short 'l' <> help "Maximum line length.")
+  <*> switch (long "log" <> help "Log to console.")
+  <*> switch (long "disable-certificate-validation" <> help "Disable certificate validation.")
+
+recipientParser :: Parser Address
+recipientParser = strOption (long "to" <> help "Mail recipients.")
+
+main :: IO ()
+main = do
+  CliOptions smtpServer recipients dryRun <- parseOptions
+
+  message <- getContents <&> fromStrict <&> eitherDecode
+  case message of
+    Left e -> putStrLn e
+    Right (Message feed element) -> do
+      timezone <- io getCurrentTimeZone
+      currentTime <- io getCurrentTime
+      let formatMail = FormatMail defaultFormatFrom defaultFormatSubject defaultFormatBody (const $ const recipients)
+          mail = buildMail formatMail currentTime timezone feed element
+      unless dryRun $ io $ withSMTPConnection smtpServer $ sendMimeMail2 mail
+
+  return ()
 
 
 -- * Default behavior
@@ -116,11 +157,11 @@ withSMTPConnection (SMTPServer authentication (Plain server port)) f =
   doSMTPPort server port $ \connection -> do
     forM_ authentication (authenticate_ connection)
     f connection
-withSMTPConnection (SMTPServer authentication (Ssl server settings)) f =
+withSMTPConnection (SMTPServer authentication (Encrypted server settings False)) f =
   doSMTPSSLWithSettings server settings $ \connection -> do
     forM_ authentication (authenticate_ connection)
     f connection
-withSMTPConnection (SMTPServer authentication (StartTls server settings)) f =
+withSMTPConnection (SMTPServer authentication (Encrypted server settings True)) f =
   doSMTPSTARTTLSWithSettings server settings $ \connection -> do
     forM_ authentication (authenticate_ connection)
     f connection

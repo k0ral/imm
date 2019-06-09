@@ -5,7 +5,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE UndecidableInstances  #-}
 -- | Implementation of "Imm.Database" based on a JSON file.
-module Imm.Database.JsonFile
+module Database
   ( JsonFileDatabase
   , mkJsonFileDatabase
   , defaultDatabase
@@ -18,10 +18,10 @@ module Imm.Database.JsonFile
 import           Imm.Database                hiding (commit, delete, insert,
                                               purge, update)
 import           Imm.Database.FeedTable
-import           Imm.Error
 import           Imm.Pretty
 
 import           Control.Concurrent.STM.TVar (swapTVar)
+import           Control.Exception.Safe
 import           Data.Aeson
 import           Data.ByteString.Lazy        (hPut)
 import           Data.ByteString.Streaming   (hGetContents, toLazy_)
@@ -34,7 +34,7 @@ import           System.FilePath
 -- }}}
 
 data CacheStatus = Empty | Clean | Dirty
-  deriving(Eq, Show)
+  deriving(Eq, Ord, Read, Show)
 
 data JsonFileDatabase t = JsonFileDatabase FilePath (Map (Key t) (Entry t)) CacheStatus
 
@@ -120,3 +120,8 @@ commit tvar = do
     return database
 
   when (status == Dirty) $ liftIO $ withFile file WriteMode $ \h -> hPut h $ encode $ Map.toList cache
+
+
+-- | Wrap a 'Maybe' value in 'MonadThrow'
+failWith :: (MonadThrow m, Exception e) => Maybe a -> e -> m a
+failWith x e = maybe (throwM e) return x

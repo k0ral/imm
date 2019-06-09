@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 -- | Implementation of "Imm.Logger" based on @fast-logger@.
 -- For further information, please consult "System.Log.FastLogger".
-module Imm.Logger.Simple (module Imm.Logger.Simple, module Reexport) where
+module Logger (module Logger, module Reexport) where
 
 -- {{{ Imports
 import           Imm.Logger                                as Reexport
@@ -33,7 +33,13 @@ mkHandle :: MonadIO m => LoggerSettings -> Handle m
 mkHandle settings = Handle
   { log = \l t -> do
       refLevel <- readMVar $ _logLevel settings
-      handleColor <- (\c -> if c then id else unAnnotate) <$> readMVar (_colorizeLogs settings)
+      handleColor <- do
+        keepColor <- readMVar (_colorizeLogs settings)
+        case (l, keepColor) of
+          (_, False) -> return unAnnotate
+          (Error, _) -> return red
+          (Warning, _) -> return yellow
+          _ -> return id
       let loggerSet = (if l == Error then _errorLoggerSet else _loggerSet) settings
       when (l >= refLevel) $ liftIO $ pushLogStrLn loggerSet $ toLogStr $ renderLazy $ layoutPretty defaultLayoutOptions $ handleColor t
 

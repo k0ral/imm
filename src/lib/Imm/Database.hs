@@ -32,7 +32,7 @@ class (Ord (Key t), Show (Key t), Show (Entry t), Typeable t, Show t, Pretty t, 
   rep :: t
 
 data Handle m t = Handle
-  { _describeDatabase :: forall a . m (Doc a)
+  { _describeDatabase :: m (Doc AnsiStyle)
   , _fetchList        :: [Key t] -> m (Map (Key t) (Entry t))
   , _fetchAll         :: m (Map (Key t) (Entry t))
   , _update           :: Key t -> (Entry t -> Entry t) -> m ()
@@ -41,6 +41,19 @@ data Handle m t = Handle
   , _purge            :: m ()
   , _commit           :: m ()
   }
+
+readOnly :: Monad m => Pretty (Key t) => Logger.Handle m -> Handle m t -> Handle m t
+readOnly logger handle = handle
+  { _describeDatabase = do
+      output <- _describeDatabase handle
+      return $ output <+> yellow (brackets "read only")
+  , _update = \key _ -> log logger Debug $ "Not updating database for key " <> pretty key
+  , _insertList = \list -> log logger Debug $ "Not inserting " <> yellow (pretty $ length list) <> " entries"
+  , _deleteList = \list -> log logger Debug $ "Not deleting " <> yellow (pretty $ length list) <> " entries"
+  , _purge = log logger Debug "Not purging database"
+  , _commit = log logger Debug "Not committing database"
+  }
+
 
 
 data DatabaseException t

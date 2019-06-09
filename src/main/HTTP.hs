@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Implementation of "Imm.HTTP" based on "Network.HTTP.Client".
-module Imm.HTTP.Simple (mkHandle, defaultManager, module Reexport) where
+module HTTP (mkHandle, defaultManager, module Reexport) where
 
 -- {{{ Imports
 import           Imm.HTTP
@@ -16,9 +16,9 @@ import           Network.HTTP.Client.TLS    as Reexport
 import           URI.ByteString
 -- }}}
 
-mkHandle :: MonadBase IO m => Manager -> Handle m
+mkHandle :: MonadIO m => Manager -> Handle m
 mkHandle manager = Handle
-  { httpGet = liftBase . httpGet' manager
+  { httpGet = io . httpGet' manager
   }
 
 -- | Default manager uses TLS and no proxy
