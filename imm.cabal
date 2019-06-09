@@ -11,6 +11,7 @@ maintainer:          chahine.moreau@gmail.com
 category:            Web
 build-type:          Simple
 extra-source-files:  README.md
+tested-with:         GHC <8.8 && >=8.4
 
 source-repository head
   type:     git
