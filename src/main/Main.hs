@@ -103,7 +103,8 @@ main3 logger database callbacks feedIDs = do
           feed <- HTTP.get logger httpClient uri >>= parseXml xmlParser uri
 
           unreadElements <- filterM (fmap not . isRead database feedID) $ getElements feed
-          forM_ unreadElements $ \element -> do
+          unprocessedElements <- listUnprocessedElements database feedID
+          forM_ (unprocessedElements <> unreadElements) $ \element -> do
             log logger Info $ "New item:" <+> magenta (pretty feedID) <+> "/" <+> yellow (pretty $ getTitle element)
             atomically $ do
               writeTMChan newItemsChan (feedID, removeElements feed, element)

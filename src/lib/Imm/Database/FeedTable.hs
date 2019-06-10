@@ -198,6 +198,12 @@ markAsUnprocessed logger database feedID = do
     , entryReadHashes = mempty
     }
 
+listUnprocessedElements :: MonadThrow m 
+                        => Database.Handle m FeedTable -> FeedID -> m [FeedElement]
+listUnprocessedElements database feedID = do
+  DatabaseEntry{..} <- fetch database feedID
+  return $ Map.keys $ Map.filter not entryItems
+
 isRead :: MonadCatch m => Database.Handle m FeedTable -> FeedID -> FeedElement -> m Bool
 isRead database feedID element = do
   DatabaseEntry _ _ readHashes _ items lastUpdate <- Database.fetch database feedID
