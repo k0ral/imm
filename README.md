@@ -96,7 +96,7 @@ in config
 
 - Check for new elements without executing any action:
   ```bash
-  imm run --no-callbacks --read-only
+  imm --read-only run --no-callbacks
   ```
 
 - Execute configured callbacks for each new element from subscribed feeds:
