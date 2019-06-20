@@ -7,8 +7,8 @@ import           Imm.Callback
 import           Imm.Feed
 import           Imm.Pretty
 
-import           Data.Aeson
 import           Data.ByteString             (getContents)
+import qualified Data.MessagePack            as MsgPack
 import           Data.Text                   as Text (intercalate)
 import           Data.Time
 import           Network.HaskellNet.SMTP
@@ -103,15 +103,15 @@ main :: IO ()
 main = do
   CliOptions smtpServer recipients dryRun <- parseOptions
 
-  message <- getContents <&> fromStrict <&> eitherDecode
+  message <- getContents <&> fromStrict <&> MsgPack.unpack
   case message of
-    Left e -> putStrLn e
-    Right (Message feed element) -> do
+    Just (Message feed element) -> do
       timezone <- io getCurrentTimeZone
       currentTime <- io getCurrentTime
       let formatMail = FormatMail defaultFormatFrom defaultFormatSubject defaultFormatBody (const $ const recipients)
           mail = buildMail formatMail currentTime timezone feed element
       unless dryRun $ io $ withSMTPConnection smtpServer $ sendMimeMail2 mail
+    _ -> putStrLn "Invalid input" >> exitFailure
 
   return ()
 

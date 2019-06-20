@@ -22,9 +22,9 @@ import           XML
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM.TMChan
 import           Control.Exception.Safe
-import           Data.Aeson                    hiding (Error)
 import           Data.Conduit.Combinators      as Conduit (stdin)
 import qualified Data.Map                      as Map
+import qualified Data.MessagePack              as MsgPack
 import qualified Data.Text                     as Text
 import qualified Data.Text.IO                  as Text
 import           Dhall
@@ -123,7 +123,7 @@ main3 logger database callbacks feedIDs = do
     newItem <- atomically $ readTMChan newItemsChan
     forM_ newItem $ \(feedID, feed, element) -> do
       results <- forM callbacks $ \callback@(Callback executable arguments) -> do
-        let processInput = byteStringInput $ encode $ Message feed element
+        let processInput = byteStringInput $ MsgPack.pack $ Message feed element
             processConfig = proc executable (map toString arguments) & setStdin processInput
 
         log logger Debug $ "Running" <+> cyan (pretty executable) <+> "on" <+> magenta (pretty feedID) <+> "/" <+> yellow (pretty $ getTitle element)

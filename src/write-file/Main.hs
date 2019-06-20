@@ -8,10 +8,10 @@ import           Imm.Callback
 import           Imm.Feed
 import           Imm.Pretty
 
-import           Data.Aeson
-import           Data.ByteString (getContents)
+import           Data.ByteString               (getContents)
 import           Data.ByteString.Builder
 import           Data.ByteString.Streaming     (toStreamingByteString)
+import qualified Data.MessagePack              as MsgPack
 import qualified Data.Text                     as Text (null, replace)
 import           Data.Time
 import           Options.Applicative
@@ -46,16 +46,16 @@ cliOptions = CliOptions
 main :: IO ()
 main = do
   CliOptions directory dryRun <- parseOptions
-  message <- getContents <&> fromStrict <&> eitherDecode
+  message <- getContents <&> fromStrict <&> MsgPack.unpack
   case message of
-    Left e -> putStrLn e
-    Right (Message feed element) -> do
+    Just (Message feed element) -> do
       let content = defaultFileContent feed element
           filePath = defaultFilePath directory feed element
       putStrLn filePath
       unless dryRun $ do
         createDirectoryIfMissing True $ takeDirectory filePath
         writeBinaryFile filePath $ toStreamingByteString content
+    _ -> putStrLn "Invalid input" >> exitFailure
   return ()
 
 -- * Default behavior

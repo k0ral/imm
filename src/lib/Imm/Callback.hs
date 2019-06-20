@@ -1,14 +1,15 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications  #-}
 module Imm.Callback where
 
 -- {{{ Imports
 import           Imm.Feed
 
-import           Data.Aeson
-import           Data.Aeson.Types
+import qualified Data.Map                  as Map
+import           Data.MessagePack.Object
 import           Data.Text.Prettyprint.Doc
-import           Dhall
+import           Dhall                     hiding (maybe)
 -- }}}
 
 -- | External program run for each feed element.
@@ -28,12 +29,13 @@ instance Pretty Callback where
 -- | All information passed to external programs about a new feed item, are stored in this structure.
 data Message = Message Feed FeedElement deriving(Eq, Generic, Ord, Show)
 
-instance ToJSON Message where
-  toJSON (Message feed element) = object ["feed" .= renderFeed feed, "element" .= renderFeedElement element]
+instance MessagePack Message where
+  toObject (Message feed element) = toObject @(Map Text Text)
+    $ Map.insert "feed" (renderFeed feed)
+    $ Map.insert "element" (renderFeedElement element) mempty
 
-instance FromJSON Message where
-  parseJSON = withObject "Message" $ \v -> Message
-    <$> (v .: "feed" >>= (liftEither . parseFeed))
-    <*> (v .: "element" >>= (liftEither . parseFeedElement))
-    where liftEither :: Either e a -> Parser a
-          liftEither = either (const mempty) return
+  fromObject object = fromObject object >>= \m -> Message
+    <$> (lookup @(Map Text Text) "feed" m >>= eitherToMaybe . parseFeed)
+    <*> (lookup @(Map Text Text) "element" m >>= eitherToMaybe . parseFeedElement)
+    where eitherToMaybe (Right a) = Just a
+          eitherToMaybe _         = Nothing
