@@ -20,7 +20,7 @@ data Callback = Callback
   , _arguments  :: [Text]
   } deriving (Eq, Generic, Ord, Read, Show)
 
-instance Interpret Callback
+instance FromDhall Callback
 
 instance Pretty Callback where
   pretty (Callback executable arguments) = pretty executable <+> sep (pretty <$> arguments)

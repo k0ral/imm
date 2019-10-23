@@ -124,7 +124,7 @@ main3 logger database callbacks feedIDs = do
     forM_ newItem $ \(feedID, feed, element) -> do
       results <- forM callbacks $ \callback@(Callback executable arguments) -> do
         let processInput = byteStringInput $ MsgPack.pack $ Message feed element
-            processConfig = proc executable (map toString arguments) & setStdin processInput
+            processConfig = proc executable (toString <$> arguments) & setStdin processInput
 
         log logger Debug $ "Running" <+> cyan (pretty executable) <+> "on" <+> magenta (pretty feedID) <+> "/" <+> yellow (pretty $ getTitle element)
 
