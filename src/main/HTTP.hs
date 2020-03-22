@@ -10,9 +10,9 @@ import           Imm.Pretty
 
 import           Control.Exception.Safe
 import           Data.CaseInsensitive
-import           Network.Connection         as Reexport
-import           Network.HTTP.Client        as Reexport
-import           Network.HTTP.Client.TLS    as Reexport
+import           Network.Connection      as Reexport
+import           Network.HTTP.Client     as Reexport
+import           Network.HTTP.Client.TLS as Reexport
 import           URI.ByteString
 -- }}}
 

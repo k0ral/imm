@@ -99,10 +99,10 @@ renderFeedElement (RssElement item) = decodeUtf8 $ toLazyByteString $ runConduit
 renderFeedElement (AtomElement entry) = decodeUtf8 $ toLazyByteString $ runConduitPure $ renderAtomEntry entry .| renderBuilder def .| foldC
 
 parseFeed :: MonadCatch m => Text -> m Feed
-parseFeed text = runConduit $ parseLBS def (encodeUtf8 text) .| XML.force "Invalid feed" ((fmap Atom <$> atomFeed) `orE` (fmap Rss <$> rssDocument) `orE` (fmap Rss <$> rss1Document))
+parseFeed text = runConduit $ parseLBS def (encodeUtf8 text) .| XML.force "Invalid feed" (choose [fmap Atom <$> atomFeed, fmap Rss <$> rssDocument, fmap Rss <$> rss1Document])
 
 parseFeedElement :: MonadCatch m => Text -> m FeedElement
-parseFeedElement text = runConduit $ parseLBS def (encodeUtf8 text) .| XML.force "Invalid feed element" ((fmap AtomElement <$> atomEntry) `orE` (fmap RssElement <$> rssItem) `orE` (fmap RssElement <$> rss1Item))
+parseFeedElement text = runConduit $ parseLBS def (encodeUtf8 text) .| XML.force "Invalid feed element" (choose [fmap AtomElement <$> atomEntry, fmap RssElement <$> rssItem, fmap RssElement <$> rss1Item])
 
 
 -- * Generic mutators
