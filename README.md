@@ -4,8 +4,8 @@
 
 *imm* is written in [Haskell][2], configured in [Dhall][3]. The project includes:
 
-- a main executable `imm` that users directly run
-- additional executables (`imm-writefile` and `imm-sendmail`) that `imm` can be configured to use as callbacks
+- a main executable `imm` that users run directly
+- secondary executables (`imm-writefile`, `imm-sendmail`) which can be used as callbacks triggered by `imm`
 - a [*Haskell*][2] library, that exports functions useful to both the main executable and callbacks; the API is documented [in Hackage][1].
 
 ## Callbacks
@@ -41,18 +41,20 @@ let Callback : Type =
 
 let sendMail =
   { _executable = "imm-sendmail"
-  , _arguments = ["--login", "-u", "user@domain.com", "-P", "password", "-s", "smtp.domain.com", "-p", "587", "--to", "foo.bar@domain.com"]
+  , _arguments = []
   }
 
 let config : List Callback = [ sendMail ]
 in config
 ```
 
+`imm-sendmail` does not have a built-in SMTP client, instead it must rely on an external SMTP client program, which is configured in `$XDG_CONFIG_HOME/imm/sendmail.dhall` (cf example bundled with the project.) `imm-sendmail` writes the mail bytestring to the standard input of the configured external program.
+
 ### Offline read-it-later
 
 *imm* is able to store a local copy of unread elements, to read them later while offline for example. External links won't work offline though.
 
-```
+```dhall
 let Callback : Type =
   { _executable : Text
   , _arguments : List Text

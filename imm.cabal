@@ -68,7 +68,7 @@ library
 
 executable imm
   import: common
-  build-depends: imm, aeson, async, atom-conduit >=0.7, bytestring, case-insensitive, conduit, connection, containers, dhall, directory, fast-logger, filepath, http-client >=0.4.30, http-client-tls, msgpack, opml-conduit >=0.7, optparse-applicative, prettyprinter-ansi-terminal, refined >=0.4.1, rss-conduit >=0.4.1, safe-exceptions, stm, stm-chans, streaming-bytestring, streaming-with, text, typed-process, uri-bytestring, xml-conduit >=1.5, xml-types
+  build-depends: imm, aeson, async, atom-conduit >=0.7, bytestring, case-insensitive, conduit, connection, containers, dhall >= 1.27, directory, fast-logger, filepath, http-client >=0.4.30, http-client-tls, msgpack, opml-conduit >=0.7, optparse-applicative, prettyprinter-ansi-terminal, refined >=0.4.1, rss-conduit >=0.4.1, safe-exceptions, stm, stm-chans, streaming-bytestring, streaming-with, text, typed-process, uri-bytestring, xml-conduit >=1.5, xml-types
   main-is: Main.hs
   other-modules: Core, Database, HTTP, Logger, Options, Paths_imm, XML
   autogen-modules: Paths_imm
@@ -84,7 +84,7 @@ executable imm-writefile
 
 executable imm-sendmail
   import: common
-  build-depends: imm, atom-conduit, blaze-html, blaze-markup, bytestring, directory, filepath, HaskellNet >=0.5, HaskellNet-SSL >= 0.3.3.0, msgpack, mime-mail, network <3, optparse-applicative, prettyprinter, refined, rss-conduit, text, time, uri-bytestring
+  build-depends: imm, atom-conduit, blaze-html, blaze-markup, bytestring, dhall >= 1.27, directory, filepath, msgpack, mime-mail, optparse-applicative, prettyprinter, refined, rss-conduit, text, time, typed-process, uri-bytestring
   main-is: Main.hs
   hs-source-dirs: src/send-mail
   ghc-options: -Wall -fno-warn-unused-do-bind -threaded

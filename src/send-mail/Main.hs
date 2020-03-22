@@ -7,36 +7,29 @@ import           Imm.Callback
 import           Imm.Feed
 import           Imm.Pretty
 
-import           Data.ByteString             (getContents)
-import qualified Data.MessagePack            as MsgPack
-import           Data.Text                   as Text (intercalate)
+import           Data.ByteString      (getContents)
+import qualified Data.MessagePack     as MsgPack
+import           Data.Text            as Text (intercalate)
 import           Data.Time
-import           Network.HaskellNet.SMTP
-import           Network.HaskellNet.SMTP.SSL
-import           Network.Mail.Mime           hiding (sendmail)
-import           Network.Socket
-import           Options.Applicative
+import           Dhall                hiding (map, maybe)
+import           Network.Mail.Mime    hiding (sendmail)
+import           Options.Applicative  hiding (auto)
 import           Refined
+import           System.Directory     (XdgDirectory (..), getXdgDirectory)
+import           System.Exit          (ExitCode (..))
+import           System.FilePath
+import           System.Process.Typed
 import           Text.Atom.Types
 import           Text.RSS.Types
 -- }}}
 
--- * Types
+-- | How to call external command
+data Command = Command
+  { _executable :: FilePath
+  , _arguments  :: [Text]
+  } deriving (Eq, Generic, Ord, Read, Show)
 
-type Username = String
-type Password = String
-type ServerName = String
-
--- | How to connect to the SMTP server
-data ConnectionSettings = Plain ServerName PortNumber | Encrypted ServerName Settings Bool
-  deriving(Eq, Generic, Ord, Show)
-
--- | How to authenticate to the SMTP server
-data Authentication = Authentication AuthType Username Password
-  deriving(Eq, Generic, Show)
-
-data SMTPServer = SMTPServer (Maybe Authentication) ConnectionSettings
-  deriving (Eq, Generic, Show)
+instance FromDhall Command
 
 -- | How to format outgoing mails from feed elements
 data FormatMail = FormatMail
@@ -47,61 +40,36 @@ data FormatMail = FormatMail
   }
 
 data CliOptions = CliOptions
-  { _smtpServer :: SMTPServer
+  { _configFile :: FilePath
   , _recipients :: [Address]
   , _dryRun     :: Bool
   } deriving (Eq, Generic, Show)
 
 
 parseOptions :: MonadIO m => m CliOptions
-parseOptions = io $ customExecParser (prefs $ showHelpOnError <> showHelpOnEmpty) (info (cliOptions <**> helper) $ progDesc "Send a mail for each new RSS/Atom item.")
+parseOptions = io $ do
+  defaultConfigFile <- getXdgDirectory XdgConfig $ "imm" </> "sendmail.dhall"
+  customExecParser (prefs $ showHelpOnError <> showHelpOnEmpty) (info (cliOptions defaultConfigFile <**> helper) $ progDesc description)
 
-cliOptions :: Parser CliOptions
-cliOptions = CliOptions
-  <$> smtpServerParser
+description :: String
+description = "Send a mail for each new RSS/Atom item."
+
+cliOptions :: FilePath -> Parser CliOptions
+cliOptions defaultConfigFile = CliOptions
+  <$> (configFileOption <|> pure defaultConfigFile)
   <*> many recipientParser
   <*> switch (long "dry-run" <> help "Disable all I/Os, except for logs.")
 
-smtpServerParser :: Parser SMTPServer
-smtpServerParser = SMTPServer
-  <$> ((Just <$> authenticationParser) <|> pure Nothing)
-  <*> (plainConnection <|> encryptedConnection)
-
-authenticationParser :: Parser Authentication
-authenticationParser = Authentication
-  <$> authenticationType
-  <*> strOption (long "user" <> short 'u' <> help "SMTP username")
-  <*> strOption (long "password" <> short 'P' <> help "SMTP password")
-
-authenticationType :: Parser AuthType
-authenticationType = flag' PLAIN (long "plain" <> help "Use plain authentication.")
-  <|> flag' LOGIN (long "login" <> help "Use login authentication")
-  <|> flag' CRAM_MD5 (long "cram-md5" <> help "Use CRAM MD5 authentication")
-
-plainConnection :: Parser ConnectionSettings
-plainConnection = Plain
-  <$> strOption (long "server" <> short 's' <> help "SMTP server address.")
-  <*> option auto (long "port" <> short 'p' <> help "SMTP server port.")
-
-encryptedConnection :: Parser ConnectionSettings
-encryptedConnection = Encrypted
-  <$> strOption (long "server" <> short 's' <> help "SMTP server address.")
-  <*> encryptionSettings
-  <*> switch (long "starttls" <> help "Use STARTTLS.")
-
-encryptionSettings :: Parser Settings
-encryptionSettings = Settings
-  <$> option auto (long "ssl-port" <> short 's' <> help "SSL port.")
-  <*> option auto (long "max-line-length" <> short 'l' <> help "Maximum line length.")
-  <*> switch (long "log" <> help "Log to console.")
-  <*> switch (long "disable-certificate-validation" <> help "Disable certificate validation.")
+configFileOption :: Parser FilePath
+configFileOption = strOption $ long "config" <> short 'c' <> metavar "FILE" <> help "Dhall configuration file for SMTP client call"
 
 recipientParser :: Parser Address
 recipientParser = strOption (long "to" <> help "Mail recipients.")
 
 main :: IO ()
 main = do
-  CliOptions smtpServer recipients dryRun <- parseOptions
+  CliOptions configFile recipients dryRun <- parseOptions
+  Command executable arguments <- input auto $ fromString configFile
 
   message <- getContents <&> fromStrict <&> MsgPack.unpack
   case message of
@@ -110,7 +78,16 @@ main = do
       currentTime <- io getCurrentTime
       let formatMail = FormatMail defaultFormatFrom defaultFormatSubject defaultFormatBody (const $ const recipients)
           mail = buildMail formatMail currentTime timezone feed element
-      unless dryRun $ io $ withSMTPConnection smtpServer $ sendMimeMail2 mail
+
+      unless dryRun $ do
+        processInput <- renderMail' mail <&> byteStringInput
+        let processConfig = proc executable (toString <$> arguments) & setStdin processInput
+
+        (exitCode, _output, errors) <- readProcess processConfig
+        case exitCode of
+          ExitSuccess   -> exitSuccess
+          ExitFailure _ -> putStrLn (decodeUtf8 errors) >> exitFailure
+
     _ -> putStrLn "Invalid input" >> exitFailure
 
   return ()
@@ -145,26 +122,6 @@ defaultFormatBody _ (AtomElement entry) = "<p>" <> Text.intercalate "<br/>" link
 
 
 -- * Low-level helpers
-
-authenticate_ :: SMTPConnection -> Authentication -> IO Bool
-authenticate_ connection (Authentication t u p) = do
-  result <- authenticate t u p connection
-  unless result $ putStrLn "Authentication failed"
-  return result
-
-withSMTPConnection :: SMTPServer -> (SMTPConnection -> IO a) -> IO a
-withSMTPConnection (SMTPServer authentication (Plain server port)) f =
-  doSMTPPort server port $ \connection -> do
-    forM_ authentication (authenticate_ connection)
-    f connection
-withSMTPConnection (SMTPServer authentication (Encrypted server settings False)) f =
-  doSMTPSSLWithSettings server settings $ \connection -> do
-    forM_ authentication (authenticate_ connection)
-    f connection
-withSMTPConnection (SMTPServer authentication (Encrypted server settings True)) f =
-  doSMTPSTARTTLSWithSettings server settings $ \connection -> do
-    forM_ authentication (authenticate_ connection)
-    f connection
 
 -- | Build mail from a given feed
 buildMail :: FormatMail -> UTCTime -> TimeZone -> Feed -> FeedElement -> Mail
