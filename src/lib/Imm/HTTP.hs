@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
 -- | HTTP module abstracts over HTTP requests to the external world.
 --
 -- This module follows the [Handle pattern](https://jaspervdj.be/posts/2018-03-08-handle-pattern.html).
@@ -9,10 +10,11 @@
 module Imm.HTTP where
 
 -- {{{ Imports
-import qualified Imm.Logger as Logger
-import           Imm.Logger hiding(Handle)
+import           Imm.Logger     hiding (Handle)
+import qualified Imm.Logger     as Logger
 import           Imm.Pretty
 
+import           Pipes.Core
 import           URI.ByteString
 -- }}}
 
@@ -20,14 +22,14 @@ import           URI.ByteString
 
 -- | Handle to perform GET HTTP requests.
 newtype Handle m = Handle
-  { httpGet :: URI -> m LByteString
+  { _withGet :: forall a. URI -> (Producer' ByteString m () -> m a) -> m a
   }
 
 
 -- * Primitives
 
--- | Simple wrapper around 'httpGet' that also logs the requested URI.
-get :: Monad m => Logger.Handle m -> Handle m -> URI -> m LByteString
-get logger handle uri = do
-  log logger Debug $ "Fetching " <> prettyURI uri
-  httpGet handle uri
+-- | Simple wrapper around '_withGet' that also logs the requested URI.
+withGet :: Monad m => Logger.Handle m -> Handle m -> URI -> (Producer' ByteString m () -> m a) -> m a
+withGet logger handle uri f = do
+  log logger Debug $ "GET" <+> prettyURI uri
+  _withGet handle uri f

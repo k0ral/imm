@@ -1,46 +1,27 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications  #-}
 -- | Implementation of "Imm.HTTP" based on "Network.HTTP.Client".
-module HTTP (mkHandle, defaultManager, module Reexport) where
+module HTTP (mkHandle) where
 
 -- {{{ Imports
 import           Imm.HTTP
+import           Imm.Logger           hiding (Handle)
+import qualified Imm.Logger           as Logger
 import           Imm.Pretty
 
-import           Control.Exception.Safe
-import           Data.CaseInsensitive
-import           Network.Connection      as Reexport
-import           Network.HTTP.Client     as Reexport
-import           Network.HTTP.Client.TLS as Reexport
-import           URI.ByteString
+import           Pipes.ByteString
+import           System.Process.Typed
 -- }}}
 
-mkHandle :: MonadIO m => Manager -> Handle m
-mkHandle manager = Handle
-  { httpGet = io . httpGet' manager
-  }
+mkHandle :: Logger.Handle IO -> Handle IO
+mkHandle logger = Handle $ \uri f ->
+  withProcessWait (httpie uri) $ \httpieProcess -> do
+    log logger Debug $ pretty $ show @String httpieProcess
+    f (fromHandle $ getStdout httpieProcess)
 
--- | Default manager uses TLS and no proxy
-defaultManager :: IO Manager
-defaultManager = newManager $ mkManagerSettings (TLSSettingsSimple False False False) Nothing
-
-
--- | Perform an HTTP GET request and return the response body
-httpGet' :: Manager -> URI -> IO LByteString
-httpGet' manager uri = do
-  request <- makeRequest uri
-  responseBody <$> httpLbs request manager
-    -- codec'   <- reader $ view (config.codec)
-    -- return $ response $=+ decode codec'
-
-parseRequest' :: MonadThrow m => URI -> m Request
-parseRequest' = parseRequest . show . prettyURI
-
--- | Build an HTTP request for given URI
-makeRequest :: URI -> IO Request
-makeRequest uri = do
-  req <- parseRequest' uri
-  return $ req { requestHeaders = [
-    (mk "User-Agent", "Mozilla/4.0"),
-    (mk "Accept", "*/*")]}
+  where httpie uri = proc "http" ["--timeout", "10", "--follow", "--print", "b", "GET", show $ prettyURI uri]
+          & setStdin nullStream
+          & setStdout createPipe
+          & setStderr nullStream

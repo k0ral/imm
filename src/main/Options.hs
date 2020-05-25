@@ -6,13 +6,12 @@ module Options where
 
 -- {{{ Imports
 import           Imm.Feed
-import           Imm.Logger                     as Logger
+import           Imm.Logger          as Logger
 import           Imm.Pretty
-import qualified Paths_imm                      as Package
+import qualified Paths_imm           as Package
 
 import           Data.List
-import           Data.Set                       (Set)
-import qualified Data.Set                       as Set
+import qualified Data.Set            as Set
 import           Data.Version
 import           Options.Applicative
 import           System.Directory
@@ -37,7 +36,13 @@ data GlobalOptions = GlobalOptions
   } deriving(Eq, Ord, Read, Show)
 
 
-data Command = Import | Subscribe URI (Set Text) | List | ShowFeed FeedRef | OnFeedRef (Maybe FeedRef) CommandOnFeedRef
+data Command = Import
+             | Subscribe FeedLocation (Set Text)
+             | List
+             | Describe FeedQuery
+             | Reset FeedQuery
+             | Run FeedQuery CallbackMode
+             | Unsubscribe FeedQuery
 
 deriving instance Eq Command
 deriving instance Ord Command
@@ -45,23 +50,17 @@ deriving instance Show Command
 
 instance Pretty Command where
   pretty Import          = "Import feeds"
-  pretty (Subscribe f _) = "Subscribe to feed:" <+> prettyURI f
-  pretty (OnFeedRef t c) = pretty c <> ":" <+> pretty t
+  pretty (Subscribe f _) = "Subscribe to feed:" <+> pretty f
   pretty List            = "List all feeds"
-  pretty (ShowFeed f)    = "Show details of feed" <+> pretty f
+  pretty (Describe f)    = "Describe feed" <+> pretty f
+  pretty (Reset q)       = "Mark feeds as unprocessed:" <+> pretty q
+  pretty (Run q c)       = "Download new entries from feeds" <> (if c == DisableCallbacks then space <> brackets "callbacks disabled" else mempty) <+> pretty q
+  pretty (Unsubscribe q) = "Unsubscribe from feeds:" <+> pretty q
 
 
 data CallbackMode = DisableCallbacks | EnableCallbacks
   deriving(Eq, Ord, Read, Show)
 
-
-data CommandOnFeedRef = Reset | Run CallbackMode | Unsubscribe
-  deriving(Eq, Ord, Read, Show)
-
-instance Pretty CommandOnFeedRef where
-  pretty Reset       = "Mark feed as unprocessed"
-  pretty (Run c)     = "Download new entries from feeds" <> (if c == DisableCallbacks then space <> brackets "callbacks disabled" else mempty)
-  pretty Unsubscribe = "Unsubscribe from feed"
 
 -- * Option parsers
 
@@ -87,17 +86,37 @@ globalOptions defaultCallbacksFile = GlobalOptions
 
 commandParser :: Parser Command
 commandParser = hsubparser $ mconcat
-  [ command "add" $ info subscribeOptions $ progDesc "Alias for subscribe."
-  , command "import" $ info (pure Import) $ progDesc "Import feeds list from an OPML descriptor (read from stdin)."
-  , command "subscribe" $ info subscribeOptions $ progDesc "Subscribe to a feed."
+  [ command "import" $ info (pure Import) $ progDesc "Import feeds list from an OPML descriptor (read from stdin)."
+  , command "subscribe" $ info subscribeCommand $ progDesc "Subscribe to a feed."
+  , command "add" $ info subscribeCommand $ progDesc "Alias for subscribe."
 
-  , command "remove" $ info unsubscribeOptions $ progDesc "Alias for unsubscribe."
-  , command "run" $ info (OnFeedRef <$> optional feedRefOption <*> runOptions) $ progDesc "Update list of feeds."
-  , command "show" $ info (ShowFeed <$> feedRefOption) $ progDesc "Show details about given feed."
+  , command "run" $ info runCommand $ progDesc "Update list of feeds."
+  , command "describe" $ info describeCommand $ progDesc "Show details about given feed."
+  , command "show" $ info describeCommand $ progDesc "Alias for describe."
   , command "list" $ info (pure List) $ progDesc "List all feed sources currently configured, along with their status."
-  , command "reset" $ info (OnFeedRef <$> optional feedRefOption <*> pure Reset) $ progDesc "Mark given feed as unprocessed."
-  , command "unsubscribe" $ info unsubscribeOptions $ progDesc "Unsubscribe from a feed."
+  , command "reset" $ info resetCommand $ progDesc "Mark given feed as unprocessed."
+  , command "unsubscribe" $ info unsubscribeCommand $ progDesc "Unsubscribe from a feed."
+  , command "remove" $ info unsubscribeCommand $ progDesc "Alias for unsubscribe."
   ]
+
+-- {{{ Commands
+describeCommand :: Parser Command
+describeCommand = Describe <$> feedQueryParser
+
+subscribeCommand :: Parser Command
+subscribeCommand    = Subscribe <$> feedLocationParser <*> (Set.fromList <$> many tagOption)
+
+unsubscribeCommand :: Parser Command
+unsubscribeCommand  = Unsubscribe <$> feedQueryParser
+
+runCommand :: Parser Command
+runCommand = Run
+  <$> feedQueryParser
+  <*> flag EnableCallbacks DisableCallbacks (long "no-callbacks" <> help "Disable callbacks.")
+
+resetCommand :: Parser Command
+resetCommand = Reset <$> feedQueryParser
+-- }}}
 
 -- {{{ Log options
 verboseFlag, quietFlag, logLevel :: Parser LogLevel
@@ -113,15 +132,8 @@ colorizeLogs = flag True False $ long "nocolor" <> help "Disable log colorisatio
 readOnlyDatabase :: Parser Bool
 readOnlyDatabase = switch $ long "read-only" <> help "Disable database writes."
 
-runOptions :: Parser CommandOnFeedRef
-runOptions = Run <$> flag EnableCallbacks DisableCallbacks (long "no-callbacks" <> help "Disable callbacks.")
-
 tagOption :: Parser Text
 tagOption = option auto $ long "tag" <> short 't' <> metavar "TAG" <> help "Set the given tag."
-
-subscribeOptions, unsubscribeOptions :: Parser Command
-subscribeOptions    = Subscribe <$> uriArgument "URI to subscribe to." <*> (Set.fromList <$> many tagOption)
-unsubscribeOptions  = OnFeedRef <$> optional feedRefOption <*> pure Unsubscribe
 
 callbacksFileOption :: Parser FilePath
 callbacksFileOption = strOption $ long "callbacks" <> short 'c' <> metavar "FILE" <> help "Dhall configuration file for callbacks"
@@ -131,8 +143,17 @@ callbacksFileOption = strOption $ long "callbacks" <> short 'c' <> metavar "FILE
 uriReader :: ReadM URI
 uriReader = eitherReader $ first show . parseURI laxURIParserOptions . encodeUtf8 @Text . fromString
 
-feedRefOption :: Parser FeedRef
-feedRefOption = argument ((ByUID <$> auto) <|> (ByURI <$> uriReader)) $ metavar "TARGET"
+feedLocationParser :: Parser FeedLocation
+feedLocationParser = byUri <|> byAlternateLink where
+  byUri = FeedDirectURI <$> option uriReader (long "uri" <> short 'u' <> metavar "URI" <> help "URI to feed")
+  byAlternateLink = FeedAlternateLink
+    <$> option uriReader (long "alternate" <> short 'a' <> metavar "URI" <> help "URI to webpage with alternate link")
+    <*> (strOption (long "title" <> short 't' <> help "Alternate link title") <|> pure mempty)
+
+feedQueryParser :: Parser FeedQuery
+feedQueryParser = argument parser (metavar "TARGET") <|> allFeeds where
+  parser = (ByDatabaseID <$> auto) <|> (ByURI <$> uriReader)
+  allFeeds = flag' AllFeeds $ short 'a' <> long "all" <> help "Run action on all subscribed feeds."
 
 uriArgument :: String -> Parser URI
 uriArgument helpText = argument uriReader $ metavar "URI" <> help helpText

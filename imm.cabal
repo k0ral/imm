@@ -29,13 +29,14 @@ library
   exposed-modules:
     Imm
     Imm.Callback
-    Imm.Database
-    Imm.Database.FeedTable
+    Imm.Database.Feed
     Imm.Feed
     Imm.HTTP
     Imm.Logger
     Imm.Pretty
     Imm.XML
+  other-modules:
+    Data.Aeson.Extended
   build-depends:
     aeson,
     async,
@@ -47,19 +48,20 @@ library
     directory >= 1.2.3.0,
     filepath,
     hashable,
-    http-types,
     msgpack,
     microlens,
     monad-time,
+    pipes,
+    pipes-bytestring,
     prettyprinter,
     prettyprinter-ansi-terminal,
     refined >=0.4.1,
-    rss-conduit >= 0.4.1,
+    rss-conduit >= 0.5.1,
     safe-exceptions,
     text,
     time,
     timerep >= 2.0.0.0,
-    tls,
+    typed-process,
     uri-bytestring,
     xml-conduit >= 1.5,
     xml-types
@@ -68,9 +70,9 @@ library
 
 executable imm
   import: common
-  build-depends: imm, aeson, async, atom-conduit >=0.7, bytestring, case-insensitive, conduit, connection, containers, dhall >= 1.27, directory, fast-logger, filepath, http-client >=0.4.30, http-client-tls, msgpack, opml-conduit >=0.7, optparse-applicative, prettyprinter-ansi-terminal, refined >=0.4.1, rss-conduit >=0.4.1, safe-exceptions, stm, stm-chans, streaming-bytestring, streaming-with, text, typed-process, uri-bytestring, xml-conduit >=1.5, xml-types
+  build-depends: imm, aeson, async, atom-conduit >=0.7, bytestring, conduit, containers, dhall >= 1.27, directory, fast-logger, filepath, msgpack, opml-conduit >=0.7, optparse-applicative, prettyprinter-ansi-terminal, pipes, pipes-bytestring, refined >=0.4.1, rss-conduit >=0.4.1, safe, safe-exceptions, stm, stm-chans, text, typed-process, uri-bytestring, xml-conduit >=1.5, xml-types
   main-is: Main.hs
-  other-modules: Core, Database, HTTP, Logger, Options, Paths_imm, XML
+  other-modules: Alternate, Core, Database, HTTP, Logger, Options, Paths_imm, XML
   autogen-modules: Paths_imm
   hs-source-dirs: src/main
   ghc-options: -Wall -fno-warn-unused-do-bind -threaded

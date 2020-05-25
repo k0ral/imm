@@ -13,11 +13,11 @@ import           Imm.Pretty
 
 import           Conduit
 import           Control.Exception.Safe
+import           Data.Aeson.Extended
 import           Data.Binary.Builder
 import           Data.Text                      as Text (null)
 import           Data.Time
 import           Data.Type.Equality
-import           Lens.Micro
 import           Text.Atom.Conduit.Parse
 import           Text.Atom.Conduit.Render
 import           Text.Atom.Types
@@ -25,7 +25,6 @@ import           Text.RSS.Conduit.Parse
 import           Text.RSS.Conduit.Render
 import           Text.RSS.Extensions.Content
 import           Text.RSS.Extensions.DublinCore
-import           Text.RSS.Lens
 import           Text.RSS.Types
 import           Text.RSS1.Conduit.Parse
 import           Text.XML.Stream.Parse          as XML hiding (content)
@@ -35,18 +34,45 @@ import           URI.ByteString
 
 -- * Types
 
--- | Feed reference: either its URI, or its UID from database
-data FeedRef = ByUID Int | ByURI URI
+-- | Feed location identifies a feed. It is either:
+-- - the feed URI
+-- - a webpage URI that refers to the feed through an alternate link, in which case an optional feed title can be provided to disambiguate multiple such links
+data FeedLocation = FeedDirectURI URI | FeedAlternateLink URI Text
   deriving(Eq, Ord, Show)
 
-instance Pretty FeedRef where
-  pretty (ByUID n) = "feed" <+> pretty n
+instance Pretty FeedLocation where
+  pretty (FeedDirectURI uri) = prettyURI uri
+  pretty (FeedAlternateLink uri title) = prettyURI uri
+    <> if Text.null title then mempty else space <> brackets (pretty title)
+
+instance FromJSON FeedLocation where
+  parseJSON value = oldStyleDirectURI <|> newStyleDirectURI value <|> alternateLink value where
+    oldStyleDirectURI = FeedDirectURI . _unwrapURI <$> parseJSON value
+    newStyleDirectURI = withObject "Feed direct URI" $ \v -> FeedDirectURI . _unwrapURI
+      <$> v .: "direct"
+    alternateLink = withObject "Feed alternate link" $ \v -> FeedAlternateLink
+      <$> (v .: "alternate" <&> _unwrapURI)
+      <*> (v .: "title" <|> pure mempty)
+
+instance ToJSON FeedLocation where
+  toJSON (FeedDirectURI uri) = object [ "direct" .= toJSON (JsonURI uri) ]
+  toJSON (FeedAlternateLink uri title) = object $ [ "alternate" .= toJSON (JsonURI uri) ] <> [ "title" .= toJSON title | not (Text.null title)]
+
+
+-- | A query describes a set of feeds through some criteria.
+data FeedQuery = ByDatabaseID Int | ByURI URI | AllFeeds
+  deriving(Eq, Ord, Show)
+
+instance Pretty FeedQuery where
+  pretty AllFeeds = "All subscribed feeds"
   pretty (ByURI u) = prettyURI u
+  pretty (ByDatabaseID n) = "database feed" <+> pretty n
 
-data Feed = Rss (RssDocument '[ContentModule, DublinCoreModule]) | Atom AtomFeed
+
+data Feed = Rss (RssDocument (ContentModule (DublinCoreModule NoExtensions))) | Atom AtomFeed
   deriving(Eq, Ord, Show)
 
-data FeedElement = RssElement (RssItem '[ContentModule, DublinCoreModule]) | AtomElement AtomEntry
+data FeedElement = RssElement (RssItem (ContentModule (DublinCoreModule NoExtensions))) | AtomElement AtomEntry
   deriving(Show)
 
 instance Pretty (PrettyKey FeedElement) where
@@ -123,7 +149,7 @@ getElements (Rss doc)   = map RssElement $ channelItems doc
 getElements (Atom feed) = map AtomElement $ feedEntries feed
 
 getDate :: FeedElement -> Maybe UTCTime
-getDate (RssElement item)   = itemPubDate item <|> elementDate (itemDcMetaData $ item ^. itemExtensionL)
+getDate (RssElement item)   = itemPubDate item <|> (item & itemExtensions & itemContentOther & itemDcMetaData & elementDate)
 getDate (AtomElement entry) = Just $ entryUpdated entry
 
 getTitle :: FeedElement -> Text
@@ -132,7 +158,7 @@ getTitle (AtomElement entry) = show $ prettyAtomText $ entryTitle entry
 
 getContent :: FeedElement -> Text
 getContent (RssElement item) = if not (Text.null content) then content else itemDescription item where
-  ContentItem content = item ^. itemExtensionL
+  content = item & itemExtensions & itemContent
 getContent (AtomElement entry) = fromMaybe "<empty>" $ content <|> summary where
   content = show . prettyAtomContent <$> entryContent entry
   summary = show . prettyAtomText <$> entrySummary entry
