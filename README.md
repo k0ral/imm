@@ -6,9 +6,31 @@
 
 - a main executable `imm` that users run directly
 - secondary executables (`imm-writefile`, `imm-sendmail`) which can be used as callbacks triggered by `imm`
-- a [*Haskell*][2] library, that exports functions useful to both the main executable and callbacks; the API is documented [in Hackage][1].
+- a [Haskell][2] library, that exports functions useful to both the main executable and callbacks; the API is documented [in Hackage][1].
 
-## Callbacks
+## Installation
+
+### Using nix
+
+This repository includes a *nix* package that can be installed by running the following command at the root folder:
+```bash
+nix-build --attr exe
+```
+
+### Without nix
+
+*imm*'s executables can be installed using *cabal-install* tool:
+```bash
+cabal install imm
+```
+
+Then, the following runtime dependencies must be installed separately and provided in `PATH`:
+- [httpie](https://github.com/jakubroztocil/httpie)
+- [pup](https://github.com/ericchiang/pup)
+
+## Configuration
+
+### Callbacks
 
 Callbacks are configured through the `$XDG_CONFIG_HOME/imm/callbacks.dhall` file. A commented template file is bundled with the project.
 
@@ -71,14 +93,19 @@ in config
 
 ## Example usage
 
-- Subscribe to a feed:
+- Subscribe to a feed through direct URL:
   ```bash
-  imm subscribe http://your.feed.org
+  imm subscribe -u http://your.feed.org
+  ```
+
+- Subscribe to a feed through an alternate link:
+  ```bash
+  imm subscribe -a http://your.website.org
   ```
 
 - Import feeds from an OPML file:
   ```bash
-  cat feeds.opml | imm import
+  imm import < feeds.opml
   ```
 
 - List subscribed feeds:
@@ -101,9 +128,9 @@ in config
   imm --read-only run --no-callbacks
   ```
 
-- Execute configured callbacks for each new element from subscribed feeds:
+- Execute configured callbacks for each new element from all subscribed feeds:
   ```bash
-  imm run
+  imm run --all
   ```
 
 [1]: http://hackage.haskell.org/package/imm
