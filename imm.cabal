@@ -11,7 +11,7 @@ maintainer:          chahine.moreau@gmail.com
 category:            Web
 build-type:          Simple
 data-files:          data/*.dhall
-extra-source-files:  README.md
+extra-source-files:  README.md, *.nix
 tested-with:         GHC <8.10 && >=8.4.2
 
 source-repository head
