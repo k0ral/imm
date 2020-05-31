@@ -4,24 +4,20 @@
 --
 -- Meant to be use as a callback for imm.
 -- {{{ Imports
-import           Imm.Callback
+import           Imm.Callback                  as Callback
 import           Imm.Feed
 import           Imm.Pretty
 
-import           Data.ByteString               (getContents)
 import           Data.ByteString.Builder
-import           Data.ByteString.Streaming     (toStreamingByteString)
-import qualified Data.MessagePack              as MsgPack
+import           Data.ByteString.Lazy          (getContents, writeFile)
 import qualified Data.Text                     as Text (null, replace)
 import           Data.Time
 import           Options.Applicative
-import           Streaming.With
 import           System.Directory              (createDirectoryIfMissing)
 import           System.FilePath
 import           Text.Atom.Types
 import           Text.Blaze.Html.Renderer.Utf8
-import           Text.Blaze.Html5              (Html, docTypeHtml,
-                                                preEscapedToHtml, (!))
+import           Text.Blaze.Html5              (Html, docTypeHtml, preEscapedToHtml, (!))
 import qualified Text.Blaze.Html5              as H
 import qualified Text.Blaze.Html5.Attributes   as H (charset, href)
 import           Text.RSS.Types
@@ -46,16 +42,17 @@ cliOptions = CliOptions
 main :: IO ()
 main = do
   CliOptions directory dryRun <- parseOptions
-  message <- getContents <&> fromStrict <&> MsgPack.unpack
-  case message of
-    Just (Message feed element) -> do
+  input <- getContents <&> Callback.deserializeMessage
+
+  case input :: Either String (Feed, FeedElement) of
+    Right (feed, element) -> do
       let content = defaultFileContent feed element
           filePath = defaultFilePath directory feed element
       putStrLn filePath
       unless dryRun $ do
         createDirectoryIfMissing True $ takeDirectory filePath
-        writeBinaryFile filePath $ toStreamingByteString content
-    _ -> putStrLn "Invalid input" >> exitFailure
+        writeFile filePath $ toLazyByteString content
+    Left e -> putStrLn ("Invalid input: " <> e) >> exitFailure
   return ()
 
 -- * Default behavior

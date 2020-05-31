@@ -19,9 +19,9 @@ import           Control.Concurrent.Async
 import           Control.Concurrent.STM.TMChan
 import           Control.Exception.Safe
 import           Data.Conduit.Combinators      as Conduit (stdin)
-import qualified Data.MessagePack              as MsgPack
 import           Dhall
 import           Imm
+import qualified Imm.Callback                  as Callback
 import           Imm.Database.Feed             as Database
 import qualified Imm.HTTP                      as HTTP
 import           Imm.Pretty
@@ -117,7 +117,7 @@ main2 logger database feedQuery callbacks = do
   -- New items events => execute callback => processed/error events
   let runnerF (entryKey, feed, element) = do
         results <- forM callbacks $ \callback@(Callback executable arguments) -> do
-          let processInput = byteStringInput $ MsgPack.pack $ Message feed element
+          let processInput = byteStringInput $ Callback.serializeMessage feed element
               processConfig = proc executable (toString <$> arguments) & setStdin processInput
 
           log logger Debug $ "Running" <+> cyan (pretty executable) <+> "on" <+> magenta (pretty entryKey) <+> "/" <+> yellow (pretty $ getTitle element)

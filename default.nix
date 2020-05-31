@@ -3,11 +3,22 @@
 let
   hlib = nixpkgs.haskell.lib;
 
-  thisPackage =
-    addRuntimeDependencies (myHaskellPackages.callCabal2nix "imm" ./. { }) [
+  source = nixpkgs.nix-gitignore.gitignoreSource [ ] ./.;
+  packageWithoutRuntimeDependencies =
+    myHaskellPackages.callCabal2nix "imm" source { };
+  packageWithRuntimeDependencies =
+    addRuntimeDependencies packageWithoutRuntimeDependencies [
       nixpkgs.httpie
       nixpkgs.pup
     ];
+
+  exe = hlib.justStaticExecutables packageWithRuntimeDependencies;
+
+  my-avro = {
+    pkg = "avro";
+    ver = "0.5.2.0";
+    sha256 = "0inznspd7lwrc4z7bz12zrdh75zmyibidyb5yblxd3vmni68dx5c";
+  };
 
   my-atom-conduit = {
     pkg = "atom-conduit";
@@ -28,16 +39,17 @@ let
   };
 
   myHaskellPackages = nixpkgs.haskellPackages.override {
-    overrides = hself: hsuper: {
-      imm = thisPackage;
-      atom-conduit = hlib.dontCheck
-        (hlib.dontHaddock (hsuper.callHackageDirect my-atom-conduit { }));
-      opml-conduit = hlib.dontCheck
-        (hlib.dontHaddock (hsuper.callHackageDirect my-opml-conduit { }));
-      rss-conduit = hlib.dontCheck
-        (hlib.dontHaddock (hsuper.callHackageDirect my-rss-conduit { }));
-      msgpack = hlib.doJailbreak hsuper.msgpack;
-    };
+    overrides = hself: hsuper:
+      let
+        fromHackage = x:
+          hlib.dontCheck (hlib.dontHaddock (hsuper.callHackageDirect x { }));
+      in {
+        imm = packageWithRuntimeDependencies;
+        avro = fromHackage my-avro;
+        atom-conduit = fromHackage my-atom-conduit;
+        opml-conduit = fromHackage my-opml-conduit;
+        rss-conduit = fromHackage my-rss-conduit;
+      };
   };
 
   addRuntimeDependencies = drv: xs:
@@ -64,8 +76,6 @@ let
 
     withHoogle = false;
   };
-
-  exe = hlib.justStaticExecutables (myHaskellPackages.imm);
 
 in {
   inherit shell;

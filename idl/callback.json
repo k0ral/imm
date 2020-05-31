@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "message",
+  "fields": [
+    {
+      "name": "feed",
+      "type": "string"
+    },
+    {
+      "name": "element",
+      "type": "string"
+    }
+  ]
+}

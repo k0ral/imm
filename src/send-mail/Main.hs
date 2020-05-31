@@ -3,12 +3,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | 'Callback' for @imm@ that sends a mail via a SMTP server the input RSS/Atom item.
 -- {{{ Imports
-import           Imm.Callback
+import qualified Imm.Callback         as Callback
 import           Imm.Feed
 import           Imm.Pretty
 
-import           Data.ByteString      (getContents)
-import qualified Data.MessagePack     as MsgPack
+import           Data.ByteString.Lazy (getContents)
 import           Data.Text            as Text (intercalate)
 import           Data.Time
 import           Dhall                hiding (map, maybe)
@@ -71,9 +70,9 @@ main = do
   CliOptions configFile recipients dryRun <- parseOptions
   Command executable arguments <- input auto $ fromString configFile
 
-  message <- getContents <&> fromStrict <&> MsgPack.unpack
+  message <- getContents <&> Callback.deserializeMessage
   case message of
-    Just (Message feed element) -> do
+    Right (feed, element) -> do
       timezone <- io getCurrentTimeZone
       currentTime <- io getCurrentTime
       let formatMail = FormatMail defaultFormatFrom defaultFormatSubject defaultFormatBody (const $ const recipients)
@@ -88,7 +87,7 @@ main = do
           ExitSuccess   -> exitSuccess
           ExitFailure _ -> putStrLn (decodeUtf8 errors) >> exitFailure
 
-    _ -> putStrLn "Invalid input" >> exitFailure
+    Left e -> putStrLn ("Invalid input: " <> e) >> exitFailure
 
   return ()
 

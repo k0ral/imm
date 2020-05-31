@@ -34,16 +34,9 @@ Then, the following runtime dependencies must be installed separately and provid
 
 Callbacks are configured through the `$XDG_CONFIG_HOME/imm/callbacks.dhall` file. A commented template file is bundled with the project.
 
-`imm` will call each callback once per feed element, and will fill its standard input (`stdin`) with a [MessagePack][4]-encoded object structured as follows:
+*imm* will call each callback once per feed element, and will fill its standard input (`stdin`) with [Avro][4]-encoded binary data, which schema is described in file [`idl/callback.json`](idl/callback.json).
 
-```
-{
-  "feed": "RSS document or Atom feed (XML)",
-  "element": "RSS item or Atom entry (XML)"
-}
-```
-
-`imm` expects callbacks to return `0` in case of success, or any other exit code in case of failure, in which case the standard error output (`stderr`) will be displayed.
+Callback process is expected to return `0` in case of success, or any other exit code in case of failure, in which case the standard error output (`stderr`) will be displayed.
 
 
 ## Example use cases
@@ -136,4 +129,4 @@ in config
 [1]: http://hackage.haskell.org/package/imm
 [2]: https://www.haskell.org
 [3]: https://dhall-lang.org/
-[4]: https://msgpack.org/
+[4]: https://avro.apache.org/

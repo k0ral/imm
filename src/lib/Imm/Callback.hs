@@ -1,20 +1,21 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 {-# LANGUAGE TypeApplications  #-}
-module Imm.Callback where
+module Imm.Callback (Callback(..), serializeMessage, deserializeMessage) where
 
 -- {{{ Imports
 import           Imm.Feed
 
-import qualified Data.Map                  as Map
-import           Data.MessagePack.Object
+import qualified Data.Avro                 as Avro
+import           Data.Avro.Deriving
 import           Data.Text.Prettyprint.Doc
 import           Dhall                     hiding (maybe)
 -- }}}
 
 -- | External program run for each feed element.
 --
--- A `Message` is passed to this program through stdin, serialized in JSON.
+-- Data is passed to that program through standard input (@stdin@), using Avro (<https://hackage.haskell.org/package/avro>) serialization format. The data schema is described in file @ids/callback.json@, provided with this library.
 data Callback = Callback
   { _executable :: FilePath
   , _arguments  :: [Text]
@@ -26,16 +27,16 @@ instance Pretty Callback where
   pretty (Callback executable arguments) = pretty executable <+> sep (pretty <$> arguments)
 
 
--- | All information passed to external programs about a new feed item, are stored in this structure.
-data Message = Message Feed FeedElement deriving(Eq, Generic, Ord, Show)
+deriveAvroWithOptions defaultDeriveOptions "idl/callback.json"
 
-instance MessagePack Message where
-  toObject (Message feed element) = toObject @(Map Text Text)
-    $ Map.insert "feed" (renderFeed feed)
-    $ Map.insert "element" (renderFeedElement element) mempty
+-- | Meant to be called by the main @imm@ process.
+serializeMessage :: Feed -> FeedElement -> LByteString
+serializeMessage feed element = Avro.encodeValue $ Message (renderFeed feed) (renderFeedElement element)
 
-  fromObject object = fromObject object >>= \m -> Message
-    <$> (lookup @(Map Text Text) "feed" m >>= eitherToMaybe . parseFeed)
-    <*> (lookup @(Map Text Text) "element" m >>= eitherToMaybe . parseFeedElement)
-    where eitherToMaybe (Right a) = Just a
-          eitherToMaybe _         = Nothing
+-- | Meant to be called by callback process.
+deserializeMessage :: MonadFail m => LByteString -> m (Feed, FeedElement)
+deserializeMessage bytestring = do
+  Message feedText elementText <- Avro.decodeValue bytestring & either fail pure
+  feed <- parseFeed feedText & either (fail . displayException) pure
+  element <- parseFeedElement elementText & either (fail . displayException) pure
+  return (feed, element)
