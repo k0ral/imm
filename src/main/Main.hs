@@ -6,6 +6,7 @@
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeFamilies          #-}
 -- {{{ Imports
 import           Alternate
 import qualified Core
@@ -202,7 +203,9 @@ printFetchError logger ((_, uri), e) = log logger Error $
   bold ("Fetch error for" <+> prettyURI uri)
   <++> indent 2 (pretty $ displayException e)
 
-printCallbackError :: Logger.Handle m -> ((EntryKey, FeedElement), _) -> m ()
+printCallbackError :: i ~ (EntryKey, FeedElement)
+                   => e ~ (Callback, Int, LByteString, LByteString)
+                   => Logger.Handle m -> (i, [e]) -> m ()
 printCallbackError logger ((entryKey, element), e) = log logger Error $
   bold ("Callback error for" <+> pretty entryKey <+> "/" <+> pretty (getTitle element))
   <++> indent 2 prettyErrors
