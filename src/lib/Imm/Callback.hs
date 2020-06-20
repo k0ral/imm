@@ -15,7 +15,7 @@ import           Dhall                     hiding (maybe)
 
 -- | External program run for each feed element.
 --
--- Data is passed to that program through standard input (@stdin@), using Avro (<https://hackage.haskell.org/package/avro>) serialization format. The data schema is described in file @ids/callback.json@, provided with this library.
+-- Data is passed to that program through standard input (@stdin@), using Avro (<https://hackage.haskell.org/package/avro>) serialization format. The data schema is described in file @idl/callback.json@, provided with this library.
 data Callback = Callback
   { _executable :: FilePath
   , _arguments  :: [Text]
