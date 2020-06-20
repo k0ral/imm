@@ -42,13 +42,14 @@ main = withLogHandler $ \logger -> do
 
   -- Setup logger
   setLogLevel logger optionLogLevel
-  log logger Debug $ "Options: " <> pretty optionCommand
+  log logger Info $ "Global options:" <+> pretty optionGlobal
+  log logger Info $ "Command:" <+> pretty optionCommand
 
   handleAny (log logger Error . pretty . displayException) $ do
     -- Setup database
     database <- Database.mkHandle <$> defaultDatabase
     let database' = if optionReadOnlyDatabase then readOnly logger database else database
-    log logger Debug . ("Using database:" <++>) . indent 2 =<< _describeDatabase database'
+    log logger Info . ("Using database:" <++>) . indent 2 =<< _describeDatabase database'
 
     case optionCommand of
       Import            -> Core.importOPML logger database' Conduit.stdin
@@ -109,7 +110,7 @@ main2 logger database feedQuery callbacks = do
           let processInput = byteStringInput $ Callback.serializeMessage feed element
               processConfig = proc executable (toString <$> arguments) & setStdin processInput
 
-          log logger Debug $ "Running" <+> cyan (pretty executable) <+> "on" <+> magenta (pretty entryKey) <+> "/" <+> yellow (pretty $ getTitle element)
+          log logger Info $ "Running" <+> cyan (pretty executable) <+> "on" <+> magenta (pretty entryKey) <+> "/" <+> yellow (pretty $ getTitle element)
 
           (exitCode, output, errors) <- readProcess processConfig
           case exitCode of

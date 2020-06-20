@@ -31,5 +31,5 @@ newtype Handle m = Handle
 -- | Simple wrapper around '_withGet' that also logs the requested URI.
 withGet :: Monad m => Logger.Handle m -> Handle m -> URI -> (Producer' ByteString m () -> m a) -> m a
 withGet logger handle uri f = do
-  log logger Debug $ "GET" <+> prettyURI uri
+  log logger Info $ "GET" <+> prettyURI uri
   _withGet handle uri f

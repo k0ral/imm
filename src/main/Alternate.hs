@@ -96,7 +96,7 @@ extractAlternateLinks logger html = io $ withProcessWait pup $ \pupProcess -> do
   hClose (getStdin pupProcess)
 
   links <- getStdout pupProcess & atomically <&> decode <&> fromMaybe mempty
-  log logger Debug $ "Found alternate links:" <+> pretty links
+  log logger Info $ "Found alternate links:" <+> pretty links
 
   return links
   where pup = proc "pup" ["html head link[rel=\"alternate\"] json{}"]

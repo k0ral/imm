@@ -34,6 +34,13 @@ data GlobalOptions = GlobalOptions
   , optionCallbacksFile    :: FilePath
   } deriving(Eq, Ord, Read, Show)
 
+instance Pretty GlobalOptions where
+  pretty o = encloseSep "{ " " }" ", "
+    [ "log level" <+> equals <+> pretty (optionLogLevel o)
+    , "database read-only" <+> equals <+> pretty (optionReadOnlyDatabase o)
+    , "callbacks file" <+> equals <+> pretty (optionCallbacksFile o)
+    ]
+
 
 data Command = Import
              | Subscribe FeedLocation (Set Text)
@@ -53,7 +60,7 @@ instance Pretty Command where
   pretty List            = "List all feeds"
   pretty (Describe f)    = "Describe feed" <+> pretty f
   pretty (Reset q)       = "Mark feeds as unprocessed:" <+> pretty q
-  pretty (Run q c)       = "Download new entries from feeds" <> (if c == DisableCallbacks then space <> brackets "callbacks disabled" else mempty) <+> pretty q
+  pretty (Run q c)       = "Download new entries from:" <+> (if c == DisableCallbacks then space <> brackets "callbacks disabled" else mempty) <+> pretty q
   pretty (Unsubscribe q) = "Unsubscribe from feeds:" <+> pretty q
 
 
