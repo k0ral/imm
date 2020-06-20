@@ -17,11 +17,9 @@ import           Imm.Pretty
 -- * Types
 
 data Handle m = Handle
-  { log :: LogLevel -> Doc AnsiStyle -> m ()
+  { log         :: LogLevel -> Doc AnsiStyle -> m ()
   , getLogLevel :: m LogLevel
   , setLogLevel :: LogLevel -> m ()
-  , setColorizeLogs :: Bool -> m ()
-  , flushLogs :: m ()
   }
 
 data LogLevel = Debug | Info | Warning | Error

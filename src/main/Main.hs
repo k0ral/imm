@@ -5,6 +5,7 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 -- {{{ Imports
@@ -16,7 +17,6 @@ import           Logger
 import           Options
 import           XML
 
-import           Control.Concurrent.Async
 import           Control.Concurrent.STM.TMChan
 import           Control.Exception.Safe
 import           Data.Conduit.Combinators      as Conduit (stdin)
@@ -27,6 +27,8 @@ import           Imm.Database.Feed             as Database
 import qualified Imm.HTTP                      as HTTP
 import           Imm.Pretty
 import           Pipes.ByteString
+import           Streamly                      as Stream
+import qualified Streamly.Prelude              as Stream
 import           System.Exit
 import           System.Process.Typed
 import           URI.ByteString
@@ -34,13 +36,11 @@ import           URI.ByteString
 
 
 main :: IO ()
-main = do
+main = withLogHandler $ \logger -> do
   AllOptions{..} <- parseOptions
   let GlobalOptions{..} = optionGlobal
 
   -- Setup logger
-  logger <- Logger.mkHandle <$> defaultLogger
-  setColorizeLogs logger optionColorizeLogs
   setLogLevel logger optionLogLevel
   log logger Debug $ "Options: " <> pretty optionCommand
 
@@ -61,8 +61,6 @@ main = do
 
     Database.commit logger database'
 
-  flushLogs logger
-
 
 resolveCallbacks :: MonadIO m => CallbackMode -> FilePath -> m [Callback]
 resolveCallbacks EnableCallbacks callbacksFile = io $ input auto $ fromString callbacksFile
@@ -71,16 +69,6 @@ resolveCallbacks _ _                           = return mempty
 
 main2 :: Logger.Handle IO -> Database.Handle IO -> FeedQuery -> [Callback] -> IO ()
 main2 logger database feedQuery callbacks = do
-  let httpClient = HTTP.mkHandle logger
-
-  feedLocations <- mapM (Database.resolveFeedLocation database)
-    =<< Database.resolveEntryKey database feedQuery
-
-  feedLocationsChan <- newTMChanIO
-  targetFeedChan <- newTMChanIO
-  newItemsChan <- newTMChanIO
-  processedChan <- newTMChanIO
-
   resolveErrorsChan <- newTMChanIO
   fetchErrorsChan <- newTMChanIO
   runErrorsChan <- newTMChanIO
@@ -89,35 +77,35 @@ main2 logger database feedQuery callbacks = do
   newItemsCount <- newTVarIO (0 :: Int)
   errorsCount <- newTVarIO (0 :: Int)
 
-  -- => Feed IDs events
-  producer <- async $ forM_ feedLocations $ atomically . writeTMChan feedLocationsChan
+  let httpClient = HTTP.mkHandle logger
 
   -- Feed locations => feed direct URIs
-  let resolverF feedLocation = do
-        uri <- resolveFeedURI logger httpClient feedLocation
-        atomically $ writeTMChan targetFeedChan (feedLocation, uri)
-
-  resolvers <- spawnConsumers logger 5 feedLocationsChan resolverF resolveErrorsChan errorsCount
-
+  let resolver = catchErrors logger resolveErrorsChan errorsCount (return Nothing) $ \feedLocation -> do
+        uri <- io $ resolveFeedURI logger httpClient feedLocation
+        return $ Just (feedLocation, uri)
   -- Feed direct URIs events => new item events
-  let fetcherF (feedLocation, uri) = do
-        feed <- HTTP.withGet logger httpClient uri
-          $ toLazyM >=> parseXml xmlParser uri
+  let fetcherE = catchErrors logger fetchErrorsChan errorsCount (return []) $ \(feedLocation, uri) -> do
+        log logger Debug "Fetch worker starts"
+        feed <- HTTP.withGet logger httpClient uri $ toLazyM >=> parseXml xmlParser uri
         let entryKey = ByLocation feedLocation
 
         unreadElements <- filterM (fmap not . isRead database entryKey) $ getElements feed
         unprocessedElements <- listUnprocessedElements database entryKey
-        forM_ (unprocessedElements <> unreadElements) $ \element -> do
-          log logger Info $ "New item:" <+> magenta (pretty entryKey) <+> "/" <+> yellow (pretty $ getTitle element)
+        return $ for (unprocessedElements <> unreadElements) (entryKey, removeElements feed,)
+      fetcher i = do
+        elements <- lift $ catchAny (fetcherE i) $ \e -> do
+          log logger Error $ pretty (displayException e)
           atomically $ do
-            writeTMChan newItemsChan (entryKey, removeElements feed, element)
-            modifyTVar' newItemsCount (+ 1)
-
-  fetchers <- spawnConsumers logger 5 targetFeedChan fetcherF fetchErrorsChan errorsCount
-
+            writeTMChan fetchErrorsChan (i, e)
+            modifyTVar' errorsCount (+ 1)
+          return []
+        Stream.fromList elements
   -- New items events => execute callback => processed/error events
-  let runnerF (entryKey, feed, element) = do
-        results <- forM callbacks $ \callback@(Callback executable arguments) -> do
+  let runner = catchErrors logger runErrorsChan errorsCount (return Nothing) $ \(entryKey, feed, element) -> do
+        Core.putDocLn $ "New item:" <+> magenta (pretty entryKey) <+> "/" <+> yellow (pretty $ getTitle element)
+        atomically $ modifyTVar' newItemsCount (+ 1)
+
+        results <- forM callbacks $ \callback@(Callback executable arguments) -> io $ do
           let processInput = byteStringInput $ Callback.serializeMessage feed element
               processConfig = proc executable (toString <$> arguments) & setStdin processInput
 
@@ -129,84 +117,73 @@ main2 logger database feedQuery callbacks = do
             ExitFailure i -> return $ Left (callback, i, output, errors)
 
         case lefts results of
-          [] -> atomically $ writeTMChan processedChan (entryKey, element)
-          e  -> atomically $ do
-            writeTMChan callbackErrorsChan ((entryKey, element), e)
-            modifyTVar' errorsCount (+ 1)
+          [] -> return $ Just (entryKey, element)
+          e  -> do
+            io $ atomically $ do
+              writeTMChan callbackErrorsChan ((entryKey, element), e)
+              modifyTVar' errorsCount (+ 1)
+            return Nothing
+  let storer (feedID, element) = do
+        log logger Info $ "Updating database for" <+> pretty feedID <+> "/" <+> pretty (getTitle element)
+        Database.markAsProcessed logger database feedID element
 
-  runners <- spawnConsumers logger 5 newItemsChan runnerF runErrorsChan errorsCount
 
-  -- Processed events => update database
-  storer <- async $ fix $ \recurse -> do
-    item <- atomically $ readTMChan processedChan
-    forM_ item $ \(feedID, element) -> do
-      log logger Debug $ "Updating database for" <+> pretty feedID <+> "/" <+> pretty (getTitle element)
-      Database.markAsProcessed logger database feedID element
-      recurse
+  entries <- Database.resolveEntryKey database feedQuery
 
-  -- Wait for all async processes to complete
-  wait producer
-  atomically $ closeTMChan feedLocationsChan
+  Stream.fromList entries
+    |& Stream.mapM (Database.resolveFeedLocation database)
+    |& Stream.mapMaybeM resolver
+    |& Stream.concatMapWith async fetcher
+    |& Stream.mapMaybeM runner
+    |& Stream.mapM storer
+    & Stream.asyncly
+    & Stream.drain
 
-  mapM_ wait resolvers
   atomically $ do
-    closeTMChan targetFeedChan
     closeTMChan resolveErrorsChan
-
-  mapM_ wait fetchers
-  atomically $ closeTMChan newItemsChan
-
-  mapM_ wait runners
-  atomically $ do
-    closeTMChan processedChan
     closeTMChan fetchErrorsChan
     closeTMChan callbackErrorsChan
     closeTMChan runErrorsChan
 
-  wait storer
-
   -- Error events => log
-  handleErrors resolveErrorsChan (printResolveError logger)
-  handleErrors fetchErrorsChan (printFetchError logger)
-  handleErrors callbackErrorsChan (printCallbackError logger)
-  handleErrors runErrorsChan (printRunError logger)
-  flushLogs logger
+  handleErrors resolveErrorsChan printResolveError
+  handleErrors fetchErrorsChan printFetchError
+  handleErrors callbackErrorsChan printCallbackError
+  handleErrors runErrorsChan printRunError
 
-  readTVarIO newItemsCount <&> pretty <&> bold <&> (<+> "new items") >>= log logger Info
-  readTVarIO errorsCount <&> pretty <&> bold <&> (<+> "errors") >>= log logger Info
+  readTVarIO newItemsCount <&> pretty <&> bold <&> (<+> "new items") >>= Core.putDocLn
+  readTVarIO errorsCount <&> pretty <&> bold <&> (<+> "errors") >>= Core.putDocLn
 
 
-spawnConsumers :: Logger.Handle IO -> Int -> TMChan i -> (i -> IO ()) -> TMChan (i, SomeException) -> TVar Int -> IO [Async ()]
-spawnConsumers logger n inputChan f errorsChan errorsCount =
-  replicateM n $ async $ fix $ \recurse -> do
-    maybeItem <- atomically $ readTMChan inputChan
-    forM_ maybeItem $ \item -> do
-      catchAny (f item) $ \e -> do
-        log logger Debug $ "Error:" <+> pretty (displayException e)
-        atomically $ do
-          writeTMChan errorsChan (item, e)
-          modifyTVar' errorsCount (+ 1)
-      recurse
+catchErrors :: MonadIO m => MonadCatch m => Logger.Handle m -> TMChan (i, SomeException) -> TVar Int -> m a -> (i -> m a) -> i -> m a
+catchErrors logger errorsChan errorsCount fe f input_ = catchAny (f input_) $ \e -> do
+  log logger Error $ pretty (displayException e)
+  io $ atomically $ do
+    writeTMChan errorsChan (input_, e)
+    modifyTVar' errorsCount (+ 1)
+  fe
+
 
 handleErrors :: MonadIO m => TMChan (input, error) -> ((input, error) -> m ()) -> m ()
 handleErrors errorsChan handler = fix $ \recurse -> do
   items <- atomically $ readTMChan errorsChan
   forM_ items $ \(i, e) -> handler (i, e) >> recurse
 
-printResolveError :: Exception e => Logger.Handle m -> (FeedLocation, e) -> m ()
-printResolveError logger (feedLocation, e) = log logger Error $
+printResolveError :: Exception e => MonadIO m => (FeedLocation, e) -> m ()
+printResolveError (feedLocation, e) = Core.putDocLn $ red $
   bold ("Resolve error for" <+> pretty feedLocation)
   <++> indent 2 (pretty $ displayException e)
 
-printFetchError :: Exception e => Logger.Handle m -> ((FeedLocation, URIRef a), e) -> m ()
-printFetchError logger ((_, uri), e) = log logger Error $
+printFetchError :: Exception e => MonadIO m => ((FeedLocation, URIRef a), e) -> m ()
+printFetchError ((_, uri), e) = Core.putDocLn $ red $
   bold ("Fetch error for" <+> prettyURI uri)
   <++> indent 2 (pretty $ displayException e)
 
 printCallbackError :: i ~ (EntryKey, FeedElement)
                    => e ~ (Callback, Int, LByteString, LByteString)
-                   => Logger.Handle m -> (i, [e]) -> m ()
-printCallbackError logger ((entryKey, element), e) = log logger Error $
+                   => MonadIO m
+                   => (i, [e]) -> m ()
+printCallbackError ((entryKey, element), e) = Core.putDocLn $ red $
   bold ("Callback error for" <+> pretty entryKey <+> "/" <+> pretty (getTitle element))
   <++> indent 2 prettyErrors
   where prettyErrors = vsep $ do
@@ -216,8 +193,8 @@ printCallbackError logger ((entryKey, element), e) = log logger Error $
             <++> "Stdout:" <++> indent 2 (pretty $ decodeUtf8 @Text stdout')
             <++> "Stderr:" <++> indent 2 (pretty $ decodeUtf8 @Text stderr')
 
-printRunError :: Exception e => Logger.Handle m -> ((EntryKey, Feed, FeedElement), e) -> m ()
-printRunError logger ((entryKey, _feed, element), e) = log logger Error $
+printRunError :: Exception e => MonadIO m => ((EntryKey, Feed, FeedElement), e) -> m ()
+printRunError ((entryKey, _feed, element), e) = Core.putDocLn $ red $
   bold ("Error for" <+> pretty entryKey <+> "/" <+> pretty (getTitle element))
   <++> indent 2 (pretty $ displayException e)
 

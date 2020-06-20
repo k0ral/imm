@@ -30,7 +30,6 @@ data AllOptions = AllOptions
 
 data GlobalOptions = GlobalOptions
   { optionLogLevel         :: LogLevel
-  , optionColorizeLogs     :: Bool
   , optionReadOnlyDatabase :: Bool
   , optionCallbacksFile    :: FilePath
   } deriving(Eq, Ord, Read, Show)
@@ -80,7 +79,6 @@ allOptions defaultCallbacksFile = AllOptions
 globalOptions :: FilePath -> Parser GlobalOptions
 globalOptions defaultCallbacksFile = GlobalOptions
   <$> (verboseFlag <|> quietFlag <|> logLevel <|> pure Info)
-  <*> colorizeLogs
   <*> readOnlyDatabase
   <*> (callbacksFileOption <|> pure defaultCallbacksFile)
 
@@ -123,9 +121,6 @@ verboseFlag, quietFlag, logLevel :: Parser LogLevel
 verboseFlag = flag' Logger.Debug $ long "verbose" <> short 'v' <> help "Set log level to DEBUG."
 quietFlag   = flag' Logger.Error $ long "quiet" <> short 'q' <> help "Set log level to ERROR."
 logLevel    = option auto $ long "log-level" <> short 'l' <> metavar "LOG-LEVEL" <> value Info <> completeWith ["Debug", "Info", "Warning", "Error"] <> help "Set log level. Available values: Debug, Info, Warning, Error."
-
-colorizeLogs :: Parser Bool
-colorizeLogs = flag True False $ long "nocolor" <> help "Disable log colorisation."
 -- }}}
 
 -- {{{ Other options
