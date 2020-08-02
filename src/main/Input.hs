@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications   #-}
-module Options where
+module Input where
 
 -- {{{ Imports
 import           Imm.Feed
@@ -22,23 +22,19 @@ import           URI.ByteString
 
 -- * Types
 
-data AllOptions = AllOptions
-  { optionCommand :: Command
-  , optionGlobal  :: GlobalOptions
-  } deriving(Eq, Show)
+data ProgramInput = ProgramInput
+  { inputCommand          :: Command
+  , inputLogLevel         :: LogLevel
+  , inputReadOnlyDatabase :: Bool
+  , inputCallbacksFile    :: FilePath
+  } deriving(Eq, Ord, Show)
 
-
-data GlobalOptions = GlobalOptions
-  { optionLogLevel         :: LogLevel
-  , optionReadOnlyDatabase :: Bool
-  , optionCallbacksFile    :: FilePath
-  } deriving(Eq, Ord, Read, Show)
-
-instance Pretty GlobalOptions where
-  pretty o = encloseSep "{ " " }" ", "
-    [ "log level" <+> equals <+> pretty (optionLogLevel o)
-    , "database read-only" <+> equals <+> pretty (optionReadOnlyDatabase o)
-    , "callbacks file" <+> equals <+> pretty (optionCallbacksFile o)
+instance Pretty ProgramInput where
+  pretty input = encloseSep "{ " " }" ", "
+    [ "command" <+> equals <+> pretty (inputCommand input)
+    , "log level" <+> equals <+> pretty (inputLogLevel input)
+    , "database read-only" <+> equals <+> pretty (inputReadOnlyDatabase input)
+    , "callbacks file" <+> equals <+> pretty (inputCallbacksFile input)
     ]
 
 
@@ -70,7 +66,7 @@ data CallbackMode = DisableCallbacks | EnableCallbacks
 
 -- * Option parsers
 
-parseOptions :: (MonadIO m) => m AllOptions
+parseOptions :: (MonadIO m) => m ProgramInput
 parseOptions = io $ do
   defaultCallbacksFile <- getXdgDirectory XdgConfig $ "imm" </> "callbacks.dhall"
   customExecParser defaultPrefs $ info (allOptions defaultCallbacksFile <**> helper <**> versionPrinter) $ progDesc description
@@ -78,14 +74,10 @@ parseOptions = io $ do
 description :: String
 description = "Execute arbitrary callbacks for each element of RSS/Atom feeds."
 
-allOptions :: FilePath -> Parser AllOptions
-allOptions defaultCallbacksFile = AllOptions
+allOptions :: FilePath -> Parser ProgramInput
+allOptions defaultCallbacksFile = ProgramInput
   <$> commandParser
-  <*> globalOptions defaultCallbacksFile
-
-globalOptions :: FilePath -> Parser GlobalOptions
-globalOptions defaultCallbacksFile = GlobalOptions
-  <$> (verboseFlag <|> quietFlag <|> logLevel <|> pure Info)
+  <*> (verboseFlag <|> quietFlag <|> logLevel <|> pure Info)
   <*> readOnlyDatabase
   <*> (callbacksFileOption <|> pure defaultCallbacksFile)
 

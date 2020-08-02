@@ -4,7 +4,6 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -13,14 +12,14 @@ import           Alternate
 import qualified Core
 import           Database
 import           HTTP
+import           Input
 import           Logger
-import           Options
 import           XML
 
 import           Control.Concurrent.STM.TMChan
 import           Control.Exception.Safe
 import           Data.Conduit.Combinators      as Conduit (stdin)
-import           Dhall
+import           Dhall                         (auto, input)
 import           Imm
 import qualified Imm.Callback                  as Callback
 import           Imm.Database.Feed             as Database
@@ -36,32 +35,38 @@ import           URI.ByteString
 
 
 main :: IO ()
-main = withLogHandler $ \logger -> do
-  AllOptions{..} <- parseOptions
-  let GlobalOptions{..} = optionGlobal
+main = do
+  programInput <- parseOptions
 
-  -- Setup logger
-  setLogLevel logger optionLogLevel
-  log logger Info $ "Global options:" <+> pretty optionGlobal
-  log logger Info $ "Command:" <+> pretty optionCommand
+  withLogger programInput $ \logger -> do
+    handleAny (log logger Error . pretty . displayException) $ do
+      database <- setupDatabase logger programInput
 
-  handleAny (log logger Error . pretty . displayException) $ do
-    -- Setup database
-    database <- Database.mkHandle <$> defaultDatabase
-    let database' = if optionReadOnlyDatabase then readOnly logger database else database
-    log logger Info . ("Using database:" <++>) . indent 2 =<< _describeDatabase database'
+      case inputCommand programInput of
+        Import            -> Core.importOPML logger stdout database Conduit.stdin
+        Subscribe u c     -> Core.subscribe logger stdout database u c
+        Unsubscribe query -> Core.unsubscribe logger database query
+        List              -> Core.listFeeds logger stdout database
+        Describe query    -> Core.describeFeed stdout database query
+        Reset feedKeys    -> Core.markAsUnprocessed logger database feedKeys
+        Run f c           -> main2 logger stdout database f =<< resolveCallbacks c (inputCallbacksFile programInput)
 
-    case optionCommand of
-      Import            -> Core.importOPML logger database' Conduit.stdin
-      Subscribe u c     -> Core.subscribe logger database' u c
-      Unsubscribe query -> Core.unsubscribe logger database' query
-      List              -> Core.listFeeds logger database'
-      Describe query    -> Core.describeFeed logger database query
-      Reset feedKeys    -> Core.markAsUnprocessed logger database' feedKeys
-      Run f c           -> main2 logger database' f =<< resolveCallbacks c optionCallbacksFile
+      Database.commit logger database
 
-    Database.commit logger database'
 
+
+withLogger :: ProgramInput -> (Logger.Handle IO -> IO ()) -> IO ()
+withLogger programInput f = withLogHandler $ \logger -> do
+  setLogLevel logger $ inputLogLevel programInput
+  log logger Info $ "Input:" <+> pretty programInput
+  f logger
+
+setupDatabase :: Logger.Handle IO -> ProgramInput -> IO (Database.Handle IO)
+setupDatabase logger programInput = do
+  database <- Database.mkHandle <$> defaultDatabase
+  let database' = if inputReadOnlyDatabase programInput then readOnly logger database else database
+  log logger Info . ("Using database:" <++>) . indent 2 =<< _describeDatabase database'
+  return database'
 
 resolveCallbacks :: MonadIO m => CallbackMode -> FilePath -> m [Callback]
 resolveCallbacks EnableCallbacks callbacksFile = io $ input auto $ fromString callbacksFile
