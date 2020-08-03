@@ -26,12 +26,6 @@ let
     sha256 = "17p8180dz3kv9ljfhjqspxp6km50xdcgsdnkknz9w3nfbkpk0l25";
   };
 
-  my-opml-conduit = {
-    pkg = "opml-conduit";
-    ver = "0.8.0.0";
-    sha256 = "14106j2rr6fk6hjhypm5hp1dk1rlxf7svswbj21ad3l40nx7qm7r";
-  };
-
   my-rss-conduit = {
     pkg = "rss-conduit";
     ver = "0.6.0.0";
@@ -47,7 +41,6 @@ let
         imm = packageWithRuntimeDependencies;
         avro = fromHackage my-avro;
         atom-conduit = fromHackage my-atom-conduit;
-        opml-conduit = fromHackage my-opml-conduit;
         rss-conduit = fromHackage my-rss-conduit;
       };
   };

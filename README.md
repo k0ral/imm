@@ -96,11 +96,6 @@ in config
   imm subscribe -a http://your.website.org
   ```
 
-- Import feeds from an OPML file:
-  ```bash
-  imm import < feeds.opml
-  ```
-
 - List subscribed feeds:
   ```bash
   imm list

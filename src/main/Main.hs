@@ -18,7 +18,6 @@ import           XML
 
 import           Control.Concurrent.STM.TMChan
 import           Control.Exception.Safe
-import           Data.Conduit.Combinators      as Conduit (stdin)
 import           Dhall                         (auto, input)
 import           Imm
 import qualified Imm.Callback                  as Callback
@@ -43,7 +42,6 @@ main = do
       database <- setupDatabase logger programInput
 
       case inputCommand programInput of
-        Import            -> Core.importOPML logger stdout database Conduit.stdin
         Subscribe u c     -> Core.subscribe logger stdout database u c
         Unsubscribe query -> Core.unsubscribe logger database query
         List              -> Core.listFeeds logger stdout database

@@ -38,8 +38,7 @@ instance Pretty ProgramInput where
     ]
 
 
-data Command = Import
-             | Subscribe FeedLocation (Set Text)
+data Command = Subscribe FeedLocation (Set Text)
              | List
              | Describe FeedQuery
              | Reset FeedQuery
@@ -51,7 +50,6 @@ deriving instance Ord Command
 deriving instance Show Command
 
 instance Pretty Command where
-  pretty Import          = "Import feeds"
   pretty (Subscribe f _) = "Subscribe to feed:" <+> pretty f
   pretty List            = "List all feeds"
   pretty (Describe f)    = "Describe feed" <+> pretty f
@@ -83,8 +81,7 @@ allOptions defaultCallbacksFile = ProgramInput
 
 commandParser :: Parser Command
 commandParser = hsubparser $ mconcat
-  [ command "import" $ info (pure Import) $ progDesc "Import feeds list from an OPML descriptor (read from stdin)."
-  , command "subscribe" $ info subscribeCommand $ progDesc "Subscribe to a feed."
+  [ command "subscribe" $ info subscribeCommand $ progDesc "Subscribe to a feed."
   , command "add" $ info subscribeCommand $ progDesc "Alias for subscribe."
 
   , command "run" $ info runCommand $ progDesc "Update list of feeds."
