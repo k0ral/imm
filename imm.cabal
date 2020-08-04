@@ -70,9 +70,9 @@ library
 
 executable imm
   import: common
-  build-depends: imm, aeson, atom-conduit >=0.7, avro >=0.5, bytestring, chronos, co-log, conduit, containers, dhall >= 1.27, directory, filepath, optparse-applicative, prettyprinter-ansi-terminal, pipes, pipes-bytestring, rss-conduit >=0.4.1, safe, safe-exceptions, stm, stm-chans, streamly, text, typed-process, typerep-map, uri-bytestring, xml-conduit >=1.5, xml-types
+  build-depends: imm, aeson, async, atom-conduit >=0.7, avro >=0.5, bytestring, chronos, co-log, conduit, containers, dhall >= 1.27, directory, filepath, optparse-applicative, prettyprinter-ansi-terminal, pipes, pipes-bytestring, rss-conduit >=0.4.1, safe, safe-exceptions, stm, stm-chans, streamly, text, typed-process, typerep-map, uri-bytestring, xml-conduit >=1.5, xml-types
   main-is: Main.hs
-  other-modules: Alternate, Core, Database, HTTP, Input, Logger, Paths_imm, XML
+  other-modules: Alternate, Core, Database, HTTP, Input, Logger, Output, Paths_imm, XML
   autogen-modules: Paths_imm
   hs-source-dirs: src/main
   ghc-options: -Wall -fno-warn-unused-do-bind -threaded

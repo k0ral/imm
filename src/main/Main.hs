@@ -14,6 +14,8 @@ import           Database
 import           HTTP
 import           Input
 import           Logger
+import           Output                        (putDocLn)
+import qualified Output
 import           XML
 
 import           Control.Concurrent.STM.TMChan
@@ -24,7 +26,7 @@ import qualified Imm.Callback                  as Callback
 import           Imm.Database.Feed             as Database
 import qualified Imm.HTTP                      as HTTP
 import           Imm.Pretty
-import           Pipes.ByteString
+import           Pipes.ByteString              hiding (stdout)
 import           Streamly                      as Stream
 import qualified Streamly.Prelude              as Stream
 import           System.Exit
@@ -36,21 +38,20 @@ import           URI.ByteString
 main :: IO ()
 main = do
   programInput <- parseOptions
+  Output.withHandle $ \stdout -> do
+    withLogger programInput $ \logger -> do
+      handleAny (log logger Error . pretty . displayException) $ do
+        database <- setupDatabase logger programInput
 
-  withLogger programInput $ \logger -> do
-    handleAny (log logger Error . pretty . displayException) $ do
-      database <- setupDatabase logger programInput
+        case inputCommand programInput of
+          Subscribe u c     -> Core.subscribe logger stdout database u c
+          Unsubscribe query -> Core.unsubscribe logger database query
+          List              -> Core.listFeeds logger stdout database
+          Describe query    -> Core.describeFeed stdout database query
+          Reset feedKeys    -> Core.markAsUnprocessed logger database feedKeys
+          Run f c           -> main2 logger stdout database f =<< resolveCallbacks c (inputCallbacksFile programInput)
 
-      case inputCommand programInput of
-        Subscribe u c     -> Core.subscribe logger stdout database u c
-        Unsubscribe query -> Core.unsubscribe logger database query
-        List              -> Core.listFeeds logger stdout database
-        Describe query    -> Core.describeFeed stdout database query
-        Reset feedKeys    -> Core.markAsUnprocessed logger database feedKeys
-        Run f c           -> main2 logger stdout database f =<< resolveCallbacks c (inputCallbacksFile programInput)
-
-      Database.commit logger database
-
+        Database.commit logger database
 
 
 withLogger :: ProgramInput -> (Logger.Handle IO -> IO ()) -> IO ()
@@ -71,8 +72,9 @@ resolveCallbacks EnableCallbacks callbacksFile = io $ input auto $ fromString ca
 resolveCallbacks _ _                           = return mempty
 
 
-main2 :: Logger.Handle IO -> Database.Handle IO -> FeedQuery -> [Callback] -> IO ()
-main2 logger database feedQuery callbacks = do
+main2 :: Logger.Handle IO -> Output.Handle IO -> Database.Handle IO
+      -> FeedQuery -> [Callback] -> IO ()
+main2 logger stdout database feedQuery callbacks = do
   resolveErrorsChan <- newTMChanIO
   fetchErrorsChan <- newTMChanIO
   runErrorsChan <- newTMChanIO
@@ -106,7 +108,7 @@ main2 logger database feedQuery callbacks = do
         Stream.fromList elements
   -- New items events => execute callback => processed/error events
   let runner = catchErrors logger runErrorsChan errorsCount (return Nothing) $ \(entryKey, feed, element) -> do
-        Core.putDocLn $ "New item:" <+> magenta (pretty entryKey) <+> "/" <+> yellow (pretty $ getTitle element)
+        putDocLn stdout $ "New item:" <+> magenta (pretty entryKey) <+> "/" <+> yellow (pretty $ getTitle element)
         atomically $ modifyTVar' newItemsCount (+ 1)
 
         results <- forM callbacks $ \callback@(Callback executable arguments) -> io $ do
@@ -150,13 +152,13 @@ main2 logger database feedQuery callbacks = do
     closeTMChan runErrorsChan
 
   -- Error events => log
-  handleErrors resolveErrorsChan printResolveError
-  handleErrors fetchErrorsChan printFetchError
-  handleErrors callbackErrorsChan printCallbackError
-  handleErrors runErrorsChan printRunError
+  handleErrors resolveErrorsChan (printResolveError stdout)
+  handleErrors fetchErrorsChan (printFetchError stdout)
+  handleErrors callbackErrorsChan (printCallbackError stdout)
+  handleErrors runErrorsChan (printRunError stdout)
 
-  readTVarIO newItemsCount <&> pretty <&> bold <&> (<+> "new items") >>= Core.putDocLn
-  readTVarIO errorsCount <&> pretty <&> bold <&> (<+> "errors") >>= Core.putDocLn
+  readTVarIO newItemsCount <&> pretty <&> bold <&> (<+> "new items") >>= putDocLn stdout
+  readTVarIO errorsCount <&> pretty <&> bold <&> (<+> "errors") >>= putDocLn stdout
 
 
 catchErrors :: MonadIO m => MonadCatch m => Logger.Handle m -> TMChan (i, SomeException) -> TVar Int -> m a -> (i -> m a) -> i -> m a
@@ -173,21 +175,21 @@ handleErrors errorsChan handler = fix $ \recurse -> do
   items <- atomically $ readTMChan errorsChan
   forM_ items $ \(i, e) -> handler (i, e) >> recurse
 
-printResolveError :: Exception e => MonadIO m => (FeedLocation, e) -> m ()
-printResolveError (feedLocation, e) = Core.putDocLn $ red $
+printResolveError :: Exception e => MonadIO m => Output.Handle m -> (FeedLocation, e) -> m ()
+printResolveError stdout (feedLocation, e) = putDocLn stdout $ red $
   bold ("Resolve error for" <+> pretty feedLocation)
   <++> indent 2 (pretty $ displayException e)
 
-printFetchError :: Exception e => MonadIO m => ((FeedLocation, URIRef a), e) -> m ()
-printFetchError ((_, uri), e) = Core.putDocLn $ red $
+printFetchError :: Exception e => MonadIO m => Output.Handle m -> ((FeedLocation, URIRef a), e) -> m ()
+printFetchError stdout ((_, uri), e) = putDocLn stdout $ red $
   bold ("Fetch error for" <+> prettyURI uri)
   <++> indent 2 (pretty $ displayException e)
 
 printCallbackError :: i ~ (EntryKey, FeedElement)
                    => e ~ (Callback, Int, LByteString, LByteString)
                    => MonadIO m
-                   => (i, [e]) -> m ()
-printCallbackError ((entryKey, element), e) = Core.putDocLn $ red $
+                   => Output.Handle m -> (i, [e]) -> m ()
+printCallbackError stdout ((entryKey, element), e) = putDocLn stdout $ red $
   bold ("Callback error for" <+> pretty entryKey <+> "/" <+> pretty (getTitle element))
   <++> indent 2 prettyErrors
   where prettyErrors = vsep $ do
@@ -197,8 +199,9 @@ printCallbackError ((entryKey, element), e) = Core.putDocLn $ red $
             <++> "Stdout:" <++> indent 2 (pretty $ decodeUtf8 @Text stdout')
             <++> "Stderr:" <++> indent 2 (pretty $ decodeUtf8 @Text stderr')
 
-printRunError :: Exception e => MonadIO m => ((EntryKey, Feed, FeedElement), e) -> m ()
-printRunError ((entryKey, _feed, element), e) = Core.putDocLn $ red $
+printRunError :: Exception e => MonadIO m
+              => Output.Handle m -> ((EntryKey, Feed, FeedElement), e) -> m ()
+printRunError stdout ((entryKey, _feed, element), e) = putDocLn stdout $ red $
   bold ("Error for" <+> pretty entryKey <+> "/" <+> pretty (getTitle element))
   <++> indent 2 (pretty $ displayException e)
 

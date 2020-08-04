@@ -5,7 +5,6 @@
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE TypeFamilies          #-}
 module Core (
-  putDocLn,
   markAsUnprocessed,
   subscribe,
   unsubscribe,
@@ -14,20 +13,18 @@ module Core (
 ) where
 
 -- {{{ Imports
+import           Output                 (putDocLn)
+import qualified Output
+
 import           Control.Exception.Safe
-import qualified Data.Map                                  as Map
-import qualified Data.Text.Lazy.IO                         as Text
-import           Data.Text.Prettyprint.Doc.Render.Terminal
-import qualified Imm.Database.Feed                         as Database
+import qualified Data.Map               as Map
+import qualified Imm.Database.Feed      as Database
 import           Imm.Feed
-import           Imm.Logger                                as Logger
+import           Imm.Logger             as Logger
 import           Imm.Pretty
-import           Text.XML                                  as XML ()
+import           Text.XML               as XML ()
 -- }}}
 
-
-putDocLn :: MonadIO m => Doc AnsiStyle -> m ()
-putDocLn = io . Text.putStrLn . renderLazy . layoutPretty defaultLayoutOptions
 
 markAsUnprocessed :: MonadThrow m => MonadIO m
                   => Logger.Handle m
@@ -38,17 +35,21 @@ markAsUnprocessed logger database query = Database.resolveEntryKey database quer
   >>= mapM_ (Database.markAsUnprocessed logger database)
 
 -- | Print database status for given feed(s)
-describeFeed :: MonadThrow m => MonadIO m => Logger.Handle m -> Database.Handle m -> FeedQuery -> m ()
-describeFeed logger database feedQuery = do
+describeFeed :: MonadThrow m => MonadIO m
+             => Output.Handle m -> Database.Handle m
+             -> FeedQuery -> m ()
+describeFeed output database feedQuery = do
   entries <- Database.fetchQuery database (Database.matching feedQuery)
   forM_ (Map.toList entries) $ \(index, entry) ->
-    putDocLn $ pretty index <+> Database.prettyEntry entry
+    putDocLn output $ pretty index <+> Database.prettyEntry entry
 
 -- | Register the given set of feeds in database
-subscribe :: MonadCatch m => MonadIO m => Logger.Handle m -> Database.Handle m -> FeedLocation -> Set Text -> m ()
-subscribe logger database feedLocation tags = do
+subscribe :: MonadCatch m => MonadIO m
+          => Logger.Handle m -> Output.Handle m -> Database.Handle m
+          -> FeedLocation -> Set Text -> m ()
+subscribe logger output database feedLocation tags = do
   index <- Database.register logger database feedLocation tags
-  putDocLn $ "Subscribed with index" <+> pretty index
+  putDocLn output $ "Subscribed with index" <+> pretty index
 
 -- | Un-register the given set of feeds from database
 unsubscribe :: MonadThrow m
@@ -60,9 +61,11 @@ unsubscribe logger database query = Database.resolveEntryKey database query
   >>= Database.delete logger database
 
 -- | List all subscribed feeds and their status
-listFeeds :: MonadIO m => MonadCatch m => Logger.Handle m -> Database.Handle m -> m ()
-listFeeds logger database = do
+listFeeds :: MonadIO m => MonadCatch m
+          => Logger.Handle m -> Output.Handle m -> Database.Handle m
+          -> m ()
+listFeeds logger output database = do
   entries <- Database.fetchAll database
   when (null entries) $ log logger Warning "No subscription"
   forM_ (zip [0..] $ Map.elems entries) $ \(i, entry) -> do
-    putDocLn $ pretty (i :: Int) <+> Database.prettyShortEntry entry
+    putDocLn output $ pretty (i :: Int) <+> Database.prettyShortEntry entry
