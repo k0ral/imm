@@ -36,6 +36,7 @@ library
     Imm.Logger
     Imm.Pretty
     Imm.XML
+    URI.ByteString.Extended
   other-modules:
     Data.Aeson.Extended
   build-depends:
