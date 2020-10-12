@@ -6,18 +6,16 @@ module Imm.Pretty (module Imm.Pretty, module X) where
 
 -- {{{ Imports
 import qualified Data.Text                                 as Text
-import           Data.Time
-import           Data.Tree
-import           Data.XML.Types                            as XML
-import           Text.Atom.Types                           as Atom
--- import           Text.OPML.Types              as OPML hiding (text)
--- import qualified Text.OPML.Types              as OPML
 import           Data.Text.Prettyprint.Doc                 as X hiding (list, width)
 import           Data.Text.Prettyprint.Doc                 (list)
 import           Data.Text.Prettyprint.Doc.Render.Terminal as X (AnsiStyle)
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import           Data.Time
+import           Data.Tree
+import           Data.XML.Types                            as XML
 import           Refined
+import           Text.Atom.Types                           as Atom
 import           Text.RSS.Types                            as RSS
 import           URI.ByteString
 -- }}}
@@ -25,6 +23,22 @@ import           URI.ByteString
 
 -- | Newtype wrapper to prettyprint a key uniquely identifying an object
 newtype PrettyKey a = PrettyKey a
+
+prettyKey :: Pretty (PrettyKey a) => a -> Doc b
+prettyKey = pretty . PrettyKey
+
+-- | Newtype wrapper to prettyprint a user-friendly name referring to an object
+newtype PrettyName a = PrettyName a
+
+prettyName :: Pretty (PrettyName a) => a -> Doc b
+prettyName = pretty . PrettyName
+
+-- | Newtype wrapper to prettyprint a short description of an object
+newtype PrettyShort a = PrettyShort a
+
+prettyShort :: Pretty (PrettyShort a) => a -> Doc b
+prettyShort = pretty . PrettyShort
+
 
 -- | Infix operator for 'line'
 (<++>) :: Doc a -> Doc a -> Doc a
@@ -35,32 +49,6 @@ prettyTree (Node n s) = pretty n <++> indent 2 (vsep $ prettyTree <$> s)
 
 prettyTime :: UTCTime -> Doc a
 prettyTime = pretty . formatTime defaultTimeLocale "%F %T"
-
--- instance Pretty OpmlHead where
---   pretty h = hsep $ catMaybes
---                [ pretty <$> fromNullable (opmlTitle h)
---                , (text "created at:" <+>) . pretty <$> opmlCreated h
---                , (text "modified at:" <+>) . pretty <$> modified h
---                , (text "by" <+>) . pretty <$> fromNullable (ownerName h)
---                , angles . pretty <$> fromNullable (ownerEmail h)
---                ]
-
--- instance Pretty OutlineBase where
---   pretty b = pretty $ OPML.text b
-
--- instance Pretty OutlineSubscription where
---   pretty b = angles $ pretty $ xmlUri b
-
--- instance Pretty OpmlOutline where
---   pretty (OpmlOutlineGeneric base otype) = hsep
---                                              [ text "type:" <+> pretty otype
---                                              , pretty base
---                                              ]
---   pretty (OpmlOutlineSubscription base s) = text "Subscription:" <+> pretty base <+> pretty s
---   pretty (OpmlOutlineLink base uri) = text "Link:" <+> pretty base <+> pretty uri
-
--- instance Pretty Opml where
---   pretty o = text "OPML" <+> pretty (opmlVersion o) <++> indent 2 (pretty (opmlHead o) <++> (vsep . map pretty $ opmlOutlines o))
 
 prettyPerson :: AtomPerson -> Doc a
 prettyPerson p = pretty (unrefine $ personName p) <> email where
