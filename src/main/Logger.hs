@@ -12,7 +12,7 @@ import           Imm.Pretty
 
 import           Chronos
 import           Colog                                     hiding (Severity (..))
-import qualified Colog                                     as Colog
+import qualified Colog
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import qualified Data.TypeRepMap                           as TypeRepMap
 import           System.Directory

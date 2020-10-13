@@ -173,7 +173,7 @@ markFeedAsUnprocessed logger database key = do
 
 markAllFeedsAsUnprocessed :: MonadThrow m => Logger.Handle m -> Handle m -> m ()
 markAllFeedsAsUnprocessed logger database = do
-  log logger Debug $ "Marking all feeds as unprocessed..."
+  log logger Debug "Marking all feeds as unprocessed..."
   feeds <- _fetchAllFeeds database
   items <- _fetchAllItems database
   forM_ items $ \item -> _updateItemStatus database $ item { _itemStatus = markItemAsUnprocessed $ _itemStatus item }
