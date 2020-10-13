@@ -1,7 +1,7 @@
 cabal-version:       2.2
 name:                imm
-version:             1.10.0.0
-synopsis:            Execute arbitrary callbacks for each element of RSS/Atom feeds
+version:             2.0.0.0
+synopsis:            Execute arbitrary actions for each item from RSS/Atom feeds
 description:         Cf README file
 homepage:            https://github.com/k0ral/imm
 license:             CC0-1.0
