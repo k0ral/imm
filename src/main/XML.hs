@@ -10,10 +10,7 @@ import           Imm.XML
 import           Control.Exception.Safe
 import           Data.Conduit
 import           Data.XML.Types
-import           Text.Atom.Conduit.Parse
-import           Text.RSS.Conduit.Parse
-import           Text.RSS1.Conduit.Parse
-import           Text.XML.Stream.Parse   as XML
+import           Text.XML.Stream.Parse  as XML
 import           URI.ByteString
 -- }}}
 
@@ -24,7 +21,9 @@ newtype XmlParser = XmlParser (forall m . Monad m => URI -> ConduitT Event Event
 -- | 'Conduit' based implementation
 mkHandle :: MonadIO m => MonadCatch m => XmlParser -> Handle m
 mkHandle (XmlParser preProcess) = Handle
-  { parseXml = \uri bytestring -> liftIO $ runConduit $ parseLBS def bytestring .| preProcess uri .| XML.force "Invalid feed" ((fmap Atom <$> atomFeed) `orE` (fmap Rss <$> rssDocument) `orE` (fmap Rss <$> rss1Document))
+  { parseXml = \uri bytestring -> liftIO $ runConduit $ parseLBS def bytestring
+      .| preProcess uri
+      .| XML.force "Invalid feed" feedC
   }
 
 -- | Forward all 'Event's without any pre-process

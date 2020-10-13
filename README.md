@@ -25,7 +25,6 @@ cabal install imm
 ```
 
 Then, the following runtime dependencies must be installed separately and provided in `PATH`:
-- [httpie](https://github.com/jakubroztocil/httpie)
 - [pup](https://github.com/ericchiang/pup)
 
 ## Configuration
@@ -34,7 +33,7 @@ Then, the following runtime dependencies must be installed separately and provid
 
 Callbacks are configured through the `$XDG_CONFIG_HOME/imm/callbacks.dhall` file. A commented template file is bundled with the project.
 
-*imm* will call each callback once per feed element, and will fill its standard input (`stdin`) with [Avro][4]-encoded binary data, which schema is described in file [`idl/callback.json`](idl/callback.json).
+*imm* will call each callback once per feed item, and will fill its standard input (`stdin`) with a JSON structure, which schema is described in file [`schema/imm.json`](schema/imm.json).
 
 Callback process is expected to return `0` in case of success, or any other exit code in case of failure, in which case the standard error output (`stderr`) will be displayed.
 
@@ -88,12 +87,12 @@ in config
 
 - Subscribe to a feed through direct URL:
   ```bash
-  imm subscribe -u http://your.feed.org
+  imm subscribe http://your.feed.org
   ```
 
 - Subscribe to a feed through an alternate link:
   ```bash
-  imm subscribe -a http://your.website.org
+  imm subscribe http://your.website.org
   ```
 
 - List subscribed feeds:
@@ -103,12 +102,12 @@ in config
 
 - Show details about a feed:
   ```bash
-  imm show http://your.feed.org
+  imm show 10  # 10 is the index of a subscribed feed, as shown with `imm list`
   ```
 
 - Unsubscribe from a feed:
   ```bash
-  imm unsubscribe http://your.feed.org
+  imm unsubscribe 10  # 10 is the index of a subscribed feed, as shown with `imm list`
   ```
 
 - Check for new elements without executing any action:
@@ -124,4 +123,3 @@ in config
 [1]: http://hackage.haskell.org/package/imm
 [2]: https://www.haskell.org
 [3]: https://dhall-lang.org/
-[4]: https://avro.apache.org/

@@ -1,181 +1,227 @@
-{-# LANGUAGE DataKinds                 #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE StandaloneDeriving        #-}
-{-# LANGUAGE TypeOperators             #-}
--- | Helpers to manipulate feeds
-module Imm.Feed where
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
+-- | Feed data structures.
+module Imm.Feed
+  ( -- * Types
+    FeedLocation(..)
+  , UID
+  , FeedQuery(..)
+  , FeedDefinition(..)
+  , FeedItem(..)
+  , Author(..)
+  , -- * Parsers
+    parseFeed
+  , feedC
+  , parseFeedItem
+  , -- * Utilities
+    getMainLink
+  , areSameItem
+  ) where
 
 -- {{{ Imports
-import           Imm.Pretty
-
 import           Conduit
 import           Control.Exception.Safe
 import           Data.Aeson.Extended
-import           Data.Binary.Builder
 import           Data.Text                      as Text (null)
 import           Data.Time
-import           Data.Type.Equality
+import           Data.XML.Types
+import           Imm.Link
+import           Imm.Pretty
+import           Refined
+import           Safe
 import           Text.Atom.Conduit.Parse
-import           Text.Atom.Conduit.Render
 import           Text.Atom.Types
 import           Text.RSS.Conduit.Parse
-import           Text.RSS.Conduit.Render
 import           Text.RSS.Extensions.Content
 import           Text.RSS.Extensions.DublinCore
 import           Text.RSS.Types
 import           Text.RSS1.Conduit.Parse
 import           Text.XML.Stream.Parse          as XML hiding (content)
-import           Text.XML.Stream.Render         hiding (content)
-import           URI.ByteString
+import           URI.ByteString.Extended
 -- }}}
-
--- * Types
 
 -- | Feed location identifies a feed. It is either:
 -- - the feed URI
 -- - a webpage URI that refers to the feed through an alternate link, in which case an optional feed title can be provided to disambiguate multiple such links
-data FeedLocation = FeedDirectURI URI | FeedAlternateLink URI Text
-  deriving(Eq, Ord, Show)
+data FeedLocation = FeedLocation URI Text
+  deriving(Eq, Generic, Ord, Show, Typeable)
 
 instance Pretty FeedLocation where
-  pretty (FeedDirectURI uri) = prettyURI uri
-  pretty (FeedAlternateLink uri title) = prettyURI uri
+  pretty (FeedLocation uri title) = prettyURI uri
     <> if Text.null title then mempty else space <> brackets (pretty title)
 
-instance FromJSON FeedLocation where
-  parseJSON value = oldStyleDirectURI <|> newStyleDirectURI value <|> alternateLink value where
-    oldStyleDirectURI = FeedDirectURI . _unwrapURI <$> parseJSON value
-    newStyleDirectURI = withObject "Feed direct URI" $ \v -> FeedDirectURI . _unwrapURI
-      <$> v .: "direct"
-    alternateLink = withObject "Feed alternate link" $ \v -> FeedAlternateLink
-      <$> (v .: "alternate" <&> _unwrapURI)
-      <*> (v .: "title" <|> pure mempty)
-
 instance ToJSON FeedLocation where
-  toJSON (FeedDirectURI uri) = object [ "direct" .= toJSON (JsonURI uri) ]
-  toJSON (FeedAlternateLink uri title) = object $ [ "alternate" .= toJSON (JsonURI uri) ] <> [ "title" .= toJSON title | not (Text.null title)]
+  toJSON (FeedLocation uri title) = object
+    [ "uri" .= toJSON (JsonURI uri)
+    , "title" .= title
+    ]
 
+instance FromJSON FeedLocation where
+  parseJSON = withObject "FeedLocation" $ \v -> do
+    FeedLocation <$> (_unwrapURI <$> (v .: "uri")) <*> (v .: "title")
+
+
+-- | Database identifier for a feed
+type UID = Int
 
 -- | A query describes a set of feeds through some criteria.
-data FeedQuery = ByDatabaseID Int | ByURI URI | AllFeeds
-  deriving(Eq, Ord, Show)
+data FeedQuery = QueryByUID UID | QueryAll
+  deriving(Eq, Ord, Read, Show, Typeable)
 
 instance Pretty FeedQuery where
-  pretty AllFeeds = "All subscribed feeds"
-  pretty (ByURI u) = prettyURI u
-  pretty (ByDatabaseID n) = "database feed" <+> pretty n
+  pretty QueryAll       = "All subscribed feeds"
+  pretty (QueryByUID k) = "Feed" <+> pretty k
 
 
-data Feed = Rss (RssDocument (ContentModule (DublinCoreModule NoExtensions))) | Atom AtomFeed
-  deriving(Eq, Ord, Show)
+newtype FeedDefinition = FeedDefinition
+  { _feedTitle :: Text
+  } deriving(Eq, Generic, Ord, Read, Show, Typeable)
 
-data FeedElement = RssElement (RssItem (ContentModule (DublinCoreModule NoExtensions))) | AtomElement AtomEntry
-  deriving(Show)
+feedDefinitionOptions :: Options
+feedDefinitionOptions = defaultOptions
+  { fieldLabelModifier = camelTo2 '_' . drop (length @[] "_feed")
+  , omitNothingFields = True
+  }
 
-instance Pretty (PrettyKey FeedElement) where
-  pretty (PrettyKey element) = "element" <+> pretty (getTitle element)
+instance ToJSON FeedDefinition where
+  toJSON     = genericToJSON feedDefinitionOptions
+  toEncoding = genericToEncoding feedDefinitionOptions
 
-instance Ord FeedElement where
-  compare element1 element2 = compare (getId element1) (getId element2)
-    <> compare (getLink element1) (getLink element2)
-    <> compare (getTitle element1) (getTitle element2)
-    <> compare (getContent element1) (getContent element2)
+instance FromJSON FeedDefinition where
+  parseJSON = genericParseJSON feedDefinitionOptions
 
-instance Eq FeedElement where
-  element1 == element2 = compare element1 element2 == EQ
+instance Pretty FeedDefinition where
+  pretty definition = pretty $ _feedTitle definition
 
-
-data FeedURI = forall a . FeedURI (URIRef a)
-
-deriving instance Show FeedURI
-instance Eq FeedURI where
-  (FeedURI a) == (FeedURI b) = case sameURIType a b of
-    Just Refl -> a == b
-    _         -> False
-
-instance Ord FeedURI where
-  compare (FeedURI a) (FeedURI b) = case (a, b) of
-    (URI{}, URI{})                 -> compare a b
-    (RelativeRef{}, RelativeRef{}) -> compare a b
-    (URI{}, RelativeRef{})         -> LT
-    (RelativeRef{}, URI{})         -> GT
-
-sameURIType :: URIRef a1 -> URIRef a2 -> Maybe (URIRef a1 :~: URIRef a2)
-sameURIType a b = case (a, b) of
-  (URI{}, URI{})                 -> Just Refl
-  (RelativeRef{}, RelativeRef{}) -> Just Refl
-  _                              -> Nothing
+instance Pretty (PrettyName FeedDefinition) where
+  pretty (PrettyName definition) = pretty $ _feedTitle definition
 
 
-withFeedURI :: (forall a . URIRef a -> b) -> FeedURI -> b
-withFeedURI f (FeedURI a) = f a
+data Author = Author
+  { _authorName  :: Text
+  , _authorEmail :: Text
+  , _authorURI   :: Maybe AnyURI
+  } deriving(Eq, Generic, Ord, Show, Typeable)
+
+authorOptions :: Options
+authorOptions = defaultOptions
+  { fieldLabelModifier = camelTo2 '_' . drop (length @[] "_author")
+  , omitNothingFields = True
+  }
+
+instance ToJSON Author where
+  toJSON     = genericToJSON authorOptions
+  toEncoding = genericToEncoding authorOptions
+
+instance FromJSON Author where
+  parseJSON = genericParseJSON authorOptions
+
+instance Pretty Author where
+  pretty Author{..} = pretty _authorName <+> brackets (pretty _authorEmail)
 
 
--- * Generic parsers/renderers
+data FeedItem = FeedItem
+  { _itemDate       :: Maybe UTCTime
+  , _itemTitle      :: Text
+  , _itemContent    :: Text
+  , _itemLinks      :: [Link]
+  , _itemIdentifier :: Text
+  , _itemAuthors    :: [Author]
+  } deriving(Eq, Generic, Ord, Show, Typeable)
 
-renderFeed :: Feed -> Text
-renderFeed (Rss rss) = decodeUtf8 $ toLazyByteString $ runConduitPure $ renderRssDocument rss .| renderBuilder def .| foldC
-renderFeed (Atom atom) = decodeUtf8 $ toLazyByteString $ runConduitPure $ renderAtomFeed atom .| renderBuilder def .| foldC
+feedItemOptions :: Options
+feedItemOptions = defaultOptions
+  { fieldLabelModifier = camelTo2 '_' . drop (length @[] "_item")
+  , omitNothingFields = True
+  }
 
-renderFeedElement :: FeedElement -> Text
-renderFeedElement (RssElement item) = decodeUtf8 $ toLazyByteString $ runConduitPure $ renderRssItem item .| renderBuilder def .| foldC
-renderFeedElement (AtomElement entry) = decodeUtf8 $ toLazyByteString $ runConduitPure $ renderAtomEntry entry .| renderBuilder def .| foldC
+instance ToJSON FeedItem where
+  toJSON     = genericToJSON feedItemOptions
+  toEncoding = genericToEncoding feedItemOptions
 
-parseFeed :: MonadCatch m => Text -> m Feed
-parseFeed text = runConduit $ parseLBS def (encodeUtf8 text) .| XML.force "Invalid feed" (choose [fmap Atom <$> atomFeed, fmap Rss <$> rssDocument, fmap Rss <$> rss1Document])
+instance FromJSON FeedItem where
+  parseJSON = genericParseJSON feedItemOptions
 
-parseFeedElement :: MonadCatch m => Text -> m FeedElement
-parseFeedElement text = runConduit $ parseLBS def (encodeUtf8 text) .| XML.force "Invalid feed element" (choose [fmap AtomElement <$> atomEntry, fmap RssElement <$> rssItem, fmap RssElement <$> rss1Item])
+instance Pretty (PrettyName FeedItem) where
+  pretty (PrettyName item) = pretty (_itemTitle item)
 
-
--- * Generic mutators
-
-removeElements :: Feed -> Feed
-removeElements (Rss rss)   = Rss $ rss { channelItems = mempty }
-removeElements (Atom atom) = Atom $ atom { feedEntries = mempty }
+instance Pretty FeedItem where
+  pretty FeedItem{..} = maybe "<unknown>" prettyTime _itemDate <+> pretty _itemTitle
 
 
--- * Generic getters
+parseFeed :: MonadCatch m => Text -> m (FeedDefinition, [FeedItem])
+parseFeed text = runConduit $ parseLBS def (encodeUtf8 text) .| XML.force "Invalid feed" feedC
 
-getFeedTitle :: Feed -> Text
-getFeedTitle (Rss doc)   = channelTitle doc
-getFeedTitle (Atom feed) = show $ prettyAtomText $ feedTitle feed
+parseAtomFeed :: AtomFeed -> (FeedDefinition, [FeedItem])
+parseAtomFeed feed = (definition, items) where
+  definition = FeedDefinition (show $ prettyAtomText $ feedTitle feed)
+  items = parseAtomItem <$> feedEntries feed
 
-getElements :: Feed -> [FeedElement]
-getElements (Rss doc)   = map RssElement $ channelItems doc
-getElements (Atom feed) = map AtomElement $ feedEntries feed
+parseRssFeed :: RssDocument (ContentModule (DublinCoreModule NoExtensions)) -> (FeedDefinition, [FeedItem])
+parseRssFeed doc = (definition, items) where
+  definition = FeedDefinition (channelTitle doc)
+  items = parseRssItem <$> channelItems doc
 
-getDate :: FeedElement -> Maybe UTCTime
-getDate (RssElement item)   = itemPubDate item <|> (item & itemExtensions & itemContentOther & itemDcMetaData & elementDate)
-getDate (AtomElement entry) = Just $ entryUpdated entry
+-- | Conduit version of 'parseFeed'
+feedC :: MonadCatch m => ConduitT Event o m (Maybe (FeedDefinition, [FeedItem]))
+feedC = choose [atom, rss, rss1] where
+  atom = fmap parseAtomFeed <$> atomFeed
+  rss = fmap parseRssFeed <$> rssDocument
+  rss1 = fmap parseRssFeed <$> rss1Document
 
-getTitle :: FeedElement -> Text
-getTitle (RssElement item)   = itemTitle item
-getTitle (AtomElement entry) = show $ prettyAtomText $ entryTitle entry
+parseFeedItem :: MonadCatch m => Text -> m FeedItem
+parseFeedItem text = runConduit $ parseLBS def (encodeUtf8 text) .| XML.force "Invalid feed element" (choose [fmap parseAtomItem <$> atomEntry, fmap parseRssItem <$> rssItem, fmap parseRssItem <$> rss1Item])
 
-getContent :: FeedElement -> Text
-getContent (RssElement item) = if not (Text.null content) then content else itemDescription item where
-  content = item & itemExtensions & itemContent
-getContent (AtomElement entry) = fromMaybe "<empty>" $ content <|> summary where
-  content = show . prettyAtomContent <$> entryContent entry
+parseAtomItem :: AtomEntry -> FeedItem
+parseAtomItem entry = FeedItem date title content links identifier authors where
+  date = Just $ entryUpdated entry
+  title = show $ prettyAtomText $ entryTitle entry
+  content = fromMaybe "<empty>" $ rawContent <|> summary
+  rawContent = show . prettyAtomContent <$> entryContent entry
   summary = show . prettyAtomText <$> entrySummary entry
+  links = parseLink <$> entryLinks entry
+  parseLink link = Link (pure $ fromMaybe Alternate $ parseRelation $ linkRel link) (linkTitle link) (parseMediaType $ linkType link) (withAtomURI AnyURI $ linkHref link)
+  identifier = entryId entry
+  authors = [Author (unrefine name) email (withAtomURI AnyURI <$> uri) | AtomPerson name email uri <- entryAuthors entry]
 
-getLink :: FeedElement -> Maybe FeedURI
-getLink (RssElement item) = itemLink item <&> withRssURI FeedURI
-getLink (AtomElement entry) = (alternateLink <|> defaultLink) <&> linkHref <&> withAtomURI FeedURI where
-  links = entryLinks entry
-  alternateLink = links & filter (\link -> linkRel link == "alternate") & nonEmpty <&> head
-  defaultLink = links & filter (Text.null . linkRel) & nonEmpty <&> head
+parseRssItem :: RssItem (ContentModule (DublinCoreModule NoExtensions)) -> FeedItem
+parseRssItem item = FeedItem date title content links identifier authors where
+  date = itemPubDate item <|> (item & itemExtensions & itemContentOther & itemDcMetaData & elementDate)
+  title = itemTitle item
+  content = if not (Text.null rawContent) then rawContent else itemDescription item
+  rawContent = item & itemExtensions & itemContent
+  links = [Link (Just Alternate) mempty mzero (withRssURI AnyURI uri) | uri <- maybeToList $ itemLink item]
+  identifier = itemGuid item <&> prettyGuid & maybe mempty show
+  authors = [Author (itemAuthor item) mempty mzero]
 
-getId :: FeedElement -> Text
-getId (RssElement item)   = itemGuid item <&> prettyGuid & maybe mempty show
-getId (AtomElement entry) = entryId entry
 
--- * Misc
+-- TODO: replace headMay with singleMay
+getMainLink :: FeedItem -> Maybe Link
+getMainLink item = _itemLinks item & filter (\l -> _linkRelation l == Just Alternate) & headMay
 
-prettyElement :: FeedElement -> Doc a
-prettyElement (RssElement item)   = prettyItem item
-prettyElement (AtomElement entry) = prettyEntry entry
+haveSameIdentifier :: FeedItem -> FeedItem -> Maybe Bool
+haveSameIdentifier item1 item2 = case (_itemIdentifier item1, _itemIdentifier item2) of
+  ("", "") -> Nothing
+  (a, b)   -> Just (a == b)
+
+haveSameLink :: FeedItem -> FeedItem -> Maybe Bool
+haveSameLink item1 item2 = case (getMainLink item1, getMainLink item2) of
+  (Just a, Just b)   -> Just (a == b)
+  (Nothing, Nothing) -> Nothing
+  _                  -> Just False
+
+haveSameTitle :: FeedItem -> FeedItem -> Maybe Bool
+haveSameTitle item1 item2 = case (_itemTitle item1, _itemTitle item2) of
+  ("" :: Text, "" :: Text) -> Nothing
+  (a, b)                   -> Just (a == b)
+
+areSameItem :: FeedItem -> FeedItem -> Bool
+areSameItem a b = fromMaybe (comparing _itemContent a b == EQ) $ haveSameIdentifier a b <|> haveSameLink a b <|> haveSameTitle a b

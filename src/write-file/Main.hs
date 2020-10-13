@@ -4,24 +4,24 @@
 --
 -- Meant to be use as a callback for imm.
 -- {{{ Imports
-import           Imm.Callback                  as Callback
+import           Imm.Callback
 import           Imm.Feed
+import           Imm.Link
 import           Imm.Pretty
 
+import           Data.Aeson
 import           Data.ByteString.Builder
 import           Data.ByteString.Lazy          (getContents, writeFile)
-import qualified Data.Text                     as Text (null, replace)
+import qualified Data.Text                     as Text (replace)
 import           Data.Time
 import           Options.Applicative
 import           System.Directory              (createDirectoryIfMissing)
 import           System.FilePath
-import           Text.Atom.Types
 import           Text.Blaze.Html.Renderer.Utf8
 import           Text.Blaze.Html5              (Html, docTypeHtml, preEscapedToHtml, (!))
 import qualified Text.Blaze.Html5              as H
 import qualified Text.Blaze.Html5.Attributes   as H (charset, href)
-import           Text.RSS.Types
-import           URI.ByteString
+import           URI.ByteString.Extended
 -- }}}
 
 data CliOptions = CliOptions
@@ -42,12 +42,12 @@ cliOptions = CliOptions
 main :: IO ()
 main = do
   CliOptions directory dryRun <- parseOptions
-  input <- getContents <&> Callback.deserializeMessage
+  input <- getContents <&> eitherDecode
 
-  case input :: Either String (Feed, FeedElement) of
-    Right (feed, element) -> do
-      let content = defaultFileContent feed element
-          filePath = defaultFilePath directory feed element
+  case input :: Either String CallbackMessage of
+    Right (CallbackMessage feedDefinition item) -> do
+      let content = defaultFileContent feedDefinition item
+          filePath = defaultFilePath directory feedDefinition item
       putStrLn filePath
       unless dryRun $ do
         createDirectoryIfMissing True $ takeDirectory filePath
@@ -58,11 +58,11 @@ main = do
 -- * Default behavior
 
 -- | Generate a path @<root>/<feed title>/<element date>-<element title>.html@, where @<root>@ is the first argument
-defaultFilePath :: FilePath -> Feed -> FeedElement -> FilePath
-defaultFilePath root feed element = makeValid $ root </> toString title </> fileName <.> "html" where
-  date = maybe "" (formatTime defaultTimeLocale "%F-") $ getDate element
-  fileName = date <> toString (sanitize $ getTitle element)
-  title = sanitize $ getFeedTitle feed
+defaultFilePath :: FilePath -> FeedDefinition -> FeedItem -> FilePath
+defaultFilePath root feedDefinition element = makeValid $ root </> toString title </> fileName <.> "html" where
+  date = maybe "" (formatTime defaultTimeLocale "%F-") $ _itemDate element
+  fileName = date <> toString (sanitize $ _itemTitle element)
+  title = sanitize $ _feedTitle feedDefinition
   sanitize = appEndo (mconcat [Endo $ Text.replace (toText [s]) "_" | s <- pathSeparators])
     >>> Text.replace "." "_"
     >>> Text.replace "?" "_"
@@ -70,59 +70,53 @@ defaultFilePath root feed element = makeValid $ root </> toString title </> file
     >>> Text.replace "#" "_"
 
 -- | Generate an HTML page, with a title, a header and an article that contains the feed element
-defaultFileContent :: Feed -> FeedElement -> Builder
-defaultFileContent feed element = renderHtmlBuilder $ docTypeHtml $ do
+defaultFileContent :: FeedDefinition -> FeedItem -> Builder
+defaultFileContent feedDefinition element = renderHtmlBuilder $ docTypeHtml $ do
   H.head $ do
     H.meta ! H.charset "utf-8"
-    H.title $ convertText $ getFeedTitle feed <> " | " <> getTitle element
+    H.title $ convertText $ _feedTitle feedDefinition <> " | " <> _itemTitle element
   H.body $ do
-    H.h1 $ convertText $ getFeedTitle feed
+    H.h1 $ convertText $ _feedTitle feedDefinition
     H.article $ do
       H.header $ do
-        defaultArticleTitle feed element
-        defaultArticleAuthor feed element
-        defaultArticleDate feed element
-      defaultBody feed element
+        defaultArticleTitle feedDefinition element
+        defaultArticleAuthor feedDefinition element
+        defaultArticleDate feedDefinition element
+      defaultBody feedDefinition element
 
 
 -- * Low-level helpers
 
-defaultArticleTitle :: Feed -> FeedElement -> Html
-defaultArticleTitle _ element@(RssElement item) = H.h2 $ maybe id (\uri -> H.a ! H.href uri) link $ convertText $ getTitle element where
-  link = withRssURI (convertDoc . prettyURI) <$> itemLink item
-defaultArticleTitle _ element@(AtomElement _) = H.h2 $ convertText $ getTitle element
+defaultArticleTitle :: FeedDefinition -> FeedItem -> Html
+defaultArticleTitle _ item = H.h2
+  $ maybe id (\link -> H.a ! href (_linkURI link)) (getMainLink item)
+  $ convertText $ _itemTitle item
 
-defaultArticleAuthor :: Feed -> FeedElement -> Html
-defaultArticleAuthor _ (RssElement item) = unless (Text.null author) $ H.address $ "Published by " >> convertText author where
-  author = itemAuthor item
-defaultArticleAuthor _ (AtomElement entry) = H.address $ do
+defaultArticleAuthor :: FeedDefinition -> FeedItem -> Html
+defaultArticleAuthor _ item = H.address $ do
   "Published by "
-  forM_ (entryAuthors entry) $ \author -> do
-    convertDoc $ prettyPerson author
+  forM_ (_itemAuthors item) $ \author -> do
+    convertDoc $ pretty author
     ", "
 
-defaultArticleDate :: Feed -> FeedElement -> Html
-defaultArticleDate _ element = forM_ (getDate element) $ \date -> H.p $ " on " >> H.time (convertDoc $ prettyTime date)
+defaultArticleDate :: FeedDefinition -> FeedItem -> Html
+defaultArticleDate _ element = forM_ (_itemDate element) $ \date -> H.p $ " on " >> H.time (convertDoc $ prettyTime date)
 
 
 -- | Generate the HTML content for a given feed element
-defaultBody :: Feed -> FeedElement -> Html
-defaultBody _ element@(RssElement _) = H.p $ preEscapedToHtml $ getContent element
-defaultBody _ element@(AtomElement entry) = do
+defaultBody :: FeedDefinition -> FeedItem -> Html
+defaultBody _ item = do
   unless (null links) $ H.p $ do
     "Related links:"
-    H.ul $ forM_ links $ \uri -> H.li (H.a ! withAtomURI href uri $ convertAtomURI uri)
-  H.p $ preEscapedToHtml $ getContent element
-  where links   = map linkHref $ entryLinks entry
+    H.ul $ forM_ links $ \uri -> H.li (H.a ! href uri $ convertURI uri)
+  H.p $ preEscapedToHtml $ _itemContent item
+  where links   = _linkURI <$> _itemLinks item
 
-href :: URIRef a -> H.Attribute
+href :: AnyURI -> H.Attribute
 href = H.href . convertURI
 
-convertAtomURI :: (IsString t) => AtomURI -> t
-convertAtomURI = withAtomURI convertURI
-
-convertURI :: (IsString t) => URIRef a -> t
-convertURI = convertText . decodeUtf8 . serializeURIRef'
+convertURI :: (IsString t) => AnyURI -> t
+convertURI = convertText . decodeUtf8 . withAnyURI serializeURIRef'
 
 convertText :: (IsString t) => Text -> t
 convertText = fromString . toString

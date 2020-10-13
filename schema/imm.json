@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "CallbackMessage": {
+      "type": "object",
+      "properties": {
+        "feed_definition": {
+          "$ref": "#/definitions/FeedDefinition"
+        },
+        "feed_item": {
+          "$ref": "#/definitions/ItemDefinition"
+        }
+      }
+    },
+    "FeedDefinition": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        }
+      }
+    },
+    "ItemDefinition": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "datetime"
+        },
+        "title": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Link"
+          }
+        },
+        "authors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Author"
+          }
+        },
+        "identifier": {
+          "type": "string"
+        }
+      }
+    },
+    "Link": {
+      "type": "object",
+      "properies": {
+        "relation": {
+          "$ref": "#/definitions/Relation"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/MediaType"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "Relation": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string"
+        }
+      }
+    },
+    "MediaType": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "subtype": {
+          "type": "string"
+        },
+        "suffix": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Author": {
+      "type": "object",
+      "properies": {
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    }
+  }
+}

@@ -3,23 +3,23 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | 'Callback' for @imm@ that sends a mail via a SMTP server the input RSS/Atom item.
 -- {{{ Imports
-import qualified Imm.Callback         as Callback
+import           Imm.Callback            (CallbackMessage (..))
 import           Imm.Feed
+import           Imm.Link
 import           Imm.Pretty
 
-import           Data.ByteString.Lazy (getContents)
-import           Data.Text            as Text (intercalate)
+import           Data.Aeson
+import           Data.ByteString.Lazy    (getContents)
+import           Data.Text               as Text (intercalate)
 import           Data.Time
-import           Dhall                hiding (map, maybe)
-import           Network.Mail.Mime    hiding (sendmail)
-import           Options.Applicative  hiding (auto)
-import           Refined
-import           System.Directory     (XdgDirectory (..), getXdgDirectory)
-import           System.Exit          (ExitCode (..))
+import           Dhall                   hiding (map, maybe)
+import           Network.Mail.Mime       hiding (sendmail)
+import           Options.Applicative     hiding (auto)
+import           System.Directory        (XdgDirectory (..), getXdgDirectory)
+import           System.Exit             (ExitCode (..))
 import           System.FilePath
 import           System.Process.Typed
-import           Text.Atom.Types
-import           Text.RSS.Types
+import           URI.ByteString.Extended
 -- }}}
 
 -- | How to call external command
@@ -32,10 +32,10 @@ instance FromDhall Command
 
 -- | How to format outgoing mails from feed elements
 data FormatMail = FormatMail
-  { formatFrom    :: Feed -> FeedElement -> Address    -- ^ How to write the From: header of feed mails
-  , formatSubject :: Feed -> FeedElement -> Text       -- ^ How to write the Subject: header of feed mails
-  , formatBody    :: Feed -> FeedElement -> Text       -- ^ How to write the body of feed mails (sic!)
-  , formatTo      :: Feed -> FeedElement -> [Address]  -- ^ How to write the To: header of feed mails
+  { formatFrom    :: FeedDefinition -> FeedItem -> Address    -- ^ How to write the From: header of feed mails
+  , formatSubject :: FeedDefinition -> FeedItem -> Text       -- ^ How to write the Subject: header of feed mails
+  , formatBody    :: FeedDefinition -> FeedItem -> Text       -- ^ How to write the body of feed mails (sic!)
+  , formatTo      :: FeedDefinition -> FeedItem -> [Address]  -- ^ How to write the To: header of feed mails
   }
 
 data CliOptions = CliOptions
@@ -70,9 +70,9 @@ main = do
   CliOptions configFile recipients dryRun <- parseOptions
   Command executable arguments <- input auto $ fromString configFile
 
-  message <- getContents <&> Callback.deserializeMessage
+  message <- getContents <&> eitherDecode
   case message of
-    Right (feed, element) -> do
+    Right (CallbackMessage feed element) -> do
       timezone <- io getCurrentTimeZone
       currentTime <- io getCurrentTime
       let formatMail = FormatMail defaultFormatFrom defaultFormatSubject defaultFormatBody (const $ const recipients)
@@ -97,35 +97,31 @@ main = do
 -- | Fill 'addressName' with the feed title and, if available, the authors' names.
 --
 -- This function leaves 'addressEmail' empty. You are expected to fill it adequately, because many SMTP servers enforce constraints on the From: email.
-defaultFormatFrom :: Feed -> FeedElement -> Address
-defaultFormatFrom (Rss doc) (RssElement item) = Address (Just $ channelTitle doc <> " (" <> itemAuthor item <> ")") ""
-defaultFormatFrom (Atom feed) (AtomElement entry) = Address (Just $ title <> " (" <> authors <> ")") ""
-  where title = show . prettyAtomText $ feedTitle feed
-        authors = Text.intercalate ", " $ map (unrefine . personName) $ entryAuthors entry <> feedAuthors feed
-defaultFormatFrom _ _ = Address (Just "Unknown") ""
+defaultFormatFrom :: FeedDefinition -> FeedItem -> Address
+defaultFormatFrom feed item = Address (Just $ title <> " (" <> authors <> ")") ""
+  where title = _feedTitle feed
+        authors = Text.intercalate ", " $ map _authorName $ _itemAuthors item
 
 -- | Fill mail subject with the element title
-defaultFormatSubject :: Feed -> FeedElement -> Text
-defaultFormatSubject _ = getTitle
+defaultFormatSubject :: FeedDefinition -> FeedItem -> Text
+defaultFormatSubject _ = _itemTitle
 
 -- | Fill mail body with:
 --
 -- - a list of links associated to the element
 -- - the element's content or description/summary
-defaultFormatBody :: Feed -> FeedElement -> Text
-defaultFormatBody _ (RssElement item) = "<p>" <> maybe "<no link>" (withRssURI (show . prettyURI)) (itemLink item) <> "</p><p>" <> itemDescription item <> "</p>"
-defaultFormatBody _ (AtomElement entry) = "<p>" <> Text.intercalate "<br/>" links <> "</p><p>" <> fromMaybe "<empty>" (content <|> summary) <> "</p>"
-  where links   = map (withAtomURI (show . prettyURI) . linkHref) $ entryLinks entry
-        content = show . prettyAtomContent <$> entryContent entry
-        summary = show . prettyAtomText <$> entrySummary entry
+defaultFormatBody :: FeedDefinition -> FeedItem -> Text
+defaultFormatBody _ item = "<p>" <> Text.intercalate "<br/>" links <> "</p><p>" <> content <> "</p>"
+  where links   = map (withAnyURI (show . prettyURI) . _linkURI) $ _itemLinks item
+        content = _itemContent item
 
 
 -- * Low-level helpers
 
 -- | Build mail from a given feed
-buildMail :: FormatMail -> UTCTime -> TimeZone -> Feed -> FeedElement -> Mail
+buildMail :: FormatMail -> UTCTime -> TimeZone -> FeedDefinition -> FeedItem -> Mail
 buildMail format currentTime timeZone feed element =
-  let date = formatTime defaultTimeLocale "%a, %e %b %Y %T %z" $ utcToZonedTime timeZone $ fromMaybe currentTime $ getDate element
+  let date = formatTime defaultTimeLocale "%a, %e %b %Y %T %z" $ utcToZonedTime timeZone $ fromMaybe currentTime $ _itemDate element
   in Mail
     { mailFrom = formatFrom format feed element
     , mailTo   = formatTo format feed element

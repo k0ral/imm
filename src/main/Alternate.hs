@@ -2,23 +2,19 @@
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeApplications  #-}
 {-# LANGUAGE TypeFamilies      #-}
-module Alternate (AlternateException(..), resolveFeedURI) where
+module Alternate (AlternateException(..), extractAlternateLinks) where
 
 -- {{{ Imports
-import           Control.Exception.Safe
 import           Data.Aeson
-import qualified Data.ByteString.Char8  as Char8
-import qualified Data.Text              as Text
-import           Imm.Feed
-import qualified Imm.HTTP               as HTTP
-import           Imm.Logger             as Logger
+import qualified Data.ByteString.Char8   as Char8
+import           Imm.Link
+import           Imm.Logger              as Logger
 import           Imm.Pretty
 import           Pipes
-import           Pipes.ByteString       as Pipes (toHandle)
-import           Safe
-import           System.IO              (hClose)
+import           Pipes.ByteString        as Pipes (toHandle)
+import           System.IO               (hClose)
 import           System.Process.Typed
-import           URI.ByteString
+import           URI.ByteString.Extended
 -- }}}
 
 
@@ -47,15 +43,6 @@ instance FromJSON AlternateLink where
   parseJSON _          = mzero
 
 
-data FeedType = RssXml | AtomXml
-  deriving(Eq, Ord, Read, Show)
-
-asFeedType :: MonadFail m => Text -> m FeedType
-asFeedType "application/rss+xml"  = pure RssXml
-asFeedType "application/atom+xml" = pure AtomXml
-asFeedType t                      = fail $ "Invalid feed type: " <> show t
-
-
 asFeedURI :: MonadFail m => URI -> Text -> m URI
 asFeedURI baseURI href = let bytes = encodeUtf8 @Text href in
   case parseURI laxURIParserOptions bytes of
@@ -78,18 +65,12 @@ mergePaths basePath path = case Char8.head path of
   _   -> basePath <> "/" <> path
 
 
-data FeedLink = FeedLink
-  { _feedTitle :: Text
-  , _feedType  :: FeedType
-  , _feedURI   :: URI
-  } deriving(Eq, Ord, Show)
-
-asFeedLink :: MonadFail m => URI -> AlternateLink -> m FeedLink
-asFeedLink baseURI (AlternateLink a b c) = FeedLink a <$> asFeedType b <*> asFeedURI baseURI c
+asLink :: MonadFail m => URI -> AlternateLink -> m Link
+asLink baseURI (AlternateLink title type' uri) = Link (Just Alternate) title (parseMediaType type') . AnyURI <$> asFeedURI baseURI uri
 
 
-extractAlternateLinks :: MonadIO m => Logger.Handle IO -> Producer' ByteString IO () -> m [AlternateLink]
-extractAlternateLinks logger html = io $ withProcessWait pup $ \pupProcess -> do
+extractAlternateLinks :: MonadIO m => MonadFail m => Logger.Handle IO -> URI -> Producer ByteString IO () -> m [Link]
+extractAlternateLinks logger baseUri html = io $ withProcessWait pup $ \pupProcess -> do
   log logger Debug $ pretty $ show @String pupProcess
 
   runEffect $ html >-> toHandle (getStdin pupProcess)
@@ -98,21 +79,8 @@ extractAlternateLinks logger html = io $ withProcessWait pup $ \pupProcess -> do
   links <- getStdout pupProcess & atomically <&> decode <&> fromMaybe mempty
   log logger Info $ "Found alternate links:" <+> pretty links
 
-  return links
+  mapM (asLink baseUri) links
   where pup = proc "pup" ["html head link[rel=\"alternate\"] json{}"]
           & setStdin createPipe
           & setStdout byteStringOutput
           & setStderr nullStream
-
-
-resolveFeedURI :: m ~ IO => Logger.Handle m -> HTTP.Handle m -> FeedLocation -> m URI
-resolveFeedURI _ _ (FeedDirectURI uri) = pure uri
-resolveFeedURI logger httpClient (FeedAlternateLink uri title) = HTTP.withGet logger httpClient uri $ \html -> extractAlternateLinks logger html
-  <&> concatMap (asFeedLink uri)
-  <&> filterByTitle
-  <&> maximumByMay compareFeeds
-  >>= maybe (throwM $ FeedNotFound uri) (return . _feedURI)
-  where filterByTitle = if Text.null title then id else filter (\f -> _feedTitle f == title)
-        compareFeeds (FeedLink _ AtomXml _) (FeedLink _ RssXml _) = GT
-        compareFeeds (FeedLink _ RssXml _) (FeedLink _ AtomXml _) = LT
-        compareFeeds _ _                                          = EQ

@@ -1,27 +1,25 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications  #-}
--- | Implementation of "Imm.HTTP" based on "Network.HTTP.Client".
+{-# LANGUAGE TypeFamilies      #-}
+-- | Implementation of "Imm.HTTP" based on "Pipes.HTTP".
 module HTTP (mkHandle) where
 
 -- {{{ Imports
 import           Imm.HTTP
-import           Imm.Logger           hiding (Handle)
-import qualified Imm.Logger           as Logger
 import           Imm.Pretty
 
-import           Pipes.ByteString
-import           System.Process.Typed
+import           Network.HTTP.Types.Header
+import           Pipes.HTTP
 -- }}}
 
-mkHandle :: Logger.Handle IO -> Handle IO
-mkHandle logger = Handle $ \uri f ->
-  withProcessWait (httpie uri) $ \httpieProcess -> do
-    log logger Debug $ pretty $ show @String httpieProcess
-    f (fromHandle $ getStdout httpieProcess)
+headers :: [Header]
+headers = [(hUserAgent, "imm/1.0")]
 
-  where httpie uri = proc "http" ["--timeout", "10", "--follow", "--print", "b", "GET", show $ prettyURI uri]
-          & setStdin nullStream
-          & setStdout createPipe
-          & setStderr nullStream
+mkHandle :: m ~ IO => m (Handle m)
+mkHandle = do
+  manager <- newManager tlsManagerSettings
+
+  return $ Handle $ \uri f -> do
+    request <- parseUrlThrow $ show $ prettyURI uri
+    withHTTP request { requestHeaders = headers } manager f

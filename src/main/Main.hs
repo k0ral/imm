@@ -1,16 +1,18 @@
+{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 -- {{{ Imports
-import           Alternate
 import qualified Core
-import           Database
+import           Database.Async                as Database
+import           Database.Handle               as Database
+import           Database.ReadOnly             as Database
+import           Database.SQLite               as SQLite
 import           HTTP
 import           Input
 import           Logger
@@ -22,16 +24,11 @@ import           Control.Concurrent.STM.TMChan
 import           Control.Exception.Safe
 import           Dhall                         (auto, input)
 import           Imm
-import qualified Imm.Callback                  as Callback
-import           Imm.Database.Feed             as Database
-import qualified Imm.HTTP                      as HTTP
 import           Imm.Pretty
-import           Pipes.ByteString              hiding (stdout)
-import           Streamly                      as Stream
+import           Pipes.ByteString              hiding (filter, stdout)
+import           Safe
+import           Streamly                      as Stream (async, asyncly, (|&))
 import qualified Streamly.Prelude              as Stream
-import           System.Exit
-import           System.Process.Typed
-import           URI.ByteString
 -- }}}
 
 
@@ -41,17 +38,15 @@ main = do
   Output.withHandle $ \stdout -> do
     withLogger programInput $ \logger -> do
       handleAny (log logger Error . pretty . displayException) $ do
-        database <- setupDatabase logger programInput
+        withDatabase logger stdout programInput $ \database -> do
+          case inputCommand programInput of
+            Subscribe u c     -> Core.subscribe logger stdout database u c
+            Unsubscribe query -> Core.unsubscribe logger database query
+            Describe query    -> Core.describeFeeds stdout database query
+            Reset query    -> Core.markAsUnprocessed logger database query
+            Run f c           -> main2 logger stdout database f =<< resolveCallbacks c (inputCallbacksFile programInput)
 
-        case inputCommand programInput of
-          Subscribe u c     -> Core.subscribe logger stdout database u c
-          Unsubscribe query -> Core.unsubscribe logger database query
-          List              -> Core.listFeeds logger stdout database
-          Describe query    -> Core.describeFeed stdout database query
-          Reset feedKeys    -> Core.markAsUnprocessed logger database feedKeys
-          Run f c           -> main2 logger stdout database f =<< resolveCallbacks c (inputCallbacksFile programInput)
-
-        Database.commit logger database
+          Database.commit logger database
 
 
 withLogger :: ProgramInput -> (Logger.Handle IO -> IO ()) -> IO ()
@@ -60,12 +55,12 @@ withLogger programInput f = withLogHandler $ \logger -> do
   log logger Info $ "Input:" <+> pretty programInput
   f logger
 
-setupDatabase :: Logger.Handle IO -> ProgramInput -> IO (Database.Handle IO)
-setupDatabase logger programInput = do
-  database <- Database.mkHandle <$> defaultDatabase
+withDatabase :: m ~ IO => Logger.Handle m -> Output.Handle m -> ProgramInput -> (Database.Handle m -> m ()) -> m ()
+withDatabase logger stdout programInput f = do
+  database <- SQLite.mkHandle =<< SQLite.defaultDatabase
   let database' = if inputReadOnlyDatabase programInput then readOnly logger database else database
   log logger Info . ("Using database:" <++>) . indent 2 =<< _describeDatabase database'
-  return database'
+  Database.withAsyncHandle logger stdout database' f
 
 resolveCallbacks :: MonadIO m => CallbackMode -> FilePath -> m [Callback]
 resolveCallbacks EnableCallbacks callbacksFile = io $ input auto $ fromString callbacksFile
@@ -75,135 +70,131 @@ resolveCallbacks _ _                           = return mempty
 main2 :: Logger.Handle IO -> Output.Handle IO -> Database.Handle IO
       -> FeedQuery -> [Callback] -> IO ()
 main2 logger stdout database feedQuery callbacks = do
-  resolveErrorsChan <- newTMChanIO
-  fetchErrorsChan <- newTMChanIO
-  runErrorsChan <- newTMChanIO
-  callbackErrorsChan <- newTMChanIO
-
   newItemsCount <- newTVarIO (0 :: Int)
   errorsCount <- newTVarIO (0 :: Int)
+  errorsChan <- newTMChanIO
 
-  let httpClient = HTTP.mkHandle logger
+  httpClient <- HTTP.mkHandle
 
-  -- Feed locations => feed direct URIs
-  let resolver = catchErrors logger resolveErrorsChan errorsCount (return Nothing) $ \feedLocation -> do
-        uri <- io $ resolveFeedURI logger httpClient feedLocation
-        return $ Just (feedLocation, uri)
-  -- Feed direct URIs events => new item events
-  let fetcherE = catchErrors logger fetchErrorsChan errorsCount (return []) $ \(feedLocation, uri) -> do
+  -- Feed record => (feed record, items)
+  let fetcher = catchErrors logger errorsChan errorsCount $ \feedRecord -> do
         log logger Debug "Fetch worker starts"
-        feed <- HTTP.withGet logger httpClient uri $ toLazyM >=> parseXml xmlParser uri
-        let entryKey = ByLocation feedLocation
 
-        unreadElements <- filterM (fmap not . isRead database entryKey) $ getElements feed
-        unprocessedElements <- listUnprocessedElements database entryKey
-        return $ for (unprocessedElements <> unreadElements) (entryKey, removeElements feed,)
-      fetcher i = do
-        elements <- lift $ catchAny (fetcherE i) $ \e -> do
-          log logger Error $ pretty (displayException e)
-          atomically $ do
-            writeTMChan fetchErrorsChan (i, e)
-            modifyTVar' errorsCount (+ 1)
-          return []
-        Stream.fromList elements
+        let location@(FeedLocation uri _) = _feedLocation feedRecord
+        (feedDefinition, items) <- Core.downloadFeed logger httpClient (toLazyM >=> parseXml xmlParser uri) location
+
+        newFeedStatus <- touchFeed $ _feedStatus feedRecord
+
+        let newFeedRecord = feedRecord { _feedDefinition = feedDefinition, _feedStatus = newFeedStatus }
+        _updateFeedDefinition database newFeedRecord
+        _updateFeedStatus database newFeedRecord
+        return $ Just (newFeedRecord, items)
+
+  -- (Feed record, items) => (feed record, items, item records)
+  let itemRetriever = catchErrors logger errorsChan errorsCount $ \(feedRecord, items) -> do
+        itemRecords <- _fetchItems database $ _feedKey feedRecord
+        return $ Just (feedRecord, items, itemRecords)
+
+  -- (Feed record, items, item records) => multiple (feed record, item, item records)
+  let itemSplitter = \(feedRecord, items, itemRecords) ->
+        Stream.fromList [(feedRecord, item, itemRecords) | item <- items]
+
+  let itemMatcher = \(feedRecord, item, itemRecords) -> do
+        let itemRecord = itemRecords & filter (\r -> _itemDefinition r `areSameItem` item) & headMay
+        return (feedRecord, item, itemRecord)
+
+  -- Filter for unread items
+  let unreadSelector (feedRecord, item, itemRecord) = checkDate || checkStatus where
+        checkDate = case (_feedLastUpdate $ _feedStatus feedRecord, _itemDate item) of
+          (Nothing, _)       -> True
+          (Just t0, Just t1) -> t0 < t1
+          _                  -> False
+        checkStatus = itemRecord <&> _itemStatus <&> (not . _isProcessed) & fromMaybe True
+        -- unprocessedElements <- listUnprocessedElements database entryKey
+
+  let logNewItem (feedRecord, item, _) = putDocLn stdout $ "New item:"
+        <+> maybe "<unknown>" prettyTime (_itemDate item)
+        <+> magenta (prettyName $ _feedDefinition feedRecord)
+        <+> "/" <+> yellow (prettyName item)
+
   -- New items events => execute callback => processed/error events
-  let runner = catchErrors logger runErrorsChan errorsCount (return Nothing) $ \(entryKey, feed, element) -> do
-        putDocLn stdout $ "New item:" <+> magenta (pretty entryKey) <+> "/" <+> yellow (pretty $ getTitle element)
-        atomically $ modifyTVar' newItemsCount (+ 1)
-
-        results <- forM callbacks $ \callback@(Callback executable arguments) -> io $ do
-          let processInput = byteStringInput $ Callback.serializeMessage feed element
-              processConfig = proc executable (toString <$> arguments) & setStdin processInput
-
-          log logger Info $ "Running" <+> cyan (pretty executable) <+> "on" <+> magenta (pretty entryKey) <+> "/" <+> yellow (pretty $ getTitle element)
-
-          (exitCode, output, errors) <- readProcess processConfig
-          case exitCode of
-            ExitSuccess   -> return $ Right callback
-            ExitFailure i -> return $ Left (callback, i, output, errors)
+  let runner = catchErrors logger errorsChan errorsCount $ \(feedRecord, item, itemRecord) -> do
+        results <- forM callbacks $ \callback -> io $ do
+          runCallback logger callback $ CallbackMessage (_feedDefinition feedRecord) item
 
         case lefts results of
-          [] -> return $ Just (entryKey, element)
+          [] -> return $ Just (feedRecord, item, itemRecord)
           e  -> do
             io $ atomically $ do
-              writeTMChan callbackErrorsChan ((entryKey, element), e)
+              writeTMChan errorsChan (toException $ CallbackException feedRecord item e)
               modifyTVar' errorsCount (+ 1)
             return Nothing
-  let storer (feedID, element) = do
-        log logger Info $ "Updating database for" <+> pretty feedID <+> "/" <+> pretty (getTitle element)
-        Database.markAsProcessed logger database feedID element
+
+  let storer (_, _, Just itemRecord) =
+        Database.markItemAsProcessed logger database itemRecord
+      storer (feedRecord, item, _) = do
+        let itemRecord = mkFeedItemRecord (_feedKey feedRecord) item (FeedItemStatus True)
+        void $ Database.insertItem logger database itemRecord
 
 
-  entries <- Database.resolveEntryKey database feedQuery
+  entries <- case feedQuery of
+    QueryAll       -> Database._fetchAllFeeds database
+    QueryByUID uid -> pure <$> Database._fetchFeed database uid
 
   Stream.fromList entries
-    |& Stream.mapM (Database.resolveFeedLocation database)
-    |& Stream.mapMaybeM resolver
-    |& Stream.concatMapWith async fetcher
+    |& Stream.mapMaybeM fetcher
+    |& Stream.mapMaybeM itemRetriever
+    |& Stream.concatMapWith async itemSplitter
+    |& Stream.mapM itemMatcher
+    |& Stream.filter unreadSelector
+    |& Stream.trace logNewItem
+    |& Stream.trace (const $ atomically $ modifyTVar' newItemsCount (+ 1))
     |& Stream.mapMaybeM runner
     |& Stream.mapM storer
     & Stream.asyncly
     & Stream.drain
 
-  atomically $ do
-    closeTMChan resolveErrorsChan
-    closeTMChan fetchErrorsChan
-    closeTMChan callbackErrorsChan
-    closeTMChan runErrorsChan
+  atomically $ closeTMChan errorsChan
 
   -- Error events => log
-  handleErrors resolveErrorsChan (printResolveError stdout)
-  handleErrors fetchErrorsChan (printFetchError stdout)
-  handleErrors callbackErrorsChan (printCallbackError stdout)
-  handleErrors runErrorsChan (printRunError stdout)
+  handleErrors stdout errorsChan
 
   readTVarIO newItemsCount <&> pretty <&> bold <&> (<+> "new items") >>= putDocLn stdout
   readTVarIO errorsCount <&> pretty <&> bold <&> (<+> "errors") >>= putDocLn stdout
 
 
-catchErrors :: MonadIO m => MonadCatch m => Logger.Handle m -> TMChan (i, SomeException) -> TVar Int -> m a -> (i -> m a) -> i -> m a
-catchErrors logger errorsChan errorsCount fe f input_ = catchAny (f input_) $ \e -> do
+data CallbackException = CallbackException (FeedRecord Inserted) FeedItem [(Callback, Int, LByteString, LByteString)]
+  deriving(Eq, Generic, Ord, Show, Typeable)
+
+instance Exception CallbackException where
+  displayException = show . pretty
+
+instance Pretty CallbackException where
+  pretty (CallbackException feedRecord item e) =
+    "Callback error for" <+> prettyName (_feedDefinition feedRecord) <+> "/" <+> prettyName item
+    <++> indent 2 prettyErrors
+    where prettyErrors = vsep $ do
+            (callback, i, stdout', stderr') <- e
+            return $ "When running:" <+> pretty callback
+              <++> "Exit code:" <+> pretty i
+              <++> "Stdout:" <++> indent 2 (pretty $ decodeUtf8 @Text stdout')
+              <++> "Stderr:" <++> indent 2 (pretty $ decodeUtf8 @Text stderr')
+
+
+catchErrors :: MonadIO m => MonadCatch m
+  => Logger.Handle m -> TMChan SomeException -> TVar Int -> (i -> m (Maybe a)) -> i -> m (Maybe a)
+catchErrors logger errorsChan errorsCount f input_ = catchAny (f input_) $ \e -> do
   log logger Error $ pretty (displayException e)
   io $ atomically $ do
-    writeTMChan errorsChan (input_, e)
+    writeTMChan errorsChan e
     modifyTVar' errorsCount (+ 1)
-  fe
+  return Nothing
 
 
-handleErrors :: MonadIO m => TMChan (input, error) -> ((input, error) -> m ()) -> m ()
-handleErrors errorsChan handler = fix $ \recurse -> do
+handleErrors :: MonadIO m => Output.Handle m -> TMChan SomeException -> m ()
+handleErrors stdout errorsChan = fix $ \recurse -> do
   items <- atomically $ readTMChan errorsChan
-  forM_ items $ \(i, e) -> handler (i, e) >> recurse
-
-printResolveError :: Exception e => MonadIO m => Output.Handle m -> (FeedLocation, e) -> m ()
-printResolveError stdout (feedLocation, e) = putDocLn stdout $ red $
-  bold ("Resolve error for" <+> pretty feedLocation)
-  <++> indent 2 (pretty $ displayException e)
-
-printFetchError :: Exception e => MonadIO m => Output.Handle m -> ((FeedLocation, URIRef a), e) -> m ()
-printFetchError stdout ((_, uri), e) = putDocLn stdout $ red $
-  bold ("Fetch error for" <+> prettyURI uri)
-  <++> indent 2 (pretty $ displayException e)
-
-printCallbackError :: i ~ (EntryKey, FeedElement)
-                   => e ~ (Callback, Int, LByteString, LByteString)
-                   => MonadIO m
-                   => Output.Handle m -> (i, [e]) -> m ()
-printCallbackError stdout ((entryKey, element), e) = putDocLn stdout $ red $
-  bold ("Callback error for" <+> pretty entryKey <+> "/" <+> pretty (getTitle element))
-  <++> indent 2 prettyErrors
-  where prettyErrors = vsep $ do
-          (callback, i, stdout', stderr') <- e
-          return $ "When running:" <+> pretty callback
-            <++> "Exit code:" <+> pretty i
-            <++> "Stdout:" <++> indent 2 (pretty $ decodeUtf8 @Text stdout')
-            <++> "Stderr:" <++> indent 2 (pretty $ decodeUtf8 @Text stderr')
-
-printRunError :: Exception e => MonadIO m
-              => Output.Handle m -> ((EntryKey, Feed, FeedElement), e) -> m ()
-printRunError stdout ((entryKey, _feed, element), e) = putDocLn stdout $ red $
-  bold ("Error for" <+> pretty entryKey <+> "/" <+> pretty (getTitle element))
-  <++> indent 2 (pretty $ displayException e)
+  forM_ items $ \e -> putDocLn stdout (red $ pretty $ displayException e) >> recurse
 
 
 xmlParser :: XML.Handle IO

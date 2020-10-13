@@ -12,5 +12,5 @@ import           URI.ByteString
 -- }}}
 
 newtype Handle m = Handle
-  { parseXml :: URI -> LByteString -> m Feed
+  { parseXml :: URI -> LByteString -> m (FeedDefinition, [FeedItem])
   }

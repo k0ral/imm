@@ -39,7 +39,6 @@ instance Pretty ProgramInput where
 
 
 data Command = Subscribe FeedLocation (Set Text)
-             | List
              | Describe FeedQuery
              | Reset FeedQuery
              | Run FeedQuery CallbackMode
@@ -51,7 +50,6 @@ deriving instance Show Command
 
 instance Pretty Command where
   pretty (Subscribe f _) = "Subscribe to feed:" <+> pretty f
-  pretty List            = "List all feeds"
   pretty (Describe f)    = "Describe feed" <+> pretty f
   pretty (Reset q)       = "Mark feeds as unprocessed:" <+> pretty q
   pretty (Run q c)       = "Download new entries from:" <+> (if c == DisableCallbacks then space <> brackets "callbacks disabled" else mempty) <+> pretty q
@@ -87,7 +85,7 @@ commandParser = hsubparser $ mconcat
   , command "run" $ info runCommand $ progDesc "Update list of feeds."
   , command "describe" $ info describeCommand $ progDesc "Show details about given feed."
   , command "show" $ info describeCommand $ progDesc "Alias for describe."
-  , command "list" $ info (pure List) $ progDesc "List all feed sources currently configured, along with their status."
+  , command "list" $ info (pure $ Describe QueryAll) $ progDesc "Alias for describe --all ."
   , command "reset" $ info resetCommand $ progDesc "Mark given feed as unprocessed."
   , command "unsubscribe" $ info unsubscribeCommand $ progDesc "Unsubscribe from a feed."
   , command "remove" $ info unsubscribeCommand $ progDesc "Alias for unsubscribe."
@@ -135,16 +133,11 @@ uriReader :: ReadM URI
 uriReader = eitherReader $ first show . parseURI laxURIParserOptions . encodeUtf8 @Text . fromString
 
 feedLocationParser :: Parser FeedLocation
-feedLocationParser = byUri <|> byAlternateLink where
-  byUri = FeedDirectURI <$> option uriReader (long "uri" <> short 'u' <> metavar "URI" <> help "URI to feed")
-  byAlternateLink = FeedAlternateLink
-    <$> option uriReader (long "alternate" <> short 'a' <> metavar "URI" <> help "URI to webpage with alternate link")
-    <*> (strOption (long "title" <> short 't' <> help "Alternate link title") <|> pure mempty)
+feedLocationParser = FeedLocation <$> argument uriReader (metavar "URI" <> help "URI to RSS/Atom document, or to HTML page.") <*> strOption (long "title" <> short 'T' <> value mempty <> help "Title used to disambiguate multiple alternate links in HTML page.")
 
 feedQueryParser :: Parser FeedQuery
-feedQueryParser = argument parser (metavar "TARGET") <|> allFeeds where
-  parser = (ByDatabaseID <$> auto) <|> (ByURI <$> uriReader)
-  allFeeds = flag' AllFeeds $ short 'a' <> long "all" <> help "Run action on all subscribed feeds."
+feedQueryParser = (QueryByUID <$> argument auto (metavar "TARGET")) <|> allFeeds where
+  allFeeds = flag' QueryAll $ short 'a' <> long "all" <> help "Run action on all subscribed feeds."
 
 uriArgument :: String -> Parser URI
 uriArgument helpText = argument uriReader $ metavar "URI" <> help helpText
