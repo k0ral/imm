@@ -8,6 +8,7 @@ let
     myHaskellPackages.callCabal2nix "imm" source { };
   packageWithRuntimeDependencies = with nixpkgs;
     addRuntimeDependencies packageWithoutRuntimeDependencies [
+      monolith
       pup
       sqliteInteractive
     ];

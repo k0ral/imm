@@ -5,8 +5,13 @@ let Callback : Type =
   , _arguments : List Text
   }
 
--- Below are 2 basic callbacks bundled with imm.
---
+-- Below are 3 basic callbacks bundled with imm.
+-- Check out `imm-monolith --help`
+let downloadPage =
+  { _executable = "imm-monolith"
+  , _arguments = [ "-d", "/path/to/folder" ]
+  }
+
 -- Check out `imm-writefile --help`
 let writeFile =
   { _executable = "imm-writefile"
@@ -19,5 +24,5 @@ let sendMail =
   , _arguments = ["--login", "-u", "user@domain.com", "-P", "password", "-s", "smtp.domain.com", "-p", "587", "--to", "foo.bar@domain.com"]
   }
 
-let config : List Callback = [ writeFile ]
+let config : List Callback = [ downloadPage ]
 in config
