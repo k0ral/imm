@@ -1,0 +1,66 @@
+{
+    "atom-conduit": {
+        "branch": "master",
+        "description": "Streaming parser/renderer for the Atom 1.0 standard (RFC 4287).",
+        "homepage": "http://hackage.haskell.org/package/atom-conduit",
+        "owner": "k0ral",
+        "repo": "atom-conduit",
+        "rev": "da353afcbf19a8cfebefa34bc5c4b81ee80322b3",
+        "sha256": "093j73j3nnkyimj07ac0cc87cynn6bqz6nlfbr42516d4wky9nj1",
+        "type": "tarball",
+        "url": "https://github.com/k0ral/atom-conduit/archive/da353afcbf19a8cfebefa34bc5c4b81ee80322b3.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz",
+        "version": "0.9.0.0"
+    },
+    "beam": {
+        "branch": "master",
+        "description": "A type-safe, non-TH Haskell SQL library and ORM",
+        "homepage": null,
+        "owner": "haskell-beam",
+        "repo": "beam",
+        "rev": "efd464b079755a781c2bb7a2fc030d6c141bbb8a",
+        "sha256": "1b2kqw5yc8wdixfwbf0pijj6yrmcrmsqff6am3zl43zgzw2fwx7j",
+        "type": "tarball",
+        "url": "https://github.com/haskell-beam/beam/archive/efd464b079755a781c2bb7a2fc030d6c141bbb8a.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz",
+        "version": "3bde0615b6eccfe5ca44ed907b79a3cd74eee33f"
+    },
+    "niv": {
+        "branch": "master",
+        "description": "Easy dependency management for Nix projects",
+        "homepage": "https://github.com/nmattia/niv",
+        "owner": "nmattia",
+        "repo": "niv",
+        "rev": "9d35b9e4837ab88517210b1701127612c260eccf",
+        "sha256": "0q50xhnm8g2yfyakrh0nly4swyygxpi0a8cb9gp65wcakcgvzvdh",
+        "type": "tarball",
+        "url": "https://github.com/nmattia/niv/archive/9d35b9e4837ab88517210b1701127612c260eccf.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "nixpkgs": {
+        "branch": "release-20.03",
+        "description": "Nix Packages collection",
+        "homepage": "",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "61525137fd1002f6f2a5eb0ea27d480713362cd5",
+        "sha256": "1gzwz9jvfcf0is6zma7qlgszkngfb2aa4kam0nhs0qnwb4nqn7mg",
+        "type": "tarball",
+        "url": "https://github.com/NixOS/nixpkgs/archive/61525137fd1002f6f2a5eb0ea27d480713362cd5.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz",
+        "version": "61525137fd1002f6f2a5eb0ea27d480713362cd5"
+    },
+    "rss-conduit": {
+        "branch": "master",
+        "description": "Streaming parser/renderer for the RSS 2.0 standard.",
+        "homepage": "http://hackage.haskell.org/package/rss-conduit",
+        "owner": "k0ral",
+        "repo": "rss-conduit",
+        "rev": "05f4ce0f7da0ef8226c4ae59585c413a7f845f5b",
+        "sha256": "1jc41i8gayac7zzan15lbrfjdh15r8gidviawkf6cx69nf6by0yq",
+        "type": "tarball",
+        "url": "https://github.com/k0ral/rss-conduit/archive/05f4ce0f7da0ef8226c4ae59585c413a7f845f5b.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz",
+        "version": "0.6.0.0"
+    }
+}
