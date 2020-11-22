@@ -58,7 +58,7 @@ downloadPage :: FilePath -> AnyURI -> IO ExitCode
 downloadPage filePath uri = runProcess $ proc "monolith" ["-o", filePath, show $ pretty uri]
   & setStdin nullStream
   & setStdout inherit
-  & setStderr nullStream
+  & setStderr inherit
 
 -- | Generate a path @<root>/<feed title>/<element date>-<element title>.html@, where @<root>@ is the first argument
 defaultFilePath :: FilePath -> FeedDefinition -> FeedItem -> FilePath
