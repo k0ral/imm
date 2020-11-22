@@ -16,9 +16,8 @@ module Core (
 
 -- {{{ Imports
 import           Alternate
-import           Database.Record
--- (FeedItemRecord (..), FeedItemStatus (..), FeedRecord (..), Inserted)
 import qualified Database.Handle           as Database
+import           Database.Record
 import           Output                    (putDocLn)
 import qualified Output
 
