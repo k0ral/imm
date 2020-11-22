@@ -39,8 +39,10 @@ instance Pretty AlternateLink where
                  ]
 
 instance FromJSON AlternateLink where
-  parseJSON (Object v) = AlternateLink <$> v .: "title" <*> v .: "type" <*> v .: "href"
-  parseJSON _          = mzero
+  parseJSON = withObject "AlternateLink" $ \v -> AlternateLink
+    <$> (v .: "title" <|> pure mempty)
+    <*> v .: "type"
+    <*> v .: "href"
 
 
 asFeedURI :: MonadFail m => URI -> Text -> m URI
