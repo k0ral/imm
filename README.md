@@ -12,9 +12,9 @@
 
 ### Using nix
 
-This repository includes a *nix* package that can be installed by running the following command at the root folder:
+This repository is notably a [Nix flake][flakes] that can be installed by running the following command at the root folder:
 ```bash
-nix-build --attr exe
+nix build
 ```
 
 ### Without nix
@@ -142,3 +142,4 @@ There are 2 alternate ways of achieving this:
 [1]: http://hackage.haskell.org/package/imm
 [2]: https://www.haskell.org
 [3]: https://dhall-lang.org/
+[flakes]: https://nixos.wiki/wiki/Flakes
