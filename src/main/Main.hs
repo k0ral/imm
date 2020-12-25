@@ -43,7 +43,7 @@ main = do
             Subscribe u c     -> Core.subscribe logger stdout database u c
             Unsubscribe query -> Core.unsubscribe logger database query
             Describe query    -> Core.describeFeeds stdout database query
-            Reset query    -> Core.markAsUnprocessed logger database query
+            Reset query       -> Core.markAsUnprocessed logger database query
             Run f c           -> main2 logger stdout database f =<< resolveCallbacks c (inputCallbacksFile programInput)
 
           Database.commit logger database

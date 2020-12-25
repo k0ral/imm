@@ -56,4 +56,4 @@ formatMessage (RichMsg (Msg severity stack text) fields) = do
     <> " " <> text
   where showTime posixTime = "[" <> encode_YmdHMS (SubsecondPrecisionFixed 0) hyphen (timeToDatetime posixTime)  <> "]"
         showThread (Just tid) = "[" <> show tid <> "]"
-        showThread _ = mempty
+        showThread _          = mempty

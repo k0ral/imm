@@ -3,7 +3,7 @@
 module Database.Async (withAsyncHandle) where
 
 import           Database.Handle
-import           Output                    (putDocLn)
+import           Output                        (putDocLn)
 import qualified Output
 
 import           Control.Concurrent.Async

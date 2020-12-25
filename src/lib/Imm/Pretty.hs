@@ -6,10 +6,10 @@ module Imm.Pretty (module Imm.Pretty, module X) where
 
 -- {{{ Imports
 import qualified Data.Text                                 as Text
-import           Data.Text.Prettyprint.Doc                 as X hiding (list, width)
 import           Data.Text.Prettyprint.Doc                 (list)
-import           Data.Text.Prettyprint.Doc.Render.Terminal as X (AnsiStyle)
+import           Data.Text.Prettyprint.Doc                 as X hiding (list, width)
 import           Data.Text.Prettyprint.Doc.Render.Terminal
+import           Data.Text.Prettyprint.Doc.Render.Terminal as X (AnsiStyle)
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import           Data.Time
 import           Data.Tree
