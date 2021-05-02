@@ -12,6 +12,8 @@
 
 ## Installation
 
+[![Packaging status](https://repology.org/badge/vertical-allrepos/haskell:imm.svg)](https://repology.org/project/haskell:imm/versions)
+
 ### Using nix
 
 This repository is notably a [Nix flake][flakes] that can be installed by running the following command at the root folder:
