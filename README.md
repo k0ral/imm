@@ -1,6 +1,8 @@
 # imm
 
 [![Built with nix](https://builtwithnix.org/badge.svg)](https://builtwithnix.org)
+[![Build](https://github.com/k0ral/imm/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/k0ral/imm/actions)
+
 
 *imm* is a program that executes arbitrary callbacks (e.g. sending a mail, or writing a file) for each element of RSS/Atom feeds.
 
