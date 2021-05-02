@@ -2,18 +2,14 @@
   description = "imm flake";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/e9158eca70ae59e73fae23be5d13d3fa0cfc78b4";
+    nixpkgs.url = "github:NixOS/nixpkgs/8e4fe32876ca15e3d5eb3ecd3ca0b224417f5f17";
     beam.url = "github:haskell-beam/beam/efd464b079755a781c2bb7a2fc030d6c141bbb8a";
     beam.flake = false;
-    atom-conduit.url = "github:k0ral/atom-conduit/da353afcbf19a8cfebefa34bc5c4b81ee80322b3";
-    atom-conduit.flake = false;
     rss-conduit.url = "github:k0ral/rss-conduit/c1fec73d715fd1c9a95a155e87ba469887b8e543";
     rss-conduit.flake = false;
-    timerep.url = "github:HugoDaniel/timerep/aeb792b7ec701634016021b188e01091e9bd10df";
-    timerep.flake = false;
   };
 
-  outputs = { self, nixpkgs, beam, atom-conduit, rss-conduit, timerep }:
+  outputs = { self, nixpkgs, beam, rss-conduit }:
     let
       pkgs = import nixpkgs { system = "x86_64-linux"; };
       hlib = pkgs.haskell.lib;
@@ -32,7 +28,6 @@
           let from-hackage = x: hlib.doJailbreak (hlib.dontCheck (hlib.dontHaddock (hsuper.callHackageDirect x { })));
           in {
             imm = package;
-            atom-conduit = hself.callCabal2nix "atom-conduit" atom-conduit { };
             beam-core = hlib.doJailbreak (hself.callCabal2nix "beam-core" "${beam}/beam-core" { });
             beam-migrate = hlib.doJailbreak (hself.callCabal2nix "beam-core" "${beam}/beam-migrate" { });
             beam-sqlite = hlib.doJailbreak (hself.callCabal2nix "beam-core" "${beam}/beam-sqlite" { });
@@ -47,7 +42,6 @@
               ver = "0.4.0.1";
               sha256 = "r/thdqWagfWFFVntgxytOWIrERUj2WCFqZXyGTA9wxU=";
             };
-            timerep = hself.callCabal2nix "timerep" timerep { };
           };
       };
 

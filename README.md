@@ -1,5 +1,7 @@
 # imm
 
+[![Built with nix](https://builtwithnix.org/badge.svg)](https://builtwithnix.org)
+
 *imm* is a program that executes arbitrary callbacks (e.g. sending a mail, or writing a file) for each element of RSS/Atom feeds.
 
 *imm* is written in [Haskell][2], configured in [Dhall][3]. The project includes:
