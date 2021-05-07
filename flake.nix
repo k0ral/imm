@@ -58,10 +58,15 @@
         });
     in {
       defaultPackage.x86_64-linux = executable;
-      devShell = my-haskell-packages.shellFor {
+      devShell.x86_64-linux = my-haskell-packages.shellFor {
         packages = p: [ p.imm ];
 
-        buildInputs = [ my-haskell-packages.cabal-install my-haskell-packages.hlint pkgs.sqliteInteractive ];
+        buildInputs = with my-haskell-packages; [
+          cabal-install
+          ghcid
+          hlint
+          pkgs.sqliteInteractive
+        ];
 
         withHoogle = false;
       };
