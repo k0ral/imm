@@ -9,7 +9,7 @@ let Callback : Type =
 -- Check out `imm-monolith --help`
 let downloadPage =
   { _executable = "imm-monolith"
-  , _arguments = [ "-d", "/path/to/folder" ]
+  , _arguments = [ "-d", "/path/to/folder", "-F"]  -- Option `-F` is forwarded to monolith
   }
 
 -- Check out `imm-writefile --help`
