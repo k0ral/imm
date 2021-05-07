@@ -65,7 +65,7 @@ data CallbackMode = DisableCallbacks | EnableCallbacks
 parseOptions :: (MonadIO m) => m ProgramInput
 parseOptions = io $ do
   defaultCallbacksFile <- getXdgDirectory XdgConfig $ "imm" </> "callbacks.dhall"
-  customExecParser defaultPrefs $ info (allOptions defaultCallbacksFile <**> helper <**> versionPrinter) $ progDesc description
+  execParser $ info (allOptions defaultCallbacksFile <**> helper <**> versionPrinter) $ progDesc description
 
 description :: String
 description = "Execute arbitrary callbacks for each element of RSS/Atom feeds."
