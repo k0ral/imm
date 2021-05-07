@@ -30,7 +30,8 @@ data CliOptions = CliOptions
   } deriving (Eq, Ord, Read, Show)
 
 parseOptions :: MonadIO m => m CliOptions
-parseOptions = io $ customExecParser defaultPrefs (info cliOptions $ progDesc "Write a file for each new RSS/Atom item. An intermediate folder will be created for each feed.")
+parseOptions = io $ execParser $ info (cliOptions <**> helper) $ progDesc description where
+  description = "Write a file for each new RSS/Atom item. An intermediate folder will be created for each feed."
 
 cliOptions :: Parser CliOptions
 cliOptions = CliOptions
