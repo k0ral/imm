@@ -79,16 +79,15 @@ allOptions defaultCallbacksFile = ProgramInput
 
 commandParser :: Parser Command
 commandParser = hsubparser $ mconcat
-  [ command "subscribe" $ info subscribeCommand $ progDesc "Subscribe to a feed."
-  , command "add" $ info subscribeCommand $ progDesc "Alias for subscribe."
-
-  , command "run" $ info runCommand $ progDesc "Update list of feeds."
+  [ command "add" $ info subscribeCommand $ progDesc "Alias for subscribe."
   , command "describe" $ info describeCommand $ progDesc "Show details about given feed."
-  , command "show" $ info describeCommand $ progDesc "Alias for describe."
   , command "list" $ info (pure $ Describe QueryAll) $ progDesc "Alias for describe --all ."
-  , command "reset" $ info resetCommand $ progDesc "Mark given feed as unprocessed."
-  , command "unsubscribe" $ info unsubscribeCommand $ progDesc "Unsubscribe from a feed."
   , command "remove" $ info unsubscribeCommand $ progDesc "Alias for unsubscribe."
+  , command "reset" $ info resetCommand $ progDesc "Mark given feed as unprocessed."
+  , command "run" $ info runCommand $ progDesc "Update list of feeds."
+  , command "show" $ info describeCommand $ progDesc "Alias for describe."
+  , command "subscribe" $ info subscribeCommand $ progDesc "Subscribe to a feed."
+  , command "unsubscribe" $ info unsubscribeCommand $ progDesc "Unsubscribe from a feed."
   ]
 
 -- {{{ Commands
