@@ -22,22 +22,25 @@ import           URI.ByteString.Extended
 -- }}}
 
 data CliOptions = CliOptions
-  { _directory :: FilePath
-  , _dryRun    :: Bool
+  { _directory        :: FilePath
+  , _dryRun           :: Bool
+  , _forwardArguments :: [String]
   } deriving (Eq, Ord, Read, Show)
 
 parseOptions :: MonadIO m => m CliOptions
-parseOptions = io $ customExecParser defaultPrefs (info cliOptions $ progDesc "Download a self-contained HTML file, using monolith, for each new RSS/Atom item. An intermediate folder will be created for each feed.")
+parseOptions = io $ execParser $ info (cliOptions <**> helper) $ progDesc description <> forwardOptions where
+  description = "Download a self-contained HTML file, using monolith, for each new RSS/Atom item. An intermediate folder will be created for each feed."
 
 cliOptions :: Parser CliOptions
 cliOptions = CliOptions
   <$> strOption (long "directory" <> short 'd' <> metavar "PATH" <> help "Root directory where files will be created.")
   <*> switch (long "dry-run" <> help "Disable all I/Os, except for logs.")
+  <*> many (strArgument $ metavar "ARG" <> help "Argument to forward to monolith.")
 
 
 main :: IO ()
 main = do
-  CliOptions directory dryRun <- parseOptions
+  CliOptions directory dryRun forwardArguments <- parseOptions
   input <- getContents <&> eitherDecode
 
   case input :: Either String CallbackMessage of
@@ -47,18 +50,19 @@ main = do
       unless dryRun $ do
         createDirectoryIfMissing True $ takeDirectory filePath
         case getMainLink item of
-          Just link -> downloadPage filePath (_linkURI link) >>= exitWith
+          Just link -> downloadPage forwardArguments filePath (_linkURI link) >>= exitWith
           _         -> putStrLn ("No main link in item " <> show (prettyName item)) >> exitFailure
     Left e -> putStrLn ("Invalid input: " <> e) >> exitFailure
   return ()
 
 -- * Default behavior
 
-downloadPage :: FilePath -> AnyURI -> IO ExitCode
-downloadPage filePath uri = runProcess $ proc "monolith" ["-o", filePath, show $ pretty uri]
+downloadPage :: [String] -> FilePath -> AnyURI -> IO ExitCode
+downloadPage forwardArguments filePath uri = runProcess $ proc "monolith" arguments
   & setStdin nullStream
   & setStdout inherit
   & setStderr inherit
+  where arguments = ["-o", filePath, show $ pretty uri] <> forwardArguments
 
 -- | Generate a path @<root>/<feed title>/<element date>-<element title>.html@, where @<root>@ is the first argument
 defaultFilePath :: FilePath -> FeedDefinition -> FeedItem -> FilePath
