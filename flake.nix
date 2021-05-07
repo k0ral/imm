@@ -32,16 +32,6 @@
             beam-migrate = hlib.doJailbreak (hself.callCabal2nix "beam-core" "${beam}/beam-migrate" { });
             beam-sqlite = hlib.doJailbreak (hself.callCabal2nix "beam-core" "${beam}/beam-sqlite" { });
             rss-conduit = hself.callCabal2nix "rss-conduit" rss-conduit { };
-            chronos = from-hackage {
-              pkg = "chronos";
-              ver = "1.1.1";
-              sha256 = "gOHjPrDXgyZjfC/4qp7UwCj9FOopO5vGQaAKkRoCdRg=";
-            };
-            co-log = from-hackage {
-              pkg = "co-log";
-              ver = "0.4.0.1";
-              sha256 = "r/thdqWagfWFFVntgxytOWIrERUj2WCFqZXyGTA9wxU=";
-            };
           };
       };
 
