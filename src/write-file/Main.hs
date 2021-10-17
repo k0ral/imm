@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | Write a file from the input RSS/Atom item.
 --
--- Meant to be use as a callback for imm.
+-- Meant to be used as a callback for imm.
 -- {{{ Imports
 import           Imm.Callback
 import           Imm.Feed

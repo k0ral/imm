@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | Download a self-contained HTML file, using monolith, related to the input RSS/Atom item.
 --
--- Meant to be use as a callback for imm.
+-- Meant to be used as a callback for imm.
 -- {{{ Imports
 import           Imm.Callback
 import           Imm.Feed
