@@ -25,9 +25,12 @@ module Database.Record
 
 import           Control.Monad.Time
 import           Data.Aeson
+import qualified Data.Text as Text              (null)
+import           Data.Text (Text)
 import           Data.Time
 import           Imm.Feed
 import           Imm.Pretty
+import           URI.ByteString
 
 
 -- | Stateful information on a feed
@@ -110,6 +113,13 @@ instance Pretty (PrettyKey (FeedRecord Inserted)) where
 
 instance Pretty (PrettyKey (FeedRecord NotInserted)) where
   pretty (PrettyKey record) = pretty $ _feedLocation record
+
+instance Pretty (PrettyName (FeedRecord s)) where
+  pretty (PrettyName record) = if Text.null title then location else definition where
+    title = record & _feedDefinition & _feedTitle
+    definition = prettyName $ _feedDefinition record
+    location = feedUri & uriAuthority <&> authorityHost <&> hostBS & fromMaybe "unknown" & decodeUtf8 & pretty @Text
+    FeedLocation feedUri alternateTitle = _feedLocation record
 
 mkFeedRecord :: FeedLocation -> FeedDefinition -> FeedStatus -> FeedRecord NotInserted
 mkFeedRecord = FeedRecord ()

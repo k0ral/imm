@@ -11,7 +11,7 @@ import           Imm.Pretty
 
 import           Data.Aeson
 import           Data.ByteString.Lazy    (getContents)
-import qualified Data.Text               as Text (replace)
+import qualified Data.Text               as Text (null, replace, unpack)
 import           Data.Time
 import           Options.Applicative
 import           System.Directory        (createDirectoryIfMissing)
@@ -40,12 +40,12 @@ cliOptions = CliOptions
 
 main :: IO ()
 main = do
-  CliOptions directory dryRun forwardArguments <- parseOptions
+  CliOptions rootDirectory dryRun forwardArguments <- parseOptions
   input <- getContents <&> eitherDecode
 
   case input :: Either String CallbackMessage of
-    Right (CallbackMessage feedDefinition item) -> do
-      let filePath = defaultFilePath directory feedDefinition item
+    Right (CallbackMessage feedLocation feedDefinition item) -> do
+      let filePath = defaultFilePath rootDirectory feedLocation feedDefinition item
       putStrLn filePath
       unless dryRun $ do
         createDirectoryIfMissing True $ takeDirectory filePath
@@ -64,9 +64,13 @@ downloadPage forwardArguments filePath uri = runProcess $ proc "monolith" argume
   & setStderr inherit
   where arguments = ["-o", filePath, show $ pretty uri] <> forwardArguments
 
--- | Generate a path @<root>/<feed title>/<element date>-<element title>.html@, where @<root>@ is the first argument
-defaultFilePath :: FilePath -> FeedDefinition -> FeedItem -> FilePath
-defaultFilePath root feedDefinition element = makeValid $ root </> toString title </> fileName <.> "html" where
+-- | Generate a path @<root>/<feed designator>/<element date>-<element title>.html@, where @<root>@ is the first argument
+defaultFilePath :: FilePath -> FeedLocation -> FeedDefinition -> FeedItem -> FilePath
+defaultFilePath root feedLocation feedDefinition element = makeValid $ root </> feedFolder </> fileName <.> "html" where
+  FeedLocation feedUri _ = feedLocation
+  feedFolder = if Text.null title then uriToFolder feedUri else toString title
+  uriToFolder uri = uri & uriAuthority <&> authorityHost <&> hostBS
+    <&> decodeUtf8 & fromMaybe "unknown-host" & sanitize & Text.unpack
   date = maybe "" (formatTime defaultTimeLocale "%F-") $ _itemDate element
   fileName = date <> toString (sanitize $ _itemTitle element)
   title = sanitize $ _feedTitle feedDefinition

@@ -114,13 +114,13 @@ main2 logger stdout database feedQuery callbacks = do
 
   let logNewItem (feedRecord, item, _) = putDocLn stdout $ "New item:"
         <+> maybe "<unknown>" prettyTime (_itemDate item)
-        <+> magenta (prettyName $ _feedDefinition feedRecord)
+        <+> magenta (prettyName feedRecord)
         <+> "/" <+> yellow (prettyName item)
 
   -- New items events => execute callback => processed/error events
   let runner = catchErrors logger errorsChan errorsCount $ \(feedRecord, item, itemRecord) -> do
         results <- forM callbacks $ \callback -> io $ do
-          runCallback logger callback $ CallbackMessage (_feedDefinition feedRecord) item
+          runCallback logger callback $ CallbackMessage (_feedLocation feedRecord) (_feedDefinition feedRecord) item
 
         case lefts results of
           [] -> return $ Just (feedRecord, item, itemRecord)

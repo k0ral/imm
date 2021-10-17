@@ -4,11 +4,25 @@
     "CallbackMessage": {
       "type": "object",
       "properties": {
+        "feed_location": {
+          "$ref": "#/definitions/FeedLocation"
+        },
         "feed_definition": {
           "$ref": "#/definitions/FeedDefinition"
         },
         "feed_item": {
           "$ref": "#/definitions/ItemDefinition"
+        }
+      }
+    },
+    "FeedLocation": {
+      "type": "object",
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
         }
       }
     },

@@ -33,7 +33,8 @@ instance Pretty Callback where
 --
 -- The data schema is described in file @schema/imm.json@, provided with this library.
 data CallbackMessage = CallbackMessage
-  { _callbackFeedDefinition :: FeedDefinition
+  { _callbackFeedLocation   :: FeedLocation
+  , _callbackFeedDefinition :: FeedDefinition
   , _callbackFeedItem       :: FeedItem
   } deriving(Eq, Generic, Ord, Show, Typeable)
 
@@ -51,7 +52,7 @@ instance FromJSON CallbackMessage where
   parseJSON = genericParseJSON customOptions
 
 instance Pretty (PrettyShort CallbackMessage) where
-  pretty (PrettyShort (CallbackMessage feed item)) = prettyName feed <+> "/" <+> pretty (_itemTitle item)
+  pretty (PrettyShort (CallbackMessage location feed item)) = pretty location <+> "/" <+> prettyName feed <+> "/" <+> pretty (_itemTitle item)
 
 
 runCallback :: MonadIO m

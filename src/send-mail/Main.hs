@@ -72,7 +72,7 @@ main = do
 
   message <- getContents <&> eitherDecode
   case message of
-    Right (CallbackMessage feed element) -> do
+    Right (CallbackMessage _ feed element) -> do
       timezone <- io getCurrentTimeZone
       currentTime <- io getCurrentTime
       let formatMail = FormatMail defaultFormatFrom defaultFormatSubject defaultFormatBody (const $ const recipients)
