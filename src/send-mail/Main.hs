@@ -12,11 +12,10 @@ import           Data.Aeson
 import           Data.ByteString.Lazy    (getContents)
 import           Data.Text               as Text (intercalate)
 import           Data.Time
-import           Dhall                   hiding (map, maybe)
+import           Dhall                   (FromDhall(..), input, auto)
 import           Network.Mail.Mime       hiding (sendmail)
 import           Options.Applicative     hiding (auto)
 import           System.Directory        (XdgDirectory (..), getXdgDirectory)
-import           System.Exit             (ExitCode (..))
 import           System.FilePath
 import           System.Process.Typed
 import           URI.ByteString.Extended

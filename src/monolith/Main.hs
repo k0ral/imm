@@ -15,7 +15,6 @@ import qualified Data.Text               as Text (null, replace, unpack)
 import           Data.Time
 import           Options.Applicative
 import           System.Directory        (createDirectoryIfMissing)
-import           System.Exit             (ExitCode)
 import           System.FilePath
 import           System.Process.Typed
 import           URI.ByteString.Extended

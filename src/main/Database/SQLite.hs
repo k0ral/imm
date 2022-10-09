@@ -16,12 +16,12 @@ module Database.SQLite
 
 import           Database.Handle                          hiding (deleteFeed, insertFeed, insertItem, purge)
 
-import           Data.Aeson
+import           Data.Aeson                               (decode, encode)
 import           Database.Beam
 import           Database.Beam.Backend.SQL                (BeamSqlBackend, HasSqlValueSyntax (..))
 import           Database.Beam.Backend.SQL.BeamExtensions
 -- import           Database.Beam.Migrate
-import           Database.Beam.Sqlite                     (runBeamSqlite)
+import           Database.Beam.Sqlite                     (SqliteM, runBeamSqlite)
 import           Database.SQLite.Simple
 import           Imm.Feed
 import           Imm.Pretty
@@ -104,7 +104,7 @@ feedItemsTable = _feedItems feedDatabase
 
 -- * Queries
 
-fetchAllFeeds :: _ [FeedRecord Inserted]
+fetchAllFeeds :: SqliteM [FeedRecord Inserted]
 fetchAllFeeds = fmap (map asFeedRecord) $ runSelectReturningList $ select $ do
   feed <- feedsTable & all_
   location <- feedLocationsTable & all_
@@ -120,7 +120,7 @@ asFeedRecord (locationT, feed) = FeedRecord
   (_feedDefinitionT feed)
   (_feedStatusT feed)
 
-fetchFeed :: UID -> _
+fetchFeed :: UID -> SqliteM (FeedRecord Inserted)
 fetchFeed uid = select (queryFeed uid) & runSelectReturningOne
   >>= maybe (fail $ "Feed not found: " <> show uid) return
   <&> asFeedRecord
@@ -135,7 +135,7 @@ queryFeed uid = do
 
   pure (location, feed)
 
-fetchItem :: UID -> _
+fetchItem :: UID -> SqliteM (FeedItemRecord Inserted)
 fetchItem uid = feedItemsTable
   & all_
   & filter_ (\i -> primaryKey i ==. val_ (FeedItemKey $ fromIntegral uid))
@@ -144,12 +144,12 @@ fetchItem uid = feedItemsTable
   >>= maybe (fail $ "Item not found: " <> show uid) return
   <&> asFeedItemRecord
 
-fetchAllItems :: _ [FeedItemRecord Inserted]
+fetchAllItems :: SqliteM [FeedItemRecord Inserted]
 fetchAllItems = select (feedItemsTable & all_)
   & runSelectReturningList
   <&> map asFeedItemRecord
 
-fetchItems :: UID -> _
+fetchItems :: UID -> SqliteM [FeedItemRecord Inserted]
 fetchItems uid = select (queryItems uid) & runSelectReturningList <&> map asFeedItemRecord
 
 queryItems :: UID -> _
@@ -168,13 +168,13 @@ asFeedItemRecord item = FeedItemRecord
   where FeedLocationKey feedKey = _itemFeedKeyT item
 
 
-deleteFeed :: UID -> _ ()
+deleteFeed :: UID -> SqliteM ()
 deleteFeed uid = do
   -- runDelete $ delete feedItemsTable $ \item -> _itemFeedKeyT item ==. val_ (FeedLocationKey $ fromIntegral uid)
   -- runDelete $ delete feedsTable $ \feed -> _feedKeyT feed ==. val_ (FeedLocationKey $ fromIntegral uid)
   runDelete $ delete feedLocationsTable $ \location -> _locationID location ==. val_ (fromIntegral uid)
 
-insertFeed :: FeedRecord NotInserted -> _ (FeedRecord Inserted)
+insertFeed :: FeedRecord NotInserted -> SqliteM (FeedRecord Inserted)
 insertFeed record = do
   location <- insertFeedLocation $ _feedLocation record
   let value = Feed (primaryKey location) (_feedDefinition record) (_feedStatus record)
@@ -184,13 +184,13 @@ insertFeed record = do
     >>= headFail (displayException $ FeedsNotInserted [record])
   return $ asFeedRecord (location, feed)
 
-insertFeedLocation :: FeedLocation -> _
+insertFeedLocation :: FeedLocation -> SqliteM (FeedLocationT Identity)
 insertFeedLocation location = insertExpressions [FeedLocationT default_ (val_ location)]
   & insert feedLocationsTable
   & runInsertReturningList
   >>= headFail ("Unable to insert feed location " <> show location)
 
-insertItem :: FeedItemRecord NotInserted -> _
+insertItem :: FeedItemRecord NotInserted -> SqliteM (FeedItemRecord Inserted)
 insertItem record = do
   inserted <- insertExpressions [FeedItemT default_ (val_ $ FeedLocationKey $ fromIntegral $ _itemFeedKey record) (val_ $ _itemDefinition record) (val_ $ _itemStatus record)]
     & insert feedItemsTable
@@ -198,19 +198,20 @@ insertItem record = do
     >>= headFail (displayException $ ItemsNotInserted [record])
   return $ FeedItemRecord (fromIntegral $ _itemKeyT inserted) (_itemFeedKey record) (_itemDefinition record) (_itemStatus record)
 
+purge :: SqliteM ()
 purge = runDelete $ delete feedLocationsTable $ const $ val_ True
 
-updateItemStatus :: FeedItemRecord Inserted -> _
+updateItemStatus :: FeedItemRecord Inserted -> SqliteM ()
 updateItemStatus record = runUpdate $ update feedItemsTable
   (\item -> _itemStatusT item <-. val_ (_itemStatus record))
   (\item -> primaryKey item ==. val_ (FeedItemKey $ fromIntegral $ _itemKey record))
 
-updateFeedDefinition :: FeedRecord Inserted -> _
+updateFeedDefinition :: FeedRecord Inserted -> SqliteM ()
 updateFeedDefinition record = runUpdate $ update feedsTable
   (\feed -> _feedDefinitionT feed <-. val_ (_feedDefinition record))
   (\feed -> primaryKey feed ==. val_ (FeedKey $ FeedLocationKey $ fromIntegral $ _feedKey record))
 
-updateFeedStatus :: FeedRecord Inserted -> _
+updateFeedStatus :: FeedRecord Inserted -> SqliteM ()
 updateFeedStatus record = runUpdate $ update feedsTable
   (\feed -> _feedStatusT feed <-. val_ (_feedStatus record))
   (\feed -> primaryKey feed ==. val_ (FeedKey $ FeedLocationKey $ fromIntegral $ _feedKey record))

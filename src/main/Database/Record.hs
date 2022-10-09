@@ -26,7 +26,6 @@ module Database.Record
 import           Control.Monad.Time
 import           Data.Aeson
 import qualified Data.Text as Text              (null)
-import           Data.Text (Text)
 import           Data.Time
 import           Imm.Feed
 import           Imm.Pretty
@@ -119,7 +118,7 @@ instance Pretty (PrettyName (FeedRecord s)) where
     title = record & _feedDefinition & _feedTitle
     definition = prettyName $ _feedDefinition record
     location = feedUri & uriAuthority <&> authorityHost <&> hostBS & fromMaybe "unknown" & decodeUtf8 & pretty @Text
-    FeedLocation feedUri alternateTitle = _feedLocation record
+    FeedLocation feedUri _alternateTitle = _feedLocation record
 
 mkFeedRecord :: FeedLocation -> FeedDefinition -> FeedStatus -> FeedRecord NotInserted
 mkFeedRecord = FeedRecord ()
