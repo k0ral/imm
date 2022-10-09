@@ -27,7 +27,7 @@ import           Imm
 import           Imm.Pretty
 import           Pipes.ByteString              hiding (filter, stdout)
 import           Safe
-import           Streamly                      as Stream (async, asyncly, (|&))
+import           Streamly.Prelude              as Stream ((|&))
 import qualified Streamly.Prelude              as Stream
 -- }}}
 
@@ -144,14 +144,14 @@ main2 logger stdout database feedQuery callbacks = do
   Stream.fromList entries
     |& Stream.mapMaybeM fetcher
     |& Stream.mapMaybeM itemRetriever
-    |& Stream.concatMapWith async itemSplitter
+    |& Stream.concatMapWith Stream.async itemSplitter
     |& Stream.mapM itemMatcher
     |& Stream.filter unreadSelector
     |& Stream.trace logNewItem
     |& Stream.trace (const $ atomically $ modifyTVar' newItemsCount (+ 1))
     |& Stream.mapMaybeM runner
     |& Stream.mapM storer
-    & Stream.asyncly
+    & Stream.fromAsync
     & Stream.drain
 
   atomically $ closeTMChan errorsChan
