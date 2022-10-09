@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
+
 module Output where
 
-import           Control.Concurrent.Async
-import           Control.Concurrent.STM.TMChan
-import           Prettyprinter.Render.Terminal
-import           Imm.Pretty
+import Control.Concurrent.Async
+import Control.Concurrent.STM.TMChan
+import Imm.Pretty
+import Prettyprinter.Render.Terminal
 
 -- * Types
 
@@ -17,11 +18,12 @@ withHandle :: (Handle IO -> IO ()) -> IO ()
 withHandle f = do
   channel <- newTMChanIO
 
-  thread <- async $ fix $ \recurse -> do
-    maybeMessage <- atomically $ readTMChan channel
-    forM_ maybeMessage $ \message -> do
-      putLTextLn $ renderLazy $ layoutPretty defaultLayoutOptions message
-      recurse
+  thread <- async $
+    fix $ \recurse -> do
+      maybeMessage <- atomically $ readTMChan channel
+      forM_ maybeMessage $ \message -> do
+        putLTextLn $ renderLazy $ layoutPretty defaultLayoutOptions message
+        recurse
 
-  f $ Handle { putDocLn = atomically . writeTMChan channel }
+  f $ Handle {putDocLn = atomically . writeTMChan channel}
   atomically (closeTMChan channel) >> wait thread
