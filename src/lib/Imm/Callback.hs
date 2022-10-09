@@ -7,7 +7,6 @@ module Imm.Callback (Callback(..), CallbackMessage(..), runCallback) where
 -- {{{ Imports
 import           Data.Aeson
 import           Data.Aeson.Encode.Pretty
-import           Data.Text.Prettyprint.Doc
 import           Dhall                     hiding (maybe)
 import           Imm.Feed
 import           Imm.Logger                as Logger

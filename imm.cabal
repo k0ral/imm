@@ -54,7 +54,7 @@ library
     parsers,
     pipes,
     pipes-bytestring,
-    prettyprinter,
+    prettyprinter >=1.7.0,
     prettyprinter-ansi-terminal,
     refined >=0.4.1,
     rss-conduit >= 0.5.1,
@@ -94,21 +94,21 @@ executable imm
 
 executable imm-monolith
   import: common
-  build-depends: imm, aeson, bytestring, directory, filepath, optparse-applicative, prettyprinter, safe-exceptions, text, time, typed-process, uri-bytestring
+  build-depends: imm, aeson, bytestring, directory, filepath, optparse-applicative, prettyprinter >=1.7.0, safe-exceptions, text, time, typed-process, uri-bytestring
   main-is: Main.hs
   hs-source-dirs: src/monolith
   ghc-options: -Wall -fno-warn-unused-do-bind -threaded
 
 executable imm-writefile
   import: common
-  build-depends: imm, aeson, blaze-html, blaze-markup, bytestring, directory, filepath, optparse-applicative, prettyprinter, safe-exceptions, text, time, uri-bytestring
+  build-depends: imm, aeson, blaze-html, blaze-markup, bytestring, directory, filepath, optparse-applicative, prettyprinter >=1.7.0, safe-exceptions, text, time, uri-bytestring
   main-is: Main.hs
   hs-source-dirs: src/write-file
   ghc-options: -Wall -fno-warn-unused-do-bind -threaded
 
 executable imm-sendmail
   import: common
-  build-depends: imm, aeson, blaze-html, blaze-markup, bytestring, dhall >= 1.27, directory, filepath, mime-mail, optparse-applicative, prettyprinter, refined, safe-exceptions, text, time, typed-process, uri-bytestring
+  build-depends: imm, aeson, blaze-html, blaze-markup, bytestring, dhall >= 1.27, directory, filepath, mime-mail, optparse-applicative, prettyprinter >=1.7.0, refined, safe-exceptions, text, time, typed-process, uri-bytestring
   main-is: Main.hs
   hs-source-dirs: src/send-mail
   ghc-options: -Wall -fno-warn-unused-do-bind -threaded

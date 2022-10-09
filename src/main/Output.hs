@@ -3,7 +3,7 @@ module Output where
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM.TMChan
-import           Data.Text.Prettyprint.Doc.Render.Terminal
+import           Prettyprinter.Render.Terminal
 import           Imm.Pretty
 
 -- * Types
