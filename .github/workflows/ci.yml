@@ -19,6 +19,11 @@ jobs:
       CONFIG: "--enable-tests --enable-benchmarks"
     steps:
       - uses: actions/checkout@v3
+      - uses: haskell/actions/hlint-setup@v2
+      - uses: haskell/actions/hlint-run@v2
+        with:
+          path: src/
+          fail-on: warning
       - uses: haskell/actions/setup@v2
         with:
           ghc-version: ${{ matrix.ghc }}

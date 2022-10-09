@@ -100,10 +100,10 @@ main2 logger stdout database feedQuery callbacks = do
         return $ Just (feedRecord, items, itemRecords)
 
   -- (Feed record, items, item records) => multiple (feed record, item, item records)
-  let itemSplitter = \(feedRecord, items, itemRecords) ->
+  let itemSplitter (feedRecord, items, itemRecords) =
         Stream.fromList [(feedRecord, item, itemRecords) | item <- items]
 
-  let itemMatcher = \(feedRecord, item, itemRecords) -> do
+  let itemMatcher (feedRecord, item, itemRecords) = do
         let itemRecord = itemRecords & filter (\r -> _itemDefinition r `areSameItem` item) & headMay
         return (feedRecord, item, itemRecord)
 
