@@ -1,6 +1,5 @@
 # imm
 
-[![Built with nix](https://builtwithnix.org/badge.svg)](https://builtwithnix.org)
 [![Build](https://github.com/k0ral/imm/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/k0ral/imm/actions)
 
 
@@ -20,7 +19,7 @@
 
 This repository is notably a [Nix flake][flakes] that can be installed by running the following command at the root folder:
 ```bash
-nix build
+make build
 ```
 
 ### Without nix
