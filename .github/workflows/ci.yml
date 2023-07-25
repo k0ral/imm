@@ -9,12 +9,13 @@ on:
       - synchronize
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         cabal: ["latest"]
-        ghc: ["8.10", "9.0"]
+        ghc: ["8.10", "9.0", "9.2", "9.4", "9.6"]
+        os: [ubuntu-latest, macOS-latest, windows-latest]
     env:
       CONFIG: "--enable-tests --enable-benchmarks"
     steps:
