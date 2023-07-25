@@ -112,3 +112,10 @@ executable imm-sendmail
   main-is: Main.hs
   hs-source-dirs: src/send-mail
   ghc-options: -Wall -fno-warn-unused-do-bind -threaded
+
+executable imm-wallabag
+  import: common
+  build-depends: imm, aeson, bytestring, dhall >= 1.27, optparse-applicative, prettyprinter >=1.7.0, refined, req, safe-exceptions, text, time, uri-bytestring
+  main-is: Main.hs
+  hs-source-dirs: src/wallabag
+  ghc-options: -Wall -fno-warn-unused-do-bind -threaded

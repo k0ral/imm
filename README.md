@@ -72,10 +72,10 @@ in config
 
 ### Offline read-it-later
 
-*imm* is able to store a local copy of unread elements, to read them later while offline for example.
+*imm* is able to store a local copy of unread elements, to read them later while offline for example. There are 3 alternate ways of achieving this.
 
-There are 2 alternate ways of achieving this:
-- using `imm-writefile` will produce a light HTML file with no stylesheets, no scripts and with links to online resources (images, fonts, ...) that won't be available offline:
+#### `imm-writefile`
+`imm-writefile` will produce a light HTML file with no stylesheets, no scripts and with links to online resources (images, fonts, ...) that won't be available offline:
   ```dhall
   let Callback : Type =
     { _executable : Text
@@ -90,7 +90,9 @@ There are 2 alternate ways of achieving this:
   let config : List Callback = [ writeFile ]
   in config
   ```
-- using `imm-monolith` will produce a heavy, self-contained HTML file, with embedded stylesheets, scripts, images and fonts; links to external web pages will still require an internet connection:
+
+#### `imm-monolith`
+`imm-monolith` will produce a heavy, self-contained HTML file, with embedded stylesheets, scripts, images and fonts; links to external web pages will still require an internet connection:
   ```dhall
   let Callback : Type =
     { _executable : Text
@@ -105,7 +107,35 @@ There are 2 alternate ways of achieving this:
   let config : List Callback = [ downloadPage ]
   in config
   ```
+#### `imm-wallabag`
+`imm-wallabag` will save webpages into a [Wallabag][wallabag] server through its REST API:
+  ```dhall
+  let Callback : Type =
+    { _executable : Text
+    , _arguments : List Text
+    }
 
+  let wallabag =
+    { _executable = "imm-wallabag"
+    , _arguments =
+        [ "--host"
+        , "INSERT_HOST"
+        , "--port"
+        , "INSERT_PORT"
+        , "--client-id"
+        , "INSERT_CLIENT_ID"
+        , "--client-secret"
+        , "INSERT_CLIENT_SECRET"
+        , "--username"
+        , "INSERT_WALLABAG_USERNAME"
+        , "--password"
+        , "INSERT_WALLABAG_PASSWORD"
+        ]
+    }
+
+  let config : List Callback = [ wallabag ]
+  in config
+  ```
 
 ## Example usage
 
@@ -148,3 +178,4 @@ There are 2 alternate ways of achieving this:
 [2]: https://www.haskell.org
 [3]: https://dhall-lang.org/
 [flakes]: https://nixos.wiki/wiki/Flakes
+[wallabag]: https://www.wallabag.it/

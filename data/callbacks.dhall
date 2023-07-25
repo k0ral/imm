@@ -5,7 +5,7 @@ let Callback : Type =
   , _arguments : List Text
   }
 
--- Below are 3 basic callbacks bundled with imm.
+-- Below are 4 basic callbacks bundled with imm.
 -- Check out `imm-monolith --help`
 let downloadPage =
   { _executable = "imm-monolith"
@@ -23,6 +23,25 @@ let sendMail =
   { _executable = "imm-sendmail"
   , _arguments = ["--login", "-u", "user@domain.com", "-P", "password", "-s", "smtp.domain.com", "-p", "587", "--to", "foo.bar@domain.com"]
   }
+
+-- Check out `imm-wallabag --help`
+let wallabag =
+      { _executable = "imm-wallabag"
+      , _arguments =
+        [ "--host"
+        , "INSERT_HOST"
+        , "--port"
+        , "INSERT_PORT"
+        , "--client-id"
+        , "INSERT_CLIENT_ID"
+        , "--client-secret"
+        , "INSERT_CLIENT_SECRET"
+        , "--username"
+        , "INSERT_USERNAME"
+        , "--password"
+        , "INSERT_PASSWORD"
+        ]
+      }
 
 let config : List Callback = [ downloadPage ]
 in config
