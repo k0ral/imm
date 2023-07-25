@@ -1,0 +1,6 @@
+function-arrows: leading
+haddock-style: single-line
+haddock-style-module: single-line
+indentation: 2
+single-constraint-parens: never
+unicode: detect

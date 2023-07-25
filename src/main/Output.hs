@@ -1,3 +1,5 @@
+{-# LANGUAGE UnicodeSyntax #-}
+
 module Output where
 
 import Control.Concurrent.Async
@@ -9,19 +11,19 @@ import Prettyprinter.Render.Terminal
 
 -- | Handle to push messages to the program's output
 newtype Handle m = Handle
-  { putDocLn :: Doc AnsiStyle -> m ()
+  { putDocLn ∷ Doc AnsiStyle → m ()
   }
 
-withHandle :: (Handle IO -> IO ()) -> IO ()
+withHandle ∷ (Handle IO → IO ()) → IO ()
 withHandle f = do
-  channel <- newTMChanIO
+  channel ← newTMChanIO
 
-  thread <- async $
-    fix $ \recurse -> do
-      maybeMessage <- atomically $ readTMChan channel
-      forM_ maybeMessage $ \message -> do
+  thread ← async $
+    fix $ \recurse → do
+      maybeMessage ← atomically $ readTMChan channel
+      forM_ maybeMessage $ \message → do
         putLTextLn $ renderLazy $ layoutPretty defaultLayoutOptions message
         recurse
 
-  f $ Handle {putDocLn = atomically . writeTMChan channel}
+  f $ Handle{putDocLn = atomically . writeTMChan channel}
   atomically (closeTMChan channel) >> wait thread

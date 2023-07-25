@@ -1,7 +1,9 @@
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE UnicodeSyntax #-}
+
 -- | Logger module abstracts over logging data.
 --
 -- This module follows the [Handle pattern](https://jaspervdj.be/posts/2018-03-08-handle-pattern.html).
@@ -11,22 +13,23 @@
 module Imm.Logger where
 
 -- {{{ Imports
-import           Imm.Pretty
+import Imm.Pretty
+
 -- }}}
 
 -- * Types
 
 data Handle m = Handle
-  { log         :: LogLevel -> Doc AnsiStyle -> m ()
-  , getLogLevel :: m LogLevel
-  , setLogLevel :: LogLevel -> m ()
+  { log ∷ LogLevel → Doc AnsiStyle → m ()
+  , getLogLevel ∷ m LogLevel
+  , setLogLevel ∷ LogLevel → m ()
   }
 
 data LogLevel = Debug | Info | Warning | Error
-  deriving(Eq, Ord, Read, Show)
+  deriving (Eq, Ord, Read, Show)
 
 instance Pretty LogLevel where
-  pretty Debug   = "DEBUG"
-  pretty Info    = "INFO"
+  pretty Debug = "DEBUG"
+  pretty Info = "INFO"
   pretty Warning = "WARNING"
-  pretty Error   = "ERROR"
+  pretty Error = "ERROR"

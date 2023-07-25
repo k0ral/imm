@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UnicodeSyntax #-}
 
 -- | Implementation of "Imm.HTTP" based on "Pipes.HTTP".
 module HTTP (mkHandle) where
@@ -14,14 +15,14 @@ import Pipes.HTTP
 
 -- }}}
 
-headers :: [Header]
+headers ∷ [Header]
 headers = [(hUserAgent, "imm/1.0")]
 
-mkHandle :: m ~ IO => m (Handle m)
+mkHandle ∷ m ~ IO ⇒ m (Handle m)
 mkHandle = do
-  manager <- newManager tlsManagerSettings
+  manager ← newManager tlsManagerSettings
 
   return $
-    Handle $ \uri f -> do
-      request <- parseUrlThrow $ show $ prettyURI uri
-      withHTTP request {requestHeaders = headers} manager f
+    Handle $ \uri f → do
+      request ← parseUrlThrow $ show $ prettyURI uri
+      withHTTP request{requestHeaders = headers} manager f

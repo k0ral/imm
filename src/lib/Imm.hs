@@ -1,3 +1,5 @@
+{-# LANGUAGE UnicodeSyntax #-}
+
 -- | Meta-module that reexports many Imm sub-modules.
 module Imm (module X) where
 
