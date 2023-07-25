@@ -19,7 +19,7 @@
 
 This repository is notably a [Nix flake][flakes] that can be installed by running the following command at the root folder:
 ```bash
-make build
+nix develop --command cabal build
 ```
 
 ### Without nix
