@@ -216,7 +216,7 @@ insertItem record = do
   return $ FeedItemRecord (fromIntegral $ _itemKeyT inserted) (_itemFeedKey record) (_itemDefinition record) (_itemStatus record)
 
 purge ∷ SqliteM ()
-purge = runDelete $ delete feedLocationsTable $ const $ val_ True
+purge = runDelete $ delete feedLocationsTable $ \_ -> val_ True
 
 updateItemStatus ∷ FeedItemRecord Inserted → SqliteM ()
 updateItemStatus record =
