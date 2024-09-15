@@ -72,7 +72,7 @@ library
 
 executable imm
   import: common
-  build-depends: imm, aeson, async, beam-core, beam-sqlite, bytestring, chronos, conduit, containers, dhall >=1.27, directory, fast-logger, filepath, http-types, microlens, monad-time, optparse-applicative, prettyprinter-ansi-terminal, pipes, pipes-bytestring, pipes-http, safe, safe-exceptions, sqlite-simple, stm, stm-chans, streamly >=0.8, text, time, typed-process, typerep-map, uri-bytestring, xml-conduit >=1.5, xml-types
+  build-depends: imm, aeson, async, beam-core, beam-sqlite, bytestring, chronos, conduit, containers, dhall >=1.27, directory, fast-logger, filepath, http-types, microlens, monad-time, optparse-applicative, prettyprinter-ansi-terminal, pipes, pipes-bytestring, pipes-http, safe, safe-exceptions, sqlite-simple, stm, stm-chans, streamly >=0.8, text, time, typed-process, uri-bytestring, xml-conduit >=1.5, xml-types
   main-is: Main.hs
   other-modules: 
     Alternate
