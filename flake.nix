@@ -2,19 +2,20 @@
   description = "imm flake";
 
   inputs = {
-    # nixpkgs.url = "github:NixOS/nixpkgs/d89d7af1ba23bd8a5341d00bdd862e8e9a808f56";
-    flake-utils.url = "github:numtide/flake-utils";
+    nixpkgs.url = "github:NixOS/nixpkgs/574d1eac1c200690e27b8eb4e24887f8df7ac27c";
+    utils.url = "github:numtide/flake-utils";
+    utils.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs = { self, nixpkgs, utils }:
+    utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
       in {
         # `nix develop`
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs.haskellPackages;
-            [ cabal-install cabal-plan ghcid haskell-language-server hlint ormolu pkgs.sqlite-interactive pkgs.zlib ];
+            [ cabal-install ghcid haskell-language-server hlint ormolu pkgs.sqlite-interactive pkgs.zlib ];
         };
       });
 }
