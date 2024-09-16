@@ -18,3 +18,4 @@ stack.yaml
 .envrc
 result
 result-*
+.direnv
