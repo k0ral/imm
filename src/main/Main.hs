@@ -29,9 +29,10 @@ import Output (putDocLn)
 import qualified Output
 import Pipes.ByteString hiding (filter, stdout)
 import Safe
-import Streamly.Prelude as Stream ((|&))
-import qualified Streamly.Prelude as Stream
+import qualified Streamly.Data.Stream.Prelude as Stream
+import qualified Streamly.Data.Fold as Fold
 import XML
+import GHC.Conc (numCapabilities)
 
 -- }}}
 
@@ -151,18 +152,22 @@ main2 logger stdout database feedQuery callbacks = do
     QueryAll → Database._fetchAllFeeds database
     QueryByUID uid → pure <$> Database._fetchFeed database uid
 
+  let streamConfig = Stream.maxThreads numCapabilities . Stream.maxBuffer 100
+
   Stream.fromList entries
-    |& Stream.mapMaybeM fetcher
-    |& Stream.mapMaybeM itemRetriever
-    |& Stream.concatMapWith Stream.async itemSplitter
-    |& Stream.mapM itemMatcher
-    |& Stream.filter unreadSelector
-    |& Stream.trace logNewItem
-    |& Stream.trace (const $ atomically $ modifyTVar' newItemsCount (+ 1))
-    |& Stream.mapMaybeM runner
-    |& Stream.mapM storer
-      & Stream.fromAsync
-      & Stream.drain
+    & Stream.parMapM streamConfig fetcher
+    & Stream.catMaybes
+    & Stream.parMapM streamConfig itemRetriever
+    & Stream.catMaybes
+    & Stream.parConcatMap streamConfig itemSplitter
+    & Stream.parMapM streamConfig itemMatcher
+    & Stream.filter unreadSelector
+    & Stream.trace logNewItem
+    & Stream.trace (const $ atomically $ modifyTVar' newItemsCount (+ 1))
+    & Stream.parMapM streamConfig runner
+    & Stream.catMaybes
+    & Stream.mapM storer
+    & Stream.fold Fold.drain
 
   atomically $ closeTMChan errorsChan
 
