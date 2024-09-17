@@ -28,7 +28,8 @@ module Imm.Feed (
   -- * Utilities
   getMainLink,
   areSameItem,
-) where
+)
+where
 
 -- {{{ Imports
 import Conduit

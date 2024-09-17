@@ -29,13 +29,13 @@ module Database.Handle (
 
   -- * Re-exports
   module Database.Record,
-) where
-
-import Database.Record hiding (markFeedAsUnprocessed, markItemAsProcessed)
-import qualified Database.Record as Record
+)
+where
 
 import Control.Exception.Safe hiding (handle)
 import Control.Monad.Time
+import Database.Record hiding (markFeedAsUnprocessed, markItemAsProcessed)
+import qualified Database.Record as Record
 import Imm.Feed
 import Imm.Logger (LogLevel (..), log)
 import qualified Imm.Logger as Logger

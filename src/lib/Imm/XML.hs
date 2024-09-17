@@ -9,7 +9,6 @@ module Imm.XML where
 
 -- {{{ Imports
 import Imm.Feed
-
 import URI.ByteString
 
 -- }}}

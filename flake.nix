@@ -15,7 +15,7 @@
         # `nix develop`
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs.haskellPackages;
-            [ cabal-install ghcid haskell-language-server hlint ormolu pkgs.sqlite-interactive pkgs.zlib ];
+            [ cabal-install ghcid haskell-language-server hlint fourmolu pkgs.sqlite-interactive pkgs.zlib ];
         };
       });
 }

@@ -20,6 +20,7 @@ import Database.Handle as Database
 import Database.ReadOnly as Database
 import Database.SQLite as SQLite
 import Dhall (auto, input)
+import GHC.Conc (numCapabilities)
 import HTTP
 import Imm
 import Imm.Pretty
@@ -29,10 +30,9 @@ import Output (putDocLn)
 import qualified Output
 import Pipes.ByteString hiding (filter, stdout)
 import Safe
-import qualified Streamly.Data.Stream.Prelude as Stream
 import qualified Streamly.Data.Fold as Fold
+import qualified Streamly.Data.Stream.Prelude as Stream
 import XML
-import GHC.Conc (numCapabilities)
 
 -- }}}
 

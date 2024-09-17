@@ -5,16 +5,15 @@
 
 module Database.Async (withAsyncHandle) where
 
-import Database.Handle
-import Output (putDocLn)
-import qualified Output
-
 import Control.Concurrent.Async
 import Control.Concurrent.STM.TMChan
 import Control.Exception.Safe
+import Database.Handle
 import Imm.Logger (LogLevel (..), log)
 import qualified Imm.Logger as Logger
 import Imm.Pretty
+import Output (putDocLn)
+import qualified Output
 
 -- | Run an existing database handle in a separate thread
 withAsyncHandle ∷ m ~ IO ⇒ Logger.Handle m → Output.Handle m → Handle m → (Handle m → m ()) → m ()

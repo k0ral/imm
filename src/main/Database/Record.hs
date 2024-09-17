@@ -23,7 +23,8 @@ module Database.Record (
   mkFeedItemRecord,
   Inserted,
   NotInserted,
-) where
+)
+where
 
 import Control.Monad.Time
 import Data.Aeson
@@ -109,7 +110,9 @@ data FeedRecord status = FeedRecord
   }
 
 deriving instance Eq (StatusUID s) ⇒ Eq (FeedRecord s)
+
 deriving instance Ord (StatusUID s) ⇒ Ord (FeedRecord s)
+
 deriving instance Show (StatusUID s) ⇒ Show (FeedRecord s)
 
 instance Pretty (PrettyKey (FeedRecord Inserted)) where
@@ -138,7 +141,9 @@ data FeedItemRecord status = FeedItemRecord
   }
 
 deriving instance Eq (StatusUID s) ⇒ Eq (FeedItemRecord s)
+
 deriving instance Ord (StatusUID s) ⇒ Ord (FeedItemRecord s)
+
 deriving instance Show (StatusUID s) ⇒ Show (FeedItemRecord s)
 
 instance Pretty (PrettyKey (FeedItemRecord Inserted)) where
@@ -158,6 +163,7 @@ mkFeedItemRecord ∷ UID → FeedItem → FeedItemStatus → FeedItemRecord NotI
 mkFeedItemRecord = FeedItemRecord ()
 
 data Inserted
+
 data NotInserted
 
 type family StatusUID s where

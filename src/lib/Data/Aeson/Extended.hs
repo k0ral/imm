@@ -4,7 +4,8 @@ module Data.Aeson.Extended (
   module Data.Aeson,
   module Data.Aeson.Types,
   module Data.Aeson.Extended,
-) where
+)
+where
 
 import Data.Aeson
 import Data.Aeson.Types

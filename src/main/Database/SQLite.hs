@@ -15,9 +15,8 @@ module Database.SQLite (
   DatabaseSQLite (..),
   defaultDatabase,
   mkHandle,
-) where
-
-import Database.Handle hiding (deleteFeed, insertFeed, insertItem, purge)
+)
+where
 
 import Data.Aeson (decode, encode)
 import Database.Beam
@@ -26,6 +25,7 @@ import Database.Beam.Backend.SQL.BeamExtensions
 
 -- import           Database.Beam.Migrate
 import Database.Beam.Sqlite (SqliteM, runBeamSqlite)
+import Database.Handle hiding (deleteFeed, insertFeed, insertItem, purge)
 import Database.SQLite.Simple
 import Imm.Feed
 import Imm.Pretty
@@ -217,7 +217,7 @@ insertItem record = do
   return $ FeedItemRecord (fromIntegral $ _itemKeyT inserted) (_itemFeedKey record) (_itemDefinition record) (_itemStatus record)
 
 purge ∷ SqliteM ()
-purge = runDelete $ delete feedLocationsTable $ \_ -> val_ True
+purge = runDelete $ delete feedLocationsTable $ \_ → val_ True
 
 updateItemStatus ∷ FeedItemRecord Inserted → SqliteM ()
 updateItemStatus record =

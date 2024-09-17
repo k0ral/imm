@@ -15,6 +15,7 @@ import URI.ByteString
 data AnyURI = ∀ a. AnyURI (URIRef a)
 
 deriving instance Show AnyURI
+
 instance Eq AnyURI where
   (AnyURI a) == (AnyURI b) = case sameURIType a b of
     Just Refl → a == b

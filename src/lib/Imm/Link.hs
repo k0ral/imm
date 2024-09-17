@@ -20,7 +20,8 @@ module Imm.Link (
   pattern MediaTypeApplicationXML,
   pattern MediaTypeTextXML,
   pattern MediaTypeHTML,
-) where
+)
+where
 
 import Data.Aeson
 import Text.Parsec (Stream, parse)

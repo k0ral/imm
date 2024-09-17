@@ -12,13 +12,13 @@
 module Imm.HTTP (
   module Imm.HTTP,
   module Network.HTTP.Client,
-) where
+)
+where
 
 -- {{{ Imports
 import Imm.Logger hiding (Handle)
 import qualified Imm.Logger as Logger
 import Imm.Pretty
-
 import Network.HTTP.Client
 import Pipes.Core
 import URI.ByteString
