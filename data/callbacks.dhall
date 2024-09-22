@@ -43,5 +43,14 @@ let wallabag =
         ]
       }
 
+-- Check out `imm-shiori --help`
+let shiori =
+      { _executable = "imm-shiori"
+      , _arguments =
+        [ "--tags"
+        , "TAG1,TAG2,TAG3"
+        ]
+      }
+
 let config : List Callback = [ downloadPage ]
 in config

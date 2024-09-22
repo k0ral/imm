@@ -74,7 +74,7 @@ executable imm
   import: common
   build-depends: imm, aeson, async, beam-core, beam-sqlite, bytestring, chronos, conduit, containers, dhall >=1.27, directory, fast-logger, filepath, http-types, microlens, monad-time, optparse-applicative, prettyprinter-ansi-terminal, pipes, pipes-bytestring, pipes-http, safe, safe-exceptions, sqlite-simple, stm, stm-chans, streamly >=0.9, streamly-core, text, time, typed-process, uri-bytestring, xml-conduit >=1.5, xml-types
   main-is: Main.hs
-  other-modules: 
+  other-modules:
     Alternate
     Core
     Database.Async
@@ -118,4 +118,11 @@ executable imm-wallabag
   build-depends: imm, aeson, bytestring, dhall >= 1.27, optparse-applicative, prettyprinter >=1.7.0, refined, req, safe-exceptions, text, time, uri-bytestring
   main-is: Main.hs
   hs-source-dirs: src/wallabag
+  ghc-options: -Wall -fno-warn-unused-do-bind -threaded
+
+executable imm-shiori
+  import: common
+  build-depends: imm, aeson, bytestring, dhall >= 1.27, optparse-applicative, prettyprinter >=1.7.0, refined, safe-exceptions, text, time, typed-process, uri-bytestring
+  main-is: Main.hs
+  hs-source-dirs: src/shiori
   ghc-options: -Wall -fno-warn-unused-do-bind -threaded

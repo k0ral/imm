@@ -108,6 +108,7 @@ in config
   let config : List Callback = [ downloadPage ]
   in config
   ```
+
 #### `imm-wallabag`
 `imm-wallabag` will save webpages into a [Wallabag][wallabag] server through its REST API:
   ```dhall
@@ -135,6 +136,26 @@ in config
     }
 
   let config : List Callback = [ wallabag ]
+  in config
+  ```
+
+#### `imm-shiori`
+`imm-shiori` will save webpages into [Shiori][shiori] bookmark manager:
+  ```dhall
+  let Callback : Type =
+    { _executable : Text
+    , _arguments : List Text
+    }
+
+  let wallabag =
+    { _executable = "imm-shiori"
+    , _arguments =
+        [ "--tags"
+        , "TAG1,TAG2,TAG3"
+        ]
+    }
+
+  let config : List Callback = [ shiori ]
   in config
   ```
 
@@ -180,3 +201,4 @@ in config
 [3]: https://dhall-lang.org/
 [flakes]: https://nixos.wiki/wiki/Flakes
 [wallabag]: https://www.wallabag.it/
+[shiori]: https://github.com/go-shiori/shiori
